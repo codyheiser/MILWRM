@@ -1,0 +1,16 @@
+# macOS
+.DS_Store
+# notebook checkpoints
+.ipynb_checkpoints/
+.nb.html
+# compilation
+__pycache__/
+*.pyc
+*.c
+*.so
+# visual studio
+.vscode/
+# package build
+build/
+dist/
+*.egg-info/
