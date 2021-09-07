@@ -398,6 +398,15 @@ def trim_image(
         adata.uns["pixel_map_df"]["barcode"] == "none", channels
     ] = np.nan  # set empty pixels to invalid image intensity value
 
+    # calculate mean image values for each channel and create .obsm key
+    adata.obsm["image_means"] = (
+        adata.uns["pixel_map_df"]
+        .loc[adata.uns["pixel_map_df"]["barcode"] != "none", ["barcode"] + channels]
+        .groupby("barcode")
+        .mean()
+        .values
+    )
+
     print(
         "Saving cropped and trimmed image to adata.uns['spatial']['{}']['images']['{}_trim']".format(
             adata.uns["pixel_map_params"]["library_id"],
@@ -713,7 +722,9 @@ class tissue_labeler:
         print("Initiating clusterer with {} anndata objects".format(len(self.adatas)))
         self.cluster_data = None  # start out with no data to cluster on
 
-    def prep_cluster_data(self, use_rep, features, histo=False, blur_pix=2):
+    def prep_cluster_data(
+        self, use_rep, features, blur_pix=2, histo=False, fluor_channels=None
+    ):
         """
         Prepare master dataframe for tissue-level clustering
 
@@ -724,13 +735,18 @@ class tissue_labeler:
         features : list of int
             List of features (1-indexed) to use from `adata.obsm[use_rep]` (e.g.
             [1,2,3,4,5] to use first 5 principal components when `use_rep`="X_pca)
-        histo : bool, optional (default `False`)
-            Use histology data from Visium anndata object (R,G,B brightfield features)
-            in addition to `adata.obsm[use_rep]`?
         blur_pix : int, optional (default=2)
             Radius of nearest spatial transcriptomics spots to blur features by for
             capturing regional information. Assumes hexagonal spot grid (10X Genomics
             Visium platform).
+        histo : bool, optional (default `False`)
+            Use histology data from Visium anndata object (R,G,B brightfield features)
+            in addition to `adata.obsm[use_rep]`? If fluorescent imaging data rather
+            than brightfield, use `fluor_channels` argument instead.
+        fluor_channels : list of int or None, optional (default `None`)
+            Channels from fluorescent image to use for model training (e.g. [1,3] for
+            channels 1 and 3 of Visium fluorescent imaging data). If `None`, do not
+            use imaging data for training.
 
         Returns
         -------
@@ -760,10 +776,27 @@ class tissue_labeler:
                 use_rep
             ][:, indices]
             if histo:
+                assert (
+                    fluor_channels is None
+                ), "If histo is True, fluor_channels must be None. \
+                    Histology specifies brightfield H&E with three (3) features."
                 print(
                     "Adding mean RGB histology features for adata #{}".format(adata_i)
                 )
-                tmp[["R_mean", "G_mean", "B_mean"]] = adata.obsm["RGB_mean"]
+                tmp[["R_mean", "G_mean", "B_mean"]] = adata.obsm["image_means"]
+            if fluor_channels:
+                assert (
+                    histo is False
+                ), "If fluorescence channels are given, histo must be False. \
+                    Histology specifies brightfield H&E with three (3) features."
+                print(
+                    "Adding mean fluorescent channels {} for adata #{}".format(
+                        fluor_channels, adata_i
+                    )
+                )
+                tmp[["ch_{}_mean".format(x) for x in fluor_channels]] = adata.obsm[
+                    "image_means"
+                ][:, fluor_channels]
             tmp2 = (
                 tmp.copy()
             )  # copy of temporary dataframe for dropping blurred features into
@@ -828,7 +861,12 @@ class tissue_labeler:
         start = 0
         print("Adding tissue_ID label to anndata objects")
         for i in range(len(self.adatas)):
-            self.adatas[i].obs["tissue_ID"] = self.kmeans.labels_[
-                start : start + self.adatas[i].n_obs
-            ]
+            IDs = self.kmeans.labels_
+            self.adatas[i].obs["tissue_ID"] = IDs[start : start + self.adatas[i].n_obs]
+            self.adatas[i].obs["tissue_ID"] = (
+                self.adatas[i].obs["tissue_ID"].astype("category")
+            )
+            self.adatas[i].obs["tissue_ID"] = (
+                self.adatas[i].obs["tissue_ID"].cat.set_categories(np.unique(IDs))
+            )
             start += self.adatas[i].n_obs
