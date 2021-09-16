@@ -272,7 +272,7 @@ class mxif_labeler(tissue_labeler):
             print("WARNING: overwriting existing cluster data")
             self.cluster_data = None
         # save the hyperparams as object attributes
-        self.features = features
+        self.model_features = features
         self.downsample_factor = downsample_factor
         self.sigma = sigma
         # perform image downsampling, blurring, subsampling, and compile cluster_data
@@ -282,12 +282,9 @@ class mxif_labeler(tissue_labeler):
             image.downsample(fact=downsample_factor, func=np.mean)
             # blur downsampled image
             image.img = gaussian(image.img, sigma=sigma, multichannel=True)
-            print(
-                "Collecting {} features for image #{}".format(
-                    len(self.features), image_i
-                )
-            )
+            print("Collecting {} features for image #{}".format(len(features), image_i))
             # get list of int for features
+            self.features = features
             if isinstance(
                 self.features, int
             ):  # force features into list if single integer
@@ -342,6 +339,22 @@ class mxif_labeler(tissue_labeler):
         self.tissue_IDs = []
         for i in range(len(self.images)):
             print("\tImage #{}".format(i))
+            # get list of int for features
+            self.features = self.model_features
+            if isinstance(
+                self.features, int
+            ):  # force features into list if single integer
+                self.features = [self.features]
+            if isinstance(
+                self.features, str
+            ):  # force features into int if single string
+                self.features = [self.images[i].ch.index(self.features)]
+            if checktype(
+                self.features
+            ):  # force features into list of int if list of strings
+                self.features = [self.images[i].ch.index(x) for x in self.features]
+            if self.features is None:  # if no features are given, use all of them
+                self.features = [x for x in range(self.images[i].n_ch)]
             # subset to features used in prep_cluster_data
             tmp = self.images[i].img[:, :, self.features]
             tID = np.zeros(tmp.shape[:2])
