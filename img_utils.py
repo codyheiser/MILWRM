@@ -14,6 +14,7 @@ plt.rcParams["font.family"] = "monospace"
 
 from math import ceil
 from skimage import exposure
+from skimage.measure import block_reduce
 from matplotlib.lines import Line2D
 
 
@@ -99,7 +100,7 @@ def clip_values(img, channels=None):
 
 
 class img:
-    def __init__(self, img_arr, channels=None):
+    def __init__(self, img_arr, channels=None, mask=None):
         """
         Initialize img class
 
@@ -110,6 +111,8 @@ class img:
         channels : tuple of str or None, optional (default=`None`)
             List of channel names corresponding to img.shape[2]. i.e. `("DAPI","GFAP",
             "NeuH")`. If `None`, channels are named "ch_0", "ch_1", etc.
+        mask : np.ndarray
+            Mask defining pixels containing tissue in the image
         """
         assert (
             img_arr.ndim > 1
@@ -127,6 +130,12 @@ class img:
                 len(channels) == self.n_ch
             ), "Number of channels must match img_arr.shape[2]"
             self.ch = channels
+        if mask is not None:
+            # validate that mask matches img_arr
+            assert (
+                mask.shape == img_arr.shape[:2]
+            ), "Shape of mask must match the first two dimensions of img_arr"
+        self.mask = mask  # set mask attribute, regardless of value given
 
     def scale(self, **kwargs):
         """
@@ -265,3 +274,28 @@ class img:
         if save_to:
             plt.savefig(fname=save_to, transparent=True, bbox_inches="tight", dpi=800)
         return fig
+
+    def downsample(self, fact, func=np.mean):
+        """
+        Downsamples image by applying `func` to `fact` pixels in both directions from
+        each pixel
+
+        Parameters
+        ----------
+        fact : int
+            Number of pixels in each direction (x & y) to downsample with
+        func : function
+            Numpy function to apply to squares of size (fact, fact, :) for downsampling
+            (e.g. `np.mean`, `np.max`, `np.sum`)
+
+        Returns
+        -------
+        self.img and self.mask are downsampled accordingly in place
+        """
+        # downsample mask if mask available
+        if self.mask is not None:
+            self.mask = block_reduce(
+                self.mask, block_size=(fact, fact), func=np.max, cval=0
+            )
+        # downsample image
+        self.img = block_reduce(self.img, block_size=(fact, fact, 1), func=func, cval=0)

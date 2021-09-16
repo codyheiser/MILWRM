@@ -9,6 +9,8 @@ import numpy as np
 import pandas as pd
 
 from sklearn.cluster import KMeans
+from skimage.filters import gaussian
+from img_utils import checktype, img
 
 
 class tissue_labeler:
@@ -244,7 +246,7 @@ class mxif_labeler(tissue_labeler):
         print("Initiating MxIF labeler with {} images".format(len(images)))
         self.images = images
 
-    def prep_cluster_data(self, features, downsample_factor=8, blur_pix=50):
+    def prep_cluster_data(self, features, downsample_factor=8, sigma=2, fract=0.2):
         """
         Prepare master dataframe for tissue-level clustering
 
@@ -254,9 +256,11 @@ class mxif_labeler(tissue_labeler):
             Indices or names of MxIF channels to use for tissue labeling
         downsample_factor : int
             Factor by which to downsample images from their original resolution
-        blur_pix : int, optional (default=50)
-            Radius of nearest image pixels to blur features by for capturing regional
-            information.
+        sigma : float, optional (default=2)
+            Standard deviation of Gaussian kernel for blurring
+        fract : float, optional (default=0.2)
+            Fraction of cluster data from each image to randomly select for model
+            building
 
         Returns
         -------
@@ -270,8 +274,48 @@ class mxif_labeler(tissue_labeler):
         # save the hyperparams as object attributes
         self.features = features
         self.downsample_factor = downsample_factor
-        self.blur_pix = blur_pix
+        self.sigma = sigma
         # perform image downsampling, blurring, subsampling, and compile cluster_data
+        for image_i, image in enumerate(self.images):
+            print("Downsampling and blurring image #{}".format(image_i))
+            # downsample image
+            image.downsample(fact=downsample_factor, func=np.mean)
+            # blur downsampled image
+            image.img = gaussian(image.img, sigma=sigma, multichannel=True)
+            print(
+                "Collecting {} features for image #{}".format(
+                    len(self.features), image_i
+                )
+            )
+            # get list of int for features
+            if isinstance(
+                self.features, int
+            ):  # force features into list if single integer
+                self.features = [self.features]
+            if isinstance(
+                self.features, str
+            ):  # force features into int if single string
+                self.features = [image.ch.index(self.features)]
+            if checktype(
+                self.features
+            ):  # force features into list of int if list of strings
+                self.features = [image.ch.index(x) for x in self.features]
+            if self.features is None:  # if no features are given, use all of them
+                self.features = [x for x in range(image.n_ch)]
+            # get cluster data for image_i
+            tmp = []
+            for i in range(image.img.shape[2]):
+                tmp.append(image.img[:, :, i][image.mask == 1])
+            tmp = np.column_stack(tmp)
+            # select cluster data
+            i = np.random.choice(tmp.shape[0], int(tmp.shape[0] * fract))
+            tmp = tmp[np.ix_(i, self.features)]
+            # append blurred features to cluster_data df for cluster training
+            if self.cluster_data is None:
+                self.cluster_data = tmp.copy()
+            else:
+                self.cluster_data = np.row_stack([self.cluster_data, tmp])
+        print("Collected clustering data of shape: {}".format(self.cluster_data.shape))
 
     def label_tissue_regions(self, k, random_state=18):
         """
@@ -294,3 +338,15 @@ class mxif_labeler(tissue_labeler):
         # call k-means model from parent class
         self.find_tissue_regions(k=k, random_state=random_state)
         # loop through image objects and create tissue label images
+        print("Creating tissue_ID images for image objects:")
+        self.tissue_IDs = []
+        for i in range(len(self.images)):
+            print("\tImage #{}".format(i))
+            # subset to features used in prep_cluster_data
+            tmp = self.images[i].img[:, :, self.features]
+            tID = np.zeros(tmp.shape[:2])
+            for x in range(tmp.shape[0]):
+                for y in range(tmp.shape[1]):
+                    tID[x, y] = self.kmeans.predict(tmp[x, y, :].reshape(1, -1))
+            tID[self.images[i].mask == 0] = np.nan  # set masked-out pixels to NaN
+            self.tissue_IDs.append(tID)  # append tID to list of cluster images
