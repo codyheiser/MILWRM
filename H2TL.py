@@ -10,7 +10,7 @@ import pandas as pd
 
 from sklearn.cluster import KMeans
 from skimage.filters import gaussian
-from img_utils import checktype, img
+from img_utils import checktype
 
 
 class tissue_labeler:
@@ -277,9 +277,13 @@ class mxif_labeler(tissue_labeler):
         self.sigma = sigma
         # perform image downsampling, blurring, subsampling, and compile cluster_data
         for image_i, image in enumerate(self.images):
-            print("Downsampling and blurring image #{}".format(image_i))
+            print(
+                "Downsampling, log-normalizing, and blurring image #{}".format(image_i)
+            )
             # downsample image
             image.downsample(fact=downsample_factor, func=np.mean)
+            # normalize and log-transform image
+            image.log_normalize(pseudoval=1, mask=True)
             # blur downsampled image
             image.img = gaussian(image.img, sigma=sigma, multichannel=True)
             print("Collecting {} features for image #{}".format(len(features), image_i))
@@ -302,7 +306,7 @@ class mxif_labeler(tissue_labeler):
             # get cluster data for image_i
             tmp = []
             for i in range(image.img.shape[2]):
-                tmp.append(image.img[:, :, i][image.mask == 1])
+                tmp.append(image.img[:, :, i][image.mask != 0])
             tmp = np.column_stack(tmp)
             # select cluster data
             i = np.random.choice(tmp.shape[0], int(tmp.shape[0] * fract))

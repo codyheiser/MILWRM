@@ -4,6 +4,7 @@ Functions and classes for analyzing multiplex imaging data
 
 @author: C Heiser
 """
+import os
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
@@ -14,6 +15,7 @@ plt.rcParams["font.family"] = "monospace"
 
 from math import ceil
 from skimage import exposure
+from skimage.io import imread
 from skimage.measure import block_reduce
 from matplotlib.lines import Line2D
 
@@ -31,34 +33,6 @@ def plot_hist(ax, data, title=None):
     if title:
         ax.set_title(title)
     return None
-
-
-def scale_rgb(img, channels=None):
-    """
-    Scale to [0.0, 1.0] for RGB image
-
-    Parameters
-    ----------
-    img : np.ndarray
-        The image
-    channels : tuple of int or None, optional (default=`None`)
-        Channels to scale on img.shape[2]. If None, scale values in all channels.
-
-    Returns
-    -------
-    img_cp : np.ndarray
-        Image with scaled values
-    """
-    img_cp = img.copy()
-    if channels is None or img.ndim == 2:
-        img_cp = img_cp - img_cp.min()
-        img_cp = img_cp / img_cp.max()
-    else:
-        for z in channels:
-            plane = img_cp[:, :, z].copy()
-            plane = plane - plane.min()
-            img_cp[:, :, z] = plane / plane.max()
-    return img_cp
 
 
 def clip_values(img, channels=None):
@@ -99,6 +73,34 @@ def clip_values(img, channels=None):
     return img_cp
 
 
+def scale_rgb(img, channels=None):
+    """
+    Scale to [0.0, 1.0] for RGB image
+
+    Parameters
+    ----------
+    img : np.ndarray
+        The image
+    channels : tuple of int or None, optional (default=`None`)
+        Channels to scale on img.shape[2]. If None, scale values in all channels.
+
+    Returns
+    -------
+    img_cp : np.ndarray
+        Image with scaled values
+    """
+    img_cp = img.copy()
+    if channels is None or img.ndim == 2:
+        img_cp = img_cp - img_cp.min()
+        img_cp = img_cp / img_cp.max()
+    else:
+        for z in channels:
+            plane = img_cp[:, :, z].copy()
+            plane = plane - plane.min()
+            img_cp[:, :, z] = plane / plane.max()
+    return img_cp
+
+
 class img:
     def __init__(self, img_arr, channels=None, mask=None):
         """
@@ -113,6 +115,10 @@ class img:
             "NeuH")`. If `None`, channels are named "ch_0", "ch_1", etc.
         mask : np.ndarray
             Mask defining pixels containing tissue in the image
+
+        Returns
+        -------
+        `img` object
         """
         assert (
             img_arr.ndim > 1
@@ -137,17 +143,157 @@ class img:
             ), "Shape of mask must match the first two dimensions of img_arr"
         self.mask = mask  # set mask attribute, regardless of value given
 
-    def scale(self, **kwargs):
+    @classmethod
+    def from_tiffs(cls, tiffdir, channels, common_strings=None, mask=None):
         """
-        Scales intensities to [0.0, 1.0]
+        Initialize img class from `.tif` files
+
+        Parameters
+        ----------
+        tiffdir : str
+            Path to directory containing `.tif` files for a multiplexed image
+        channels : tuple of str
+            List of channels present in `.tif` file names (case-sensitive)
+            corresponding to img.shape[2] e.g. `("ACTG1","BCATENIN","DAPI",...)`
+        common_strings : str, list of str, or `None`, optional (default=None)
+            Strings to look for in all `.tif` files in `tiffdir` corresponding to
+            `channels` e.g. `("WD86055_", "_region_001.tif")` for files named
+            "WD86055_[MARKERNAME]_region_001.tif". If `None`, assume that only 1 image
+            for each marker in `channels` is present in `tiffdir`.
+        mask : str, optional (default=None)
+            Name of mask defining pixels containing tissue in the image, present in
+            `.tif` file names (case-sensitive) e.g. "_01_TISSUE_MASK.tif"
+
+        Returns
+        -------
+        `img` object
         """
-        self.img = scale_rgb(self.img, **kwargs)
+        if common_strings is not None:
+            # coerce single string to list
+            if isinstance(common_strings, str):
+                common_strings = [common_strings]
+        A = []  # list for dumping numpy arrays
+        for channel in channels:
+            if common_strings is None:
+                # find file matching all common_strings and channel name
+                f = [f for f in os.listdir(tiffdir) if channel in f]
+            else:
+                # find file matching all common_strings and channel name
+                f = [
+                    f
+                    for f in os.listdir(tiffdir)
+                    if all(x in f for x in common_strings + [channel])
+                ]
+            # assertions so we only get one file per channel
+            assert len(f) != 0, "No file found with channel {}".format(channel)
+            assert (
+                len(f) == 1
+            ), "More than one match found for file with channel {}".format(channel)
+            f = os.path.join(tiffdir, f[0])  # get full path to file for reading
+            print("Reading marker {} from {}".format(channel, f))
+            tmp = imread(f)  # read in .tif file
+            A.append(tmp)  # append numpy array to list
+        A_arr = np.dstack(
+            A
+        )  # stack numpy arrays in new dimension (third dim is channel)
+        print("Final image array of shape: {}".format(A_arr.shape))
+        # read in tissue mask if available
+        if mask is not None:
+            f = [f for f in os.listdir(tiffdir) if mask in f]
+            # assertions so we only get one mask file
+            assert len(f) != 0, "No tissue mask file found"
+            assert len(f) == 1, "More than one match found for tissue mask file"
+            f = os.path.join(tiffdir, f[0])  # get full path to file for reading
+            print("Reading tissue mask from {}".format(f))
+            A_mask = imread(f)  # read in .tif file
+            assert (
+                A_mask.shape == A_arr.shape[:2]
+            ), "Mask (shape: {}) is not the same shape as marker images (shape: {})".format(
+                A_mask.shape, A_arr.shape[:2]
+            )
+            print("Final mask array of shape: {}".format(A_mask.shape))
+        else:
+            A_mask = None
+        # generate img object
+        return cls(img_arr=A_arr, channels=channels, mask=A_mask)
 
     def clip(self, **kwargs):
         """
         Clips outlier values
+
+        Parameters
+        ----------
+        **kwargs
+            Keyword args to pass to `clip_values()` function
+
+        Returns
+        -------
+        Clips outlier values from `self.img`
         """
         self.img = clip_values(self.img, **kwargs)
+
+    def scale(self, **kwargs):
+        """
+        Scales intensities to [0.0, 1.0]
+
+        Parameters
+        ----------
+        **kwargs
+            Keyword args to pass to `scale_rgb()` function
+
+        Returns
+        -------
+        Scales intensities of `self.img`
+        """
+        self.img = scale_rgb(self.img, **kwargs)
+
+    def log_normalize(self, pseudoval=1, mask=True):
+        """
+        Log-normalizes values for each marker with `log10(arr/arr.mean() + pseudoval)`
+
+        Parameters
+        ----------
+        pseudoval : float
+            Value to add to image values prior to log-transforming to avoid issues
+            with zeros
+        mask : bool, optional (default=True)
+            Use tissue mask to determine marker mean factor for normalization. Default
+            `True`.
+
+        Returns
+        -------
+        Log-normalizes values in each channel of `self.img`
+        """
+        if mask:
+            assert self.mask is not None, "No tissue mask available"
+            for i in range(self.img.shape[2]):
+                fact = self.img[:, :, i][self.mask != 0].mean()
+                self.img[:, :, i] = np.log10(self.img[:, :, i] / fact + pseudoval)
+
+    def downsample(self, fact, func=np.mean):
+        """
+        Downsamples image by applying `func` to `fact` pixels in both directions from
+        each pixel
+
+        Parameters
+        ----------
+        fact : int
+            Number of pixels in each direction (x & y) to downsample with
+        func : function
+            Numpy function to apply to squares of size (fact, fact, :) for downsampling
+            (e.g. `np.mean`, `np.max`, `np.sum`)
+
+        Returns
+        -------
+        self.img and self.mask are downsampled accordingly in place
+        """
+        # downsample mask if mask available
+        if self.mask is not None:
+            self.mask = block_reduce(
+                self.mask, block_size=(fact, fact), func=np.max, cval=0
+            )
+        # downsample image
+        self.img = block_reduce(self.img, block_size=(fact, fact, 1), func=func, cval=0)
 
     def show(
         self,
@@ -160,7 +306,7 @@ class img:
         **kwargs,
     ):
         """
-        Plot image using imshow
+        Plot image
 
         Parameters
         ----------
@@ -274,28 +420,3 @@ class img:
         if save_to:
             plt.savefig(fname=save_to, transparent=True, bbox_inches="tight", dpi=800)
         return fig
-
-    def downsample(self, fact, func=np.mean):
-        """
-        Downsamples image by applying `func` to `fact` pixels in both directions from
-        each pixel
-
-        Parameters
-        ----------
-        fact : int
-            Number of pixels in each direction (x & y) to downsample with
-        func : function
-            Numpy function to apply to squares of size (fact, fact, :) for downsampling
-            (e.g. `np.mean`, `np.max`, `np.sum`)
-
-        Returns
-        -------
-        self.img and self.mask are downsampled accordingly in place
-        """
-        # downsample mask if mask available
-        if self.mask is not None:
-            self.mask = block_reduce(
-                self.mask, block_size=(fact, fact), func=np.max, cval=0
-            )
-        # downsample image
-        self.img = block_reduce(self.img, block_size=(fact, fact, 1), func=func, cval=0)
