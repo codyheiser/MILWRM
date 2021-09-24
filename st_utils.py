@@ -5,7 +5,6 @@ histological imaging data
 
 @author: C Heiser
 """
-import os
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -17,95 +16,11 @@ sc.set_figure_params(dpi=100, dpi_save=400)
 sns.set_style("white")
 plt.rcParams["font.family"] = "monospace"
 
-from glob import glob
 from math import ceil
 from matplotlib.lines import Line2D
 from scipy.spatial import cKDTree
 from scipy.interpolate import interpnd, griddata
-from shutil import rmtree
 from sklearn.metrics.pairwise import euclidean_distances
-
-
-def read_10x_visium(
-    directory,
-    count_file="raw_feature_bc_matrix.h5",
-    filter_labels=True,
-    cleanup=True,
-    save_to=None,
-    verbose=True,
-):
-    """
-    Read Visium data from 10x Genomics and compile AnnData object
-
-    Parameters
-    ----------
-    directory : str
-        Directory containing Visium files. Minimum requirements are 'spatial.tar.gz'
-        and '*_raw_feature_bc_matrix.h5'.
-    count_file : str
-        File within dir that has counts. Default '*_raw_feature_bc_matrix.h5'.
-    filter_labels : bool
-        Add 'in_tissue' label to adata.obs from '*_filtered_gene_bc_matrix.h5'
-    cleanup : bool
-        Remove files after reading into AnnData.
-    save_to : str or None
-        Name of .h5ad file to write to. If None, don't write.
-    verbose : bool
-        Print progress updates to console.
-
-    Returns
-    -------
-    a : AnnData.anndata
-        AnnData object with Visium data
-    """
-    if verbose:
-        print(
-            "Reading Visium data from {}".format(
-                glob("{}/*{}".format(directory, count_file))
-            )
-        )
-    a = sc.read_visium(
-        path=directory,
-        count_file=os.path.basename(glob("{}/*{}".format(directory, count_file))[0]),
-    )
-    a.var_names_make_unique()
-    # add in_tissue labels from filtered file if desired
-    if filter_labels:
-        if verbose:
-            print(
-                "Adding 'in_tissue' label from {}".format(
-                    glob("{}/*filtered_feature_bc_matrix.h5".format(directory))[0]
-                ),
-                end="",
-            )
-        b = sc.read_10x_h5(
-            glob("{}/*filtered_feature_bc_matrix.h5".format(directory))[0]
-        )
-        a.obs["in_tissue"] = "False"
-        a.obs.loc[b.obs_names, "in_tissue"] = "True"
-        if verbose:
-            print(
-                " - {} spots within tissue area".format(
-                    len(
-                        a.obs.loc[
-                            a.obs.in_tissue == "True",
-                        ]
-                    )
-                )
-            )
-    # remove unnecessary files
-    if cleanup:
-        if verbose:
-            print("Cleaning up workspace")
-        rmtree("{}/spatial".format(directory))
-        for f in glob("{}/*".format(directory)):
-            os.remove(f)
-    # save AnnData as .h5ad file
-    if save_to is not None:
-        if verbose:
-            print("Saving AnnData to {}/{}".format(directory, save_to))
-        a.write("{}/{}".format(directory, save_to), compression="gzip")
-    return a
 
 
 def bin_threshold(mat, threshmin=None, threshmax=0.5):
@@ -557,6 +472,7 @@ def show_pita(
     pita,
     features=None,
     RGB=False,
+    histo=None,
     label="feature",
     ncols=4,
     figsize=(7, 7),
@@ -570,14 +486,16 @@ def show_pita(
     ----------
     pita : np.array
         Image of desired expression in pixel space from `.assemble_pita()`
-    features : list of int
-        List of features by index to show in plot
-    RGB : bool
+    features : list of int, optional (default=`None`)
+        List of features by index to show in plot. If `None`, use all features.
+    RGB : bool, optional (default=`False`)
         Treat 3-dimensional array as RGB image
+    histo : np.array or `None`, optional (default=`None`)
+        Histology image to show along with pita in gridspec. If `None`, ignore.
     label : str
         What to title each panel of the gridspec (i.e. "PC" or "usage") or each
         channel in RGB image. Can also pass list of names e.g. ["NeuN","GFAP",
-        "DAPI"] corresponding to R, G, B channels.
+        "DAPI"] corresponding to channels.
     ncols : int
         Number of columns for gridspec
     figsize : tuple of float
@@ -597,7 +515,7 @@ def show_pita(
     )
     assert pita.ndim < 4, "Pita has too many dimensions: {} given".format(pita.ndim)
     # if only one feature (2D), plot it quickly
-    if pita.ndim == 2:
+    if (pita.ndim == 2) and histo is None:
         fig = plt.figure(figsize=figsize)
         plt.imshow(pita, **kwargs)
         plt.tick_params(labelbottom=False, labelleft=False)
@@ -625,21 +543,57 @@ def show_pita(
                 len(label), label
             )
             channels = label
-        fig = plt.figure(figsize=figsize)
-        plt.imshow(pita, **kwargs)
-        # add legend for channel IDs
-        custom_lines = [
-            Line2D([0], [0], color=(1, 0, 0), lw=5),
-            Line2D([0], [0], color=(0, 1, 0), lw=5),
-            Line2D([0], [0], color=(0, 0, 1), lw=5),
-        ]
-        plt.legend(custom_lines, channels, fontsize="medium")
-        plt.tick_params(labelbottom=False, labelleft=False)
-        sns.despine(bottom=True, left=True)
-        plt.tight_layout()
-        if save_to:
-            plt.savefig(fname=save_to, transparent=True, bbox_inches="tight", dpi=800)
-        return fig
+        if histo is not None:
+            n_rows, n_cols = 1, 2  # two images here, histo and RGB
+            fig = plt.figure(figsize=(ncols * n_cols, ncols * n_rows))
+            # arrange axes as subplots
+            gs = gridspec.GridSpec(n_rows, n_cols, figure=fig)
+            # add plots to axes
+            ax = plt.subplot(gs[0])
+            im = ax.imshow(histo, **kwargs)
+            ax.tick_params(labelbottom=False, labelleft=False)
+            sns.despine(bottom=True, left=True)
+            ax.set_title(
+                label="Histology",
+                loc="left",
+                fontweight="bold",
+                fontsize=16,
+            )
+            ax = plt.subplot(gs[1])
+            im = ax.imshow(pita, **kwargs)
+            # add legend for channel IDs
+            custom_lines = [
+                Line2D([0], [0], color=(1, 0, 0), lw=5),
+                Line2D([0], [0], color=(0, 1, 0), lw=5),
+                Line2D([0], [0], color=(0, 0, 1), lw=5),
+            ]
+            plt.legend(custom_lines, channels, fontsize="medium")
+            ax.tick_params(labelbottom=False, labelleft=False)
+            sns.despine(bottom=True, left=True)
+            fig.tight_layout()
+            if save_to:
+                plt.savefig(
+                    fname=save_to, transparent=True, bbox_inches="tight", dpi=800
+                )
+            return fig
+        else:
+            fig = plt.figure(figsize=figsize)
+            plt.imshow(pita, **kwargs)
+            # add legend for channel IDs
+            custom_lines = [
+                Line2D([0], [0], color=(1, 0, 0), lw=5),
+                Line2D([0], [0], color=(0, 1, 0), lw=5),
+                Line2D([0], [0], color=(0, 0, 1), lw=5),
+            ]
+            plt.legend(custom_lines, channels, fontsize="medium")
+            plt.tick_params(labelbottom=False, labelleft=False)
+            sns.despine(bottom=True, left=True)
+            plt.tight_layout()
+            if save_to:
+                plt.savefig(
+                    fname=save_to, transparent=True, bbox_inches="tight", dpi=800
+                )
+            return fig
     # if pita has multiple features, plot them in gridspec
     if isinstance(features, int):  # force features into list if single integer
         features = [features]
@@ -663,20 +617,40 @@ def show_pita(
     else:
         assert len(label) == len(
             features
-        ), "Please the same number of labels as features; {} labels given, {} features given.".format(
+        ), "Please provide the same number of labels as features; {} labels given, {} features given.".format(
             len(label), len(features)
         )
         labels = label
     # calculate gridspec dimensions
-    if len(features) <= ncols:
-        n_rows, n_cols = 1, len(features)
+    if histo is not None:
+        labels = ["Histology"] + labels  # append histo to front of labels
+        if len(features) + 1 <= ncols:
+            n_rows, n_cols = 1, len(features) + 1
+        else:
+            n_rows, n_cols = ceil((len(features) + 1) / ncols), ncols
     else:
-        n_rows, n_cols = ceil(len(features) / ncols), ncols
+        if len(features) <= ncols:
+            n_rows, n_cols = 1, len(features)
+        else:
+            n_rows, n_cols = ceil(len(features) / ncols), ncols
     fig = plt.figure(figsize=(ncols * n_cols, ncols * n_rows))
     # arrange axes as subplots
     gs = gridspec.GridSpec(n_rows, n_cols, figure=fig)
     # add plots to axes
     i = 0
+    if histo is not None:
+        # add histology plot to first axes
+        ax = plt.subplot(gs[i])
+        im = ax.imshow(histo, **kwargs)
+        ax.tick_params(labelbottom=False, labelleft=False)
+        sns.despine(bottom=True, left=True)
+        ax.set_title(
+            label=labels[i],
+            loc="left",
+            fontweight="bold",
+            fontsize=16,
+        )
+        i = i + 1
     for feature in features:
         ax = plt.subplot(gs[i])
         im = ax.imshow(pita[:, :, feature - 1], **kwargs)

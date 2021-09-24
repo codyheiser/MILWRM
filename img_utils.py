@@ -217,6 +217,51 @@ class img:
         # generate img object
         return cls(img_arr=A_arr, channels=channels, mask=A_mask)
 
+    @classmethod
+    def from_npz(cls, file):
+        """
+        Initialize img class from `.npz` file
+
+        Parameters
+        ----------
+        file : str
+            Path to `.npz` file containing saved img object and metadata
+
+        Returns
+        -------
+        `img` object
+        """
+        print("Loading img object from {}...".format(file))
+        tmp = np.load(file)  # load from .npz compressed file
+        assert (
+            "img" in tmp.files
+        ), "Unexpected files in .npz: {}, expected ['img','mask','ch'].".format(
+            tmp.files
+        )
+        A_mask = tmp["mask"] if "mask" in tmp.files else None
+        A_ch = list(tmp["ch"]) if "ch" in tmp.files else None
+        # generate img object
+        return cls(img_arr=tmp["img"], channels=A_ch, mask=A_mask)
+
+    def to_npz(self, file):
+        """
+        Save img object to compressed `.npz` file
+
+        Parameters
+        ----------
+        file : str
+            Path to `.npz` file in which to save img object and metadata
+
+        Returns
+        -------
+        Writes object to `file`
+        """
+        print("Saving img object to {}...".format(file))
+        if self.mask is None:
+            np.savez_compressed(file, img=self.img, ch=self.ch)
+        else:
+            np.savez_compressed(file, img=self.img, ch=self.ch, mask=self.mask)
+
     def clip(self, **kwargs):
         """
         Clips outlier values
