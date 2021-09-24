@@ -1,0 +1,1541 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1" />
+<meta name="generator" content="pdoc 0.9.2" />
+<title>st_utils API documentation</title>
+<meta name="description" content="Functions and classes for manipulating 10X Visium spatial transcriptomic (ST) and
+histological imaging data …" />
+<link rel="preload stylesheet" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/10up-sanitize.css/11.0.1/sanitize.min.css" integrity="sha256-PK9q560IAAa6WVRRh76LtCaI8pjTJ2z11v0miyNNjrs=" crossorigin>
+<link rel="preload stylesheet" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/10up-sanitize.css/11.0.1/typography.min.css" integrity="sha256-7l/o7C8jubJiy74VsKTidCy1yBkRtiUGbVkYBylBqUg=" crossorigin>
+<link rel="stylesheet preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/10.1.1/styles/github.min.css" crossorigin>
+<style>:root{--highlight-color:#fe9}.flex{display:flex !important}body{line-height:1.5em}#content{padding:20px}#sidebar{padding:30px;overflow:hidden}#sidebar > *:last-child{margin-bottom:2cm}.http-server-breadcrumbs{font-size:130%;margin:0 0 15px 0}#footer{font-size:.75em;padding:5px 30px;border-top:1px solid #ddd;text-align:right}#footer p{margin:0 0 0 1em;display:inline-block}#footer p:last-child{margin-right:30px}h1,h2,h3,h4,h5{font-weight:300}h1{font-size:2.5em;line-height:1.1em}h2{font-size:1.75em;margin:1em 0 .50em 0}h3{font-size:1.4em;margin:25px 0 10px 0}h4{margin:0;font-size:105%}h1:target,h2:target,h3:target,h4:target,h5:target,h6:target{background:var(--highlight-color);padding:.2em 0}a{color:#058;text-decoration:none;transition:color .3s ease-in-out}a:hover{color:#e82}.title code{font-weight:bold}h2[id^="header-"]{margin-top:2em}.ident{color:#900}pre code{background:#f8f8f8;font-size:.8em;line-height:1.4em}code{background:#f2f2f1;padding:1px 4px;overflow-wrap:break-word}h1 code{background:transparent}pre{background:#f8f8f8;border:0;border-top:1px solid #ccc;border-bottom:1px solid #ccc;margin:1em 0;padding:1ex}#http-server-module-list{display:flex;flex-flow:column}#http-server-module-list div{display:flex}#http-server-module-list dt{min-width:10%}#http-server-module-list p{margin-top:0}.toc ul,#index{list-style-type:none;margin:0;padding:0}#index code{background:transparent}#index h3{border-bottom:1px solid #ddd}#index ul{padding:0}#index h4{margin-top:.6em;font-weight:bold}@media (min-width:200ex){#index .two-column{column-count:2}}@media (min-width:300ex){#index .two-column{column-count:3}}dl{margin-bottom:2em}dl dl:last-child{margin-bottom:4em}dd{margin:0 0 1em 3em}#header-classes + dl > dd{margin-bottom:3em}dd dd{margin-left:2em}dd p{margin:10px 0}.name{background:#eee;font-weight:bold;font-size:.85em;padding:5px 10px;display:inline-block;min-width:40%}.name:hover{background:#e0e0e0}dt:target .name{background:var(--highlight-color)}.name > span:first-child{white-space:nowrap}.name.class > span:nth-child(2){margin-left:.4em}.inherited{color:#999;border-left:5px solid #eee;padding-left:1em}.inheritance em{font-style:normal;font-weight:bold}.desc h2{font-weight:400;font-size:1.25em}.desc h3{font-size:1em}.desc dt code{background:inherit}.source summary,.git-link-div{color:#666;text-align:right;font-weight:400;font-size:.8em;text-transform:uppercase}.source summary > *{white-space:nowrap;cursor:pointer}.git-link{color:inherit;margin-left:1em}.source pre{max-height:500px;overflow:auto;margin:0}.source pre code{font-size:12px;overflow:visible}.hlist{list-style:none}.hlist li{display:inline}.hlist li:after{content:',\2002'}.hlist li:last-child:after{content:none}.hlist .hlist{display:inline;padding-left:1em}img{max-width:100%}td{padding:0 .5em}.admonition{padding:.1em .5em;margin-bottom:1em}.admonition-title{font-weight:bold}.admonition.note,.admonition.info,.admonition.important{background:#aef}.admonition.todo,.admonition.versionadded,.admonition.tip,.admonition.hint{background:#dfd}.admonition.warning,.admonition.versionchanged,.admonition.deprecated{background:#fd4}.admonition.error,.admonition.danger,.admonition.caution{background:lightpink}</style>
+<style media="screen and (min-width: 700px)">@media screen and (min-width:700px){#sidebar{width:30%;height:100vh;overflow:auto;position:sticky;top:0}#content{width:70%;max-width:100ch;padding:3em 4em;border-left:1px solid #ddd}pre code{font-size:1em}.item .name{font-size:1em}main{display:flex;flex-direction:row-reverse;justify-content:flex-end}.toc ul ul,#index ul{padding-left:1.5em}.toc > ul > li{margin-top:.5em}}</style>
+<style media="print">@media print{#sidebar h1{page-break-before:always}.source{display:none}}@media print{*{background:transparent !important;color:#000 !important;box-shadow:none !important;text-shadow:none !important}a[href]:after{content:" (" attr(href) ")";font-size:90%}a[href][title]:after{content:none}abbr[title]:after{content:" (" attr(title) ")"}.ir a:after,a[href^="javascript:"]:after,a[href^="#"]:after{content:""}pre,blockquote{border:1px solid #999;page-break-inside:avoid}thead{display:table-header-group}tr,img{page-break-inside:avoid}img{max-width:100% !important}@page{margin:0.5cm}p,h2,h3{orphans:3;widows:3}h1,h2,h3,h4,h5,h6{page-break-after:avoid}}</style>
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/10.1.1/highlight.min.js" integrity="sha256-Uv3H6lx7dJmRfRvH8TH6kJD1TSK1aFcwgx+mdg3epi8=" crossorigin></script>
+<script>window.addEventListener('DOMContentLoaded', () => hljs.initHighlighting())</script>
+</head>
+<body>
+<main>
+<article id="content">
+<header>
+<h1 class="title">Module <code>st_utils</code></h1>
+</header>
+<section id="section-intro">
+<p>Functions and classes for manipulating 10X Visium spatial transcriptomic (ST) and
+histological imaging data</p>
+<p>@author: C Heiser</p>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python"># -*- coding: utf-8 -*-
+&#34;&#34;&#34;
+Functions and classes for manipulating 10X Visium spatial transcriptomic (ST) and 
+histological imaging data
+
+@author: C Heiser
+&#34;&#34;&#34;
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+import matplotlib.gridspec as gridspec
+import seaborn as sns
+import scanpy as sc
+
+sc.set_figure_params(dpi=100, dpi_save=400)
+sns.set_style(&#34;white&#34;)
+plt.rcParams[&#34;font.family&#34;] = &#34;monospace&#34;
+
+from math import ceil
+from matplotlib.lines import Line2D
+from scipy.spatial import cKDTree
+from scipy.interpolate import interpnd, griddata
+from sklearn.metrics.pairwise import euclidean_distances
+
+
+def bin_threshold(mat, threshmin=None, threshmax=0.5):
+    &#34;&#34;&#34;
+    Generate binary segmentation from probabilities
+
+    Parameters
+    ----------
+    mat : np.array
+        The data
+    threshmin : float or None
+        Minimum value on [0,1] to assign binary IDs from probabilities.
+    thresmax : float
+        Maximum value on [0,1] to assign binary IDs from probabilities. Values higher
+        than threshmax -&gt; 1. Values lower than thresmax -&gt; 0.
+
+    Returns
+    -------
+    a : np.array
+        Thresholded matrix
+    &#34;&#34;&#34;
+    a = np.ma.array(mat, copy=True)
+    mask = np.zeros(a.shape, dtype=bool)
+    if threshmin:
+        mask |= (a &lt; threshmin).filled(False)
+
+    if threshmax:
+        mask |= (a &gt; threshmax).filled(False)
+
+    a[mask] = 1
+    a[~mask] = 0
+    return a
+
+
+def map_pixels(adata, filter_label=&#34;in_tissue&#34;, img_key=&#34;hires&#34;, library_id=None):
+    &#34;&#34;&#34;
+    Map spot IDs to &#39;pixel space&#39; by assigning spot ID values to evenly spaced grid
+
+    Parameters
+    ----------
+    adata : AnnData.anndata
+        The data
+    filter_label : str or None
+        adata.obs column key that contains binary labels for filtering barcodes. If
+        None, do not filter.
+    img_key : str
+        adata.uns key containing the image to use for mapping
+
+    Returns
+    -------
+    adata : AnnData.anndata
+        with the following attributes:
+        adata.uns[&#34;pixel_map_df&#34;] : pd.DataFrame
+            Long-form dataframe of Visium spot barcode IDs, pixel coordinates, and
+            .obs metadata
+        adata.uns[&#34;pixel_map&#34;] : np.array
+            Pixel space array of Visium spot barcode IDs
+    &#34;&#34;&#34;
+    adata.uns[&#34;pixel_map_params&#34;] = {
+        &#34;img_key&#34;: img_key
+    }  # create params dict for future use
+    # add library_id key to params
+    if library_id is None:
+        library_id = adata.uns[&#34;pixel_map_params&#34;][&#34;library_id&#34;] = list(
+            adata.uns[&#34;spatial&#34;].keys()
+        )[0]
+    else:
+        adata.uns[&#34;pixel_map_params&#34;][&#34;library_id&#34;] = library_id
+    # first get center-to-face pixel distance of hexagonal Visium spots
+    dist = euclidean_distances(adata.obsm[&#34;spatial&#34;])
+    adata.uns[&#34;pixel_map_params&#34;][&#34;ctr_to_face&#34;] = (
+        np.unique(dist)[np.unique(dist) != 0].min() / 2
+    )
+    # also save center-to-vertex pixel distance as vadata attribute
+    adata.uns[&#34;pixel_map_params&#34;][&#34;ctr_to_vert&#34;] = adata.uns[&#34;pixel_map_params&#34;][
+        &#34;ctr_to_face&#34;
+    ] / np.cos(30 * (np.pi / 180))
+    # get the spot radius from adata.uns[&#34;spatial&#34;] as well
+    adata.uns[&#34;pixel_map_params&#34;][&#34;radius&#34;] = (
+        adata.uns[&#34;spatial&#34;][library_id][&#34;scalefactors&#34;][&#34;spot_diameter_fullres&#34;] / 2
+    )
+    # get scale factor from adata.uns[&#34;spatial&#34;]
+    adata.uns[&#34;pixel_map_params&#34;][&#34;scalef&#34;] = adata.uns[&#34;spatial&#34;][library_id][
+        &#34;scalefactors&#34;
+    ][f&#34;tissue_{img_key}_scalef&#34;]
+
+    # determine pixel bounds from spot coords, adding center-to-face distance
+    adata.uns[&#34;pixel_map_params&#34;][&#34;xmin_px&#34;] = int(
+        np.floor(
+            adata.uns[&#34;pixel_map_params&#34;][&#34;scalef&#34;]
+            * (
+                adata.obsm[&#34;spatial&#34;][:, 0].min()
+                - adata.uns[&#34;pixel_map_params&#34;][&#34;radius&#34;]
+            )
+        )
+    )
+    adata.uns[&#34;pixel_map_params&#34;][&#34;xmax_px&#34;] = int(
+        np.ceil(
+            adata.uns[&#34;pixel_map_params&#34;][&#34;scalef&#34;]
+            * (
+                adata.obsm[&#34;spatial&#34;][:, 0].max()
+                + adata.uns[&#34;pixel_map_params&#34;][&#34;radius&#34;]
+            )
+        )
+    )
+    adata.uns[&#34;pixel_map_params&#34;][&#34;ymin_px&#34;] = int(
+        np.floor(
+            adata.uns[&#34;pixel_map_params&#34;][&#34;scalef&#34;]
+            * (
+                adata.obsm[&#34;spatial&#34;][:, 1].min()
+                - adata.uns[&#34;pixel_map_params&#34;][&#34;radius&#34;]
+            )
+        )
+    )
+    adata.uns[&#34;pixel_map_params&#34;][&#34;ymax_px&#34;] = int(
+        np.ceil(
+            adata.uns[&#34;pixel_map_params&#34;][&#34;scalef&#34;]
+            * (
+                adata.obsm[&#34;spatial&#34;][:, 1].max()
+                + adata.uns[&#34;pixel_map_params&#34;][&#34;radius&#34;]
+            )
+        )
+    )
+
+    print(&#34;Creating pixel grid and mapping to nearest barcode coordinates&#34;)
+    # define grid for pixel space
+    grid_y, grid_x = np.mgrid[
+        adata.uns[&#34;pixel_map_params&#34;][&#34;ymin_px&#34;] : adata.uns[&#34;pixel_map_params&#34;][
+            &#34;ymax_px&#34;
+        ],
+        adata.uns[&#34;pixel_map_params&#34;][&#34;xmin_px&#34;] : adata.uns[&#34;pixel_map_params&#34;][
+            &#34;xmax_px&#34;
+        ],
+    ]
+    # map barcodes to pixel coordinates
+    pixel_coords = np.column_stack((grid_x.ravel(order=&#34;C&#34;), grid_y.ravel(order=&#34;C&#34;)))
+    barcode_list = griddata(
+        np.multiply(adata.obsm[&#34;spatial&#34;], adata.uns[&#34;pixel_map_params&#34;][&#34;scalef&#34;]),
+        adata.obs_names,
+        (pixel_coords[:, 0], pixel_coords[:, 1]),
+        method=&#34;nearest&#34;,
+    )
+    # save grid_x and grid_y to adata.uns
+    adata.uns[&#34;grid_x&#34;], adata.uns[&#34;grid_y&#34;] = grid_x, grid_y
+
+    # put results into DataFrame for filtering and reindexing
+    print(&#34;Saving barcode mapping to adata.uns[&#39;pixel_map_df&#39;] and adding metadata&#34;)
+    adata.uns[&#34;pixel_map_df&#34;] = pd.DataFrame(pixel_coords, columns=[&#34;x&#34;, &#34;y&#34;])
+    # add barcodes to long-form dataframe
+    adata.uns[&#34;pixel_map_df&#34;][&#34;barcode&#34;] = barcode_list
+    # merge master df with self.adata.obs for metadata
+    adata.uns[&#34;pixel_map_df&#34;] = adata.uns[&#34;pixel_map_df&#34;].merge(
+        adata.obs, how=&#34;outer&#34;, left_on=&#34;barcode&#34;, right_index=True
+    )
+    # filter using label from adata.obs if desired (i.e. &#34;in_tissue&#34;)
+    if filter_label is not None:
+        print(
+            &#34;Filtering barcodes using labels in self.adata.obs[&#39;{}&#39;]&#34;.format(
+                filter_label
+            )
+        )
+        # set empty pixels (no Visium spot) to &#34;none&#34;
+        adata.uns[&#34;pixel_map_df&#34;].loc[
+            adata.uns[&#34;pixel_map_df&#34;][filter_label].isin([&#34;False&#34;, False, 0, 0.0]),
+            &#34;barcode&#34;,
+        ] = &#34;none&#34;
+        # subset the entire anndata object using filter_label
+        adata = adata[adata.obs[filter_label].isin([&#34;True&#34;, True, 1.0, 1]), :].copy()
+        print(&#34;New size: {} spots x {} genes&#34;.format(adata.n_obs, adata.n_vars))
+
+    print(&#34;Done!&#34;)
+    return adata
+
+
+def trim_image(
+    adata, distance_trim=False, threshold=None, channels=None, plot_out=True, **kwargs
+):
+    &#34;&#34;&#34;
+    Trim pixels in image using pixel map output from Visium barcodes
+
+    Parameters
+    ----------
+    adata : AnnData.anndata
+        The data
+    distance_trim : bool
+        Manually trim pixels by distance to nearest Visium spot center
+    threshold : int or None
+        Number of pixels from nearest Visium spot center to call barcode ID. Ignored
+        if `distance_trim==False`.
+    channels : list of str or None
+        Names of image channels in axis order. If None, channels are named &#34;ch_0&#34;,
+        &#34;ch_1&#34;, etc.
+    plot_out : bool
+        Plot final trimmed image
+    **kwargs
+        Arguments to pass to `show_pita()` function if `plot_out==True`
+
+    Returns
+    -------
+    adata.uns[&#34;pixel_map_trim&#34;] : np.array
+        Contains image with unused pixels set to `np.nan`
+    adata.obsm[&#34;spatial_trim&#34;] : np.array
+        Contains spatial coords with adjusted pixel values after image cropping
+    &#34;&#34;&#34;
+    assert (
+        adata.uns[&#34;pixel_map_params&#34;] is not None
+    ), &#34;Pixel map not yet created. Run map_pixels() first.&#34;
+
+    print(
+        &#34;Cropping image to pixel dimensions and adding values to adata.uns[&#39;pixel_map_df&#39;]&#34;
+    )
+    cropped = adata.uns[&#34;spatial&#34;][adata.uns[&#34;pixel_map_params&#34;][&#34;library_id&#34;]][
+        &#34;images&#34;
+    ][adata.uns[&#34;pixel_map_params&#34;][&#34;img_key&#34;]].transpose(1, 0, 2)[
+        int(adata.uns[&#34;pixel_map_params&#34;][&#34;xmin_px&#34;]) : int(
+            (adata.uns[&#34;pixel_map_params&#34;][&#34;xmax_px&#34;])
+        ),
+        int(adata.uns[&#34;pixel_map_params&#34;][&#34;ymin_px&#34;]) : int(
+            (adata.uns[&#34;pixel_map_params&#34;][&#34;ymax_px&#34;])
+        ),
+    ]
+    # crop x,y coords and save to .obsm as well
+    print(&#34;Cropping Visium spot coordinates and saving to adata.obsm[&#39;spatial_trim&#39;]&#34;)
+    adata.obsm[&#34;spatial_trim&#34;] = adata.obsm[&#34;spatial&#34;] - np.repeat(
+        [
+            [
+                adata.uns[&#34;pixel_map_params&#34;][&#34;xmin_px&#34;],
+                adata.uns[&#34;pixel_map_params&#34;][&#34;ymin_px&#34;],
+            ]
+        ],
+        adata.obsm[&#34;spatial&#34;].shape[0],
+        axis=0,
+    )
+
+    # manual trimming of pixels by distance if desired
+    if distance_trim:
+        print(&#34;Calculating pixel distances from spot centers for thresholding&#34;)
+        tree = cKDTree(adata.obsm[&#34;spatial&#34;])
+        xi = interpnd._ndim_coords_from_arrays(
+            (adata.uns[&#34;grid_x&#34;], adata.uns[&#34;grid_y&#34;]),
+            ndim=adata.obsm[&#34;spatial&#34;].shape[1],
+        )
+        dists, _ = tree.query(xi)
+
+        # determine distance threshold
+        if threshold is None:
+            threshold = int(adata.uns[&#34;pixel_map_params&#34;][&#34;ctr_to_vert&#34;] + 1)
+            print(
+                &#34;Using distance threshold of {} pixels from adata.uns[&#39;pixel_map_params&#39;][&#39;ctr_to_vert&#39;]&#34;.format(
+                    threshold
+                )
+            )
+
+        dist_mask = bin_threshold(dists, threshmax=threshold)
+        if plot_out:
+            # plot pixel distances from spot centers on image
+            show_pita(pita=dists, figsize=(4, 4))
+            # plot binary thresholded image
+            show_pita(pita=dist_mask, figsize=(4, 4))
+
+        print(
+            &#34;Trimming pixels by spot distance and adjusting labels in adata.uns[&#39;pixel_map_df&#39;]&#34;
+        )
+        mask_df = pd.DataFrame(dist_mask.T.ravel(order=&#34;F&#34;), columns=[&#34;manual_trim&#34;])
+        adata.uns[&#34;pixel_map_df&#34;] = adata.uns[&#34;pixel_map_df&#34;].merge(
+            mask_df, left_index=True, right_index=True
+        )
+        adata.uns[&#34;pixel_map_df&#34;].loc[
+            adata.uns[&#34;pixel_map_df&#34;][&#34;manual_trim&#34;] == 1, [&#34;barcode&#34;]
+        ] = &#34;none&#34;  # set empty pixels to empty barcode
+        adata.uns[&#34;pixel_map_df&#34;].drop(
+            columns=&#34;manual_trim&#34;, inplace=True
+        )  # remove unneeded label
+
+    if channels is None:
+        # if channel names not specified, name them numerically
+        channels = [&#34;ch_{}&#34;.format(x) for x in range(cropped.shape[2])]
+    # cast image intensity values to long-form and add to adata.uns[&#34;pixel_map_df&#34;]
+    rgb = pd.DataFrame(
+        np.column_stack(
+            [cropped[:, :, x].ravel(order=&#34;F&#34;) for x in range(cropped.shape[2])]
+        ),
+        columns=channels,
+    )
+    adata.uns[&#34;pixel_map_df&#34;] = adata.uns[&#34;pixel_map_df&#34;].merge(
+        rgb, left_index=True, right_index=True
+    )
+    adata.uns[&#34;pixel_map_df&#34;].loc[
+        adata.uns[&#34;pixel_map_df&#34;][&#34;barcode&#34;] == &#34;none&#34;, channels
+    ] = np.nan  # set empty pixels to invalid image intensity value
+
+    # calculate mean image values for each channel and create .obsm key
+    adata.obsm[&#34;image_means&#34;] = (
+        adata.uns[&#34;pixel_map_df&#34;]
+        .loc[adata.uns[&#34;pixel_map_df&#34;][&#34;barcode&#34;] != &#34;none&#34;, [&#34;barcode&#34;] + channels]
+        .groupby(&#34;barcode&#34;)
+        .mean()
+        .values
+    )
+
+    print(
+        &#34;Saving cropped and trimmed image to adata.uns[&#39;spatial&#39;][&#39;{}&#39;][&#39;images&#39;][&#39;{}_trim&#39;]&#34;.format(
+            adata.uns[&#34;pixel_map_params&#34;][&#34;library_id&#34;],
+            adata.uns[&#34;pixel_map_params&#34;][&#34;img_key&#34;],
+        )
+    )
+    adata.uns[&#34;spatial&#34;][adata.uns[&#34;pixel_map_params&#34;][&#34;library_id&#34;]][&#34;images&#34;][
+        &#34;{}_trim&#34;.format(adata.uns[&#34;pixel_map_params&#34;][&#34;img_key&#34;])
+    ] = np.dstack(
+        [
+            adata.uns[&#34;pixel_map_df&#34;]
+            .pivot(index=&#34;y&#34;, columns=&#34;x&#34;, values=[channels[x]])
+            .values
+            for x in range(len(channels))
+        ]
+    )
+    # save scale factor as well
+    adata.uns[&#34;spatial&#34;][adata.uns[&#34;pixel_map_params&#34;][&#34;library_id&#34;]][&#34;scalefactors&#34;][
+        &#34;tissue_{}_trim_scalef&#34;.format(adata.uns[&#34;pixel_map_params&#34;][&#34;img_key&#34;])
+    ] = adata.uns[&#34;spatial&#34;][adata.uns[&#34;pixel_map_params&#34;][&#34;library_id&#34;]][
+        &#34;scalefactors&#34;
+    ][
+        &#34;tissue_{}_scalef&#34;.format(adata.uns[&#34;pixel_map_params&#34;][&#34;img_key&#34;])
+    ]
+    # plot results if desired
+    if plot_out:
+        if len(channels) == 3:
+            show_pita(
+                pita=adata.uns[&#34;spatial&#34;][adata.uns[&#34;pixel_map_params&#34;][&#34;library_id&#34;]][
+                    &#34;images&#34;
+                ][&#34;{}_trim&#34;.format(adata.uns[&#34;pixel_map_params&#34;][&#34;img_key&#34;])],
+                RGB=True,
+                label=channels,
+                **kwargs,
+            )
+        else:
+            show_pita(
+                pita=adata.uns[&#34;spatial&#34;][adata.uns[&#34;pixel_map_params&#34;][&#34;library_id&#34;]][
+                    &#34;images&#34;
+                ][&#34;{}_trim&#34;.format(adata.uns[&#34;pixel_map_params&#34;][&#34;img_key&#34;])],
+                RGB=False,
+                label=channels,
+                **kwargs,
+            )
+    print(&#34;Done!&#34;)
+
+
+def assemble_pita(
+    adata, features=None, use_rep=None, layer=None, plot_out=True, **kwargs
+):
+    &#34;&#34;&#34;
+    Cast feature into pixel space to construct gene expression image (&#34;pita&#34;)
+
+    Parameters
+    ----------
+    adata : AnnData.anndata
+        the data
+    features : list of int or str
+        Names or indices of features to cast onto spot image. If `None`, cast all
+        features. If `plot_out`, first feature in list will be plotted. If not
+        specified and `plot_out`, first feature (index 0) will be plotted.
+    use_rep : str
+        Key from `adata.obsm` to use for plotting. If `None`, use `adata.X`.
+    layer :str
+        Key from `adata.layers` to use for plotting. Ignored if `use_rep` is not `None`
+    plot_out : bool
+        Show resulting image?
+    **kwargs
+        Arguments to pass to `show_pita()` function
+
+    Returns
+    -------
+    assembled : np.array
+        Image of desired expression in pixel space
+    &#34;&#34;&#34;
+    assert (
+        adata.uns[&#34;pixel_map_params&#34;] is not None
+    ), &#34;Pixel map not yet created. Run map_pixels() first.&#34;
+
+    # coerce features to list if only single string
+    if features and not isinstance(features, list):
+        features = [features]
+
+    if use_rep is None:
+        # use all genes if no gene features specified
+        if not features:
+            features = adata.var_names  # [adata.var.highly_variable == 1].tolist()
+        if layer is None:
+            print(&#34;Assembling pita with {} features from adata.X&#34;.format(len(features)))
+            mapper = pd.DataFrame(
+                adata.X[:, [adata.var_names.get_loc(x) for x in features]],
+                index=adata.obs_names,
+            )
+        else:
+            print(
+                &#34;Assembling pita with {} features from adata.layers[&#39;{}&#39;]&#34;.format(
+                    len(features), layer
+                )
+            )
+            mapper = pd.DataFrame(
+                adata.layers[layer][:, [adata.var_names.get_loc(x) for x in features]],
+                index=adata.obs_names,
+            )
+    elif use_rep in [&#34;.obs&#34;, &#34;obs&#34;]:
+        assert features is not None, &#34;Must provide feature(s) from adata.obs&#34;
+        print(&#34;Assembling pita with {} features from adata.obs&#34;.format(len(features)))
+        if all(isinstance(x, int) for x in features):
+            mapper = adata.obs.iloc[:, features].copy()
+        else:
+            mapper = adata.obs[features].copy()
+    else:
+        if not features:
+            print(
+                &#34;Assembling pita with {} features from adata.obsm[&#39;{}&#39;]&#34;.format(
+                    adata.obsm[use_rep].shape[1], use_rep
+                )
+            )
+            mapper = pd.DataFrame(adata.obsm[use_rep], index=adata.obs_names)
+        else:
+            assert all(
+                isinstance(x, int) for x in features
+            ), &#34;Features must be integer indices if using rep from adata.obsm&#34;
+            print(
+                &#34;Assembling pita with {} features from adata.obsm[&#39;{}&#39;]&#34;.format(
+                    len(features), use_rep
+                )
+            )
+            mapper = pd.DataFrame(
+                adata.obsm[use_rep][:, features], index=adata.obs_names
+            )
+
+    # cast barcodes into pixel dimensions for reindexing
+    print(&#34;Casting barcodes to pixel dimensions and saving to adata.uns[&#39;pixel_map&#39;]&#34;)
+    pixel_map = (
+        adata.uns[&#34;pixel_map_df&#34;].pivot(index=&#34;y&#34;, columns=&#34;x&#34;, values=&#34;barcode&#34;).values
+    )
+
+    assembled = np.array(
+        [mapper.reindex(index=pixel_map[x], copy=True) for x in range(len(pixel_map))]
+    ).squeeze()
+
+    if plot_out:
+        show_pita(pita=assembled, **kwargs)
+    print(&#34;Done!&#34;)
+    return assembled
+
+
+def show_pita(
+    pita,
+    features=None,
+    RGB=False,
+    histo=None,
+    label=&#34;feature&#34;,
+    ncols=4,
+    figsize=(7, 7),
+    save_to=None,
+    **kwargs,
+):
+    &#34;&#34;&#34;
+    Plot assembled pita using `plt.imshow()`
+
+    Parameters
+    ----------
+    pita : np.array
+        Image of desired expression in pixel space from `.assemble_pita()`
+    features : list of int, optional (default=`None`)
+        List of features by index to show in plot. If `None`, use all features.
+    RGB : bool, optional (default=`False`)
+        Treat 3-dimensional array as RGB image
+    histo : np.array or `None`, optional (default=`None`)
+        Histology image to show along with pita in gridspec. If `None`, ignore.
+    label : str
+        What to title each panel of the gridspec (i.e. &#34;PC&#34; or &#34;usage&#34;) or each
+        channel in RGB image. Can also pass list of names e.g. [&#34;NeuN&#34;,&#34;GFAP&#34;,
+        &#34;DAPI&#34;] corresponding to channels.
+    ncols : int
+        Number of columns for gridspec
+    figsize : tuple of float
+        Size in inches of output figure
+    save_to : str or None
+        Path to image file to save results. if `None`, show figure.
+    **kwargs
+        Arguments to pass to `plt.imshow()` function
+
+    Returns
+    -------
+    Matplotlib object (if plotting one feature or RGB) or gridspec object (for
+    multiple features). Saves plot to file if `save_to` is not `None`.
+    &#34;&#34;&#34;
+    assert pita.ndim &gt; 1, &#34;Pita does not have enough dimensions: {} given&#34;.format(
+        pita.ndim
+    )
+    assert pita.ndim &lt; 4, &#34;Pita has too many dimensions: {} given&#34;.format(pita.ndim)
+    # if only one feature (2D), plot it quickly
+    if (pita.ndim == 2) and histo is None:
+        fig = plt.figure(figsize=figsize)
+        plt.imshow(pita, **kwargs)
+        plt.tick_params(labelbottom=False, labelleft=False)
+        sns.despine(bottom=True, left=True)
+        plt.colorbar(shrink=0.8)
+        plt.tight_layout()
+        if save_to:
+            plt.savefig(fname=save_to, transparent=True, bbox_inches=&#34;tight&#34;, dpi=800)
+        return fig
+    if RGB:
+        # if third dim has 3 features, treat as RGB and plot it quickly
+        assert (pita.ndim == 3) &amp; (
+            pita.shape[2] == 3
+        ), &#34;Need 3 dimensions and 3 given features for an RGB image; shape = {}; features given = {}&#34;.format(
+            pita.shape, len(features)
+        )
+        print(&#34;Plotting pita as RGB image&#34;)
+        if isinstance(label, str):
+            # if label is single string, name channels numerically
+            channels = [&#34;{}_{}&#34;.format(label, x) for x in range(pita.shape[2])]
+        else:
+            assert (
+                len(label) == 3
+            ), &#34;Please pass 3 channel names for RGB plot; {} labels given: {}&#34;.format(
+                len(label), label
+            )
+            channels = label
+        if histo is not None:
+            n_rows, n_cols = 1, 2  # two images here, histo and RGB
+            fig = plt.figure(figsize=(ncols * n_cols, ncols * n_rows))
+            # arrange axes as subplots
+            gs = gridspec.GridSpec(n_rows, n_cols, figure=fig)
+            # add plots to axes
+            ax = plt.subplot(gs[0])
+            im = ax.imshow(histo, **kwargs)
+            ax.tick_params(labelbottom=False, labelleft=False)
+            sns.despine(bottom=True, left=True)
+            ax.set_title(
+                label=&#34;Histology&#34;,
+                loc=&#34;left&#34;,
+                fontweight=&#34;bold&#34;,
+                fontsize=16,
+            )
+            ax = plt.subplot(gs[1])
+            im = ax.imshow(pita, **kwargs)
+            # add legend for channel IDs
+            custom_lines = [
+                Line2D([0], [0], color=(1, 0, 0), lw=5),
+                Line2D([0], [0], color=(0, 1, 0), lw=5),
+                Line2D([0], [0], color=(0, 0, 1), lw=5),
+            ]
+            plt.legend(custom_lines, channels, fontsize=&#34;medium&#34;)
+            ax.tick_params(labelbottom=False, labelleft=False)
+            sns.despine(bottom=True, left=True)
+            fig.tight_layout()
+            if save_to:
+                plt.savefig(
+                    fname=save_to, transparent=True, bbox_inches=&#34;tight&#34;, dpi=800
+                )
+            return fig
+        else:
+            fig = plt.figure(figsize=figsize)
+            plt.imshow(pita, **kwargs)
+            # add legend for channel IDs
+            custom_lines = [
+                Line2D([0], [0], color=(1, 0, 0), lw=5),
+                Line2D([0], [0], color=(0, 1, 0), lw=5),
+                Line2D([0], [0], color=(0, 0, 1), lw=5),
+            ]
+            plt.legend(custom_lines, channels, fontsize=&#34;medium&#34;)
+            plt.tick_params(labelbottom=False, labelleft=False)
+            sns.despine(bottom=True, left=True)
+            plt.tight_layout()
+            if save_to:
+                plt.savefig(
+                    fname=save_to, transparent=True, bbox_inches=&#34;tight&#34;, dpi=800
+                )
+            return fig
+    # if pita has multiple features, plot them in gridspec
+    if isinstance(features, int):  # force features into list if single integer
+        features = [features]
+    # if no features are given, use all of them
+    if features is None:
+        features = [x + 1 for x in range(pita.shape[2])]
+    else:
+        assert (
+            pita.ndim &gt; 2
+        ), &#34;Not enough features in pita: shape {}, expecting 3rd dim with length {}&#34;.format(
+            pita.shape, len(features)
+        )
+        assert (
+            len(features) &lt;= pita.shape[2]
+        ), &#34;Too many features given: pita has {}, expected {}&#34;.format(
+            pita.shape[2], len(features)
+        )
+    if isinstance(label, str):
+        # if label is single string, name channels numerically
+        labels = [&#34;{}_{}&#34;.format(label, x) for x in features]
+    else:
+        assert len(label) == len(
+            features
+        ), &#34;Please provide the same number of labels as features; {} labels given, {} features given.&#34;.format(
+            len(label), len(features)
+        )
+        labels = label
+    # calculate gridspec dimensions
+    if histo is not None:
+        labels = [&#34;Histology&#34;] + labels  # append histo to front of labels
+        if len(features) + 1 &lt;= ncols:
+            n_rows, n_cols = 1, len(features) + 1
+        else:
+            n_rows, n_cols = ceil((len(features) + 1) / ncols), ncols
+    else:
+        if len(features) &lt;= ncols:
+            n_rows, n_cols = 1, len(features)
+        else:
+            n_rows, n_cols = ceil(len(features) / ncols), ncols
+    fig = plt.figure(figsize=(ncols * n_cols, ncols * n_rows))
+    # arrange axes as subplots
+    gs = gridspec.GridSpec(n_rows, n_cols, figure=fig)
+    # add plots to axes
+    i = 0
+    if histo is not None:
+        # add histology plot to first axes
+        ax = plt.subplot(gs[i])
+        im = ax.imshow(histo, **kwargs)
+        ax.tick_params(labelbottom=False, labelleft=False)
+        sns.despine(bottom=True, left=True)
+        ax.set_title(
+            label=labels[i],
+            loc=&#34;left&#34;,
+            fontweight=&#34;bold&#34;,
+            fontsize=16,
+        )
+        i = i + 1
+    for feature in features:
+        ax = plt.subplot(gs[i])
+        im = ax.imshow(pita[:, :, feature - 1], **kwargs)
+        ax.tick_params(labelbottom=False, labelleft=False)
+        sns.despine(bottom=True, left=True)
+        ax.set_title(
+            label=labels[i],
+            loc=&#34;left&#34;,
+            fontweight=&#34;bold&#34;,
+            fontsize=16,
+        )
+        cbar = plt.colorbar(im, shrink=0.8)
+        i = i + 1
+    fig.tight_layout()
+    if save_to:
+        plt.savefig(fname=save_to, transparent=True, bbox_inches=&#34;tight&#34;, dpi=800)
+    return fig</code></pre>
+</details>
+</section>
+<section>
+</section>
+<section>
+</section>
+<section>
+<h2 class="section-title" id="header-functions">Functions</h2>
+<dl>
+<dt id="st_utils.assemble_pita"><code class="name flex">
+<span>def <span class="ident">assemble_pita</span></span>(<span>adata, features=None, use_rep=None, layer=None, plot_out=True, **kwargs)</span>
+</code></dt>
+<dd>
+<div class="desc"><p>Cast feature into pixel space to construct gene expression image ("pita")</p>
+<h2 id="parameters">Parameters</h2>
+<dl>
+<dt><strong><code>adata</code></strong> :&ensp;<code>AnnData.anndata</code></dt>
+<dd>the data</dd>
+<dt><strong><code>features</code></strong> :&ensp;<code>list</code> of <code>int</code> or <code>str</code></dt>
+<dd>Names or indices of features to cast onto spot image. If <code>None</code>, cast all
+features. If <code>plot_out</code>, first feature in list will be plotted. If not
+specified and <code>plot_out</code>, first feature (index 0) will be plotted.</dd>
+<dt><strong><code>use_rep</code></strong> :&ensp;<code>str</code></dt>
+<dd>Key from <code>adata.obsm</code> to use for plotting. If <code>None</code>, use <code>adata.X</code>.</dd>
+<dt>layer :str</dt>
+<dt>Key from <code>adata.layers</code> to use for plotting. Ignored if <code>use_rep</code> is not <code>None</code></dt>
+<dt><strong><code>plot_out</code></strong> :&ensp;<code>bool</code></dt>
+<dd>Show resulting image?</dd>
+<dt><strong><code>**kwargs</code></strong></dt>
+<dd>Arguments to pass to <code><a title="st_utils.show_pita" href="#st_utils.show_pita">show_pita()</a></code> function</dd>
+</dl>
+<h2 id="returns">Returns</h2>
+<dl>
+<dt><strong><code>assembled</code></strong> :&ensp;<code>np.array</code></dt>
+<dd>Image of desired expression in pixel space</dd>
+</dl></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def assemble_pita(
+    adata, features=None, use_rep=None, layer=None, plot_out=True, **kwargs
+):
+    &#34;&#34;&#34;
+    Cast feature into pixel space to construct gene expression image (&#34;pita&#34;)
+
+    Parameters
+    ----------
+    adata : AnnData.anndata
+        the data
+    features : list of int or str
+        Names or indices of features to cast onto spot image. If `None`, cast all
+        features. If `plot_out`, first feature in list will be plotted. If not
+        specified and `plot_out`, first feature (index 0) will be plotted.
+    use_rep : str
+        Key from `adata.obsm` to use for plotting. If `None`, use `adata.X`.
+    layer :str
+        Key from `adata.layers` to use for plotting. Ignored if `use_rep` is not `None`
+    plot_out : bool
+        Show resulting image?
+    **kwargs
+        Arguments to pass to `show_pita()` function
+
+    Returns
+    -------
+    assembled : np.array
+        Image of desired expression in pixel space
+    &#34;&#34;&#34;
+    assert (
+        adata.uns[&#34;pixel_map_params&#34;] is not None
+    ), &#34;Pixel map not yet created. Run map_pixels() first.&#34;
+
+    # coerce features to list if only single string
+    if features and not isinstance(features, list):
+        features = [features]
+
+    if use_rep is None:
+        # use all genes if no gene features specified
+        if not features:
+            features = adata.var_names  # [adata.var.highly_variable == 1].tolist()
+        if layer is None:
+            print(&#34;Assembling pita with {} features from adata.X&#34;.format(len(features)))
+            mapper = pd.DataFrame(
+                adata.X[:, [adata.var_names.get_loc(x) for x in features]],
+                index=adata.obs_names,
+            )
+        else:
+            print(
+                &#34;Assembling pita with {} features from adata.layers[&#39;{}&#39;]&#34;.format(
+                    len(features), layer
+                )
+            )
+            mapper = pd.DataFrame(
+                adata.layers[layer][:, [adata.var_names.get_loc(x) for x in features]],
+                index=adata.obs_names,
+            )
+    elif use_rep in [&#34;.obs&#34;, &#34;obs&#34;]:
+        assert features is not None, &#34;Must provide feature(s) from adata.obs&#34;
+        print(&#34;Assembling pita with {} features from adata.obs&#34;.format(len(features)))
+        if all(isinstance(x, int) for x in features):
+            mapper = adata.obs.iloc[:, features].copy()
+        else:
+            mapper = adata.obs[features].copy()
+    else:
+        if not features:
+            print(
+                &#34;Assembling pita with {} features from adata.obsm[&#39;{}&#39;]&#34;.format(
+                    adata.obsm[use_rep].shape[1], use_rep
+                )
+            )
+            mapper = pd.DataFrame(adata.obsm[use_rep], index=adata.obs_names)
+        else:
+            assert all(
+                isinstance(x, int) for x in features
+            ), &#34;Features must be integer indices if using rep from adata.obsm&#34;
+            print(
+                &#34;Assembling pita with {} features from adata.obsm[&#39;{}&#39;]&#34;.format(
+                    len(features), use_rep
+                )
+            )
+            mapper = pd.DataFrame(
+                adata.obsm[use_rep][:, features], index=adata.obs_names
+            )
+
+    # cast barcodes into pixel dimensions for reindexing
+    print(&#34;Casting barcodes to pixel dimensions and saving to adata.uns[&#39;pixel_map&#39;]&#34;)
+    pixel_map = (
+        adata.uns[&#34;pixel_map_df&#34;].pivot(index=&#34;y&#34;, columns=&#34;x&#34;, values=&#34;barcode&#34;).values
+    )
+
+    assembled = np.array(
+        [mapper.reindex(index=pixel_map[x], copy=True) for x in range(len(pixel_map))]
+    ).squeeze()
+
+    if plot_out:
+        show_pita(pita=assembled, **kwargs)
+    print(&#34;Done!&#34;)
+    return assembled</code></pre>
+</details>
+</dd>
+<dt id="st_utils.bin_threshold"><code class="name flex">
+<span>def <span class="ident">bin_threshold</span></span>(<span>mat, threshmin=None, threshmax=0.5)</span>
+</code></dt>
+<dd>
+<div class="desc"><p>Generate binary segmentation from probabilities</p>
+<h2 id="parameters">Parameters</h2>
+<dl>
+<dt><strong><code>mat</code></strong> :&ensp;<code>np.array</code></dt>
+<dd>The data</dd>
+<dt><strong><code>threshmin</code></strong> :&ensp;<code>float</code> or <code>None</code></dt>
+<dd>Minimum value on [0,1] to assign binary IDs from probabilities.</dd>
+<dt><strong><code>thresmax</code></strong> :&ensp;<code>float</code></dt>
+<dd>Maximum value on [0,1] to assign binary IDs from probabilities. Values higher
+than threshmax -&gt; 1. Values lower than thresmax -&gt; 0.</dd>
+</dl>
+<h2 id="returns">Returns</h2>
+<dl>
+<dt><strong><code>a</code></strong> :&ensp;<code>np.array</code></dt>
+<dd>Thresholded matrix</dd>
+</dl></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def bin_threshold(mat, threshmin=None, threshmax=0.5):
+    &#34;&#34;&#34;
+    Generate binary segmentation from probabilities
+
+    Parameters
+    ----------
+    mat : np.array
+        The data
+    threshmin : float or None
+        Minimum value on [0,1] to assign binary IDs from probabilities.
+    thresmax : float
+        Maximum value on [0,1] to assign binary IDs from probabilities. Values higher
+        than threshmax -&gt; 1. Values lower than thresmax -&gt; 0.
+
+    Returns
+    -------
+    a : np.array
+        Thresholded matrix
+    &#34;&#34;&#34;
+    a = np.ma.array(mat, copy=True)
+    mask = np.zeros(a.shape, dtype=bool)
+    if threshmin:
+        mask |= (a &lt; threshmin).filled(False)
+
+    if threshmax:
+        mask |= (a &gt; threshmax).filled(False)
+
+    a[mask] = 1
+    a[~mask] = 0
+    return a</code></pre>
+</details>
+</dd>
+<dt id="st_utils.map_pixels"><code class="name flex">
+<span>def <span class="ident">map_pixels</span></span>(<span>adata, filter_label='in_tissue', img_key='hires', library_id=None)</span>
+</code></dt>
+<dd>
+<div class="desc"><p>Map spot IDs to 'pixel space' by assigning spot ID values to evenly spaced grid</p>
+<h2 id="parameters">Parameters</h2>
+<dl>
+<dt><strong><code>adata</code></strong> :&ensp;<code>AnnData.anndata</code></dt>
+<dd>The data</dd>
+<dt><strong><code>filter_label</code></strong> :&ensp;<code>str</code> or <code>None</code></dt>
+<dd>adata.obs column key that contains binary labels for filtering barcodes. If
+None, do not filter.</dd>
+<dt><strong><code>img_key</code></strong> :&ensp;<code>str</code></dt>
+<dd>adata.uns key containing the image to use for mapping</dd>
+</dl>
+<h2 id="returns">Returns</h2>
+<dl>
+<dt><strong><code>adata</code></strong> :&ensp;<code>AnnData.anndata</code></dt>
+<dd>with the following attributes:
+adata.uns["pixel_map_df"] : pd.DataFrame
+Long-form dataframe of Visium spot barcode IDs, pixel coordinates, and
+.obs metadata
+adata.uns["pixel_map"] : np.array
+Pixel space array of Visium spot barcode IDs</dd>
+</dl></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def map_pixels(adata, filter_label=&#34;in_tissue&#34;, img_key=&#34;hires&#34;, library_id=None):
+    &#34;&#34;&#34;
+    Map spot IDs to &#39;pixel space&#39; by assigning spot ID values to evenly spaced grid
+
+    Parameters
+    ----------
+    adata : AnnData.anndata
+        The data
+    filter_label : str or None
+        adata.obs column key that contains binary labels for filtering barcodes. If
+        None, do not filter.
+    img_key : str
+        adata.uns key containing the image to use for mapping
+
+    Returns
+    -------
+    adata : AnnData.anndata
+        with the following attributes:
+        adata.uns[&#34;pixel_map_df&#34;] : pd.DataFrame
+            Long-form dataframe of Visium spot barcode IDs, pixel coordinates, and
+            .obs metadata
+        adata.uns[&#34;pixel_map&#34;] : np.array
+            Pixel space array of Visium spot barcode IDs
+    &#34;&#34;&#34;
+    adata.uns[&#34;pixel_map_params&#34;] = {
+        &#34;img_key&#34;: img_key
+    }  # create params dict for future use
+    # add library_id key to params
+    if library_id is None:
+        library_id = adata.uns[&#34;pixel_map_params&#34;][&#34;library_id&#34;] = list(
+            adata.uns[&#34;spatial&#34;].keys()
+        )[0]
+    else:
+        adata.uns[&#34;pixel_map_params&#34;][&#34;library_id&#34;] = library_id
+    # first get center-to-face pixel distance of hexagonal Visium spots
+    dist = euclidean_distances(adata.obsm[&#34;spatial&#34;])
+    adata.uns[&#34;pixel_map_params&#34;][&#34;ctr_to_face&#34;] = (
+        np.unique(dist)[np.unique(dist) != 0].min() / 2
+    )
+    # also save center-to-vertex pixel distance as vadata attribute
+    adata.uns[&#34;pixel_map_params&#34;][&#34;ctr_to_vert&#34;] = adata.uns[&#34;pixel_map_params&#34;][
+        &#34;ctr_to_face&#34;
+    ] / np.cos(30 * (np.pi / 180))
+    # get the spot radius from adata.uns[&#34;spatial&#34;] as well
+    adata.uns[&#34;pixel_map_params&#34;][&#34;radius&#34;] = (
+        adata.uns[&#34;spatial&#34;][library_id][&#34;scalefactors&#34;][&#34;spot_diameter_fullres&#34;] / 2
+    )
+    # get scale factor from adata.uns[&#34;spatial&#34;]
+    adata.uns[&#34;pixel_map_params&#34;][&#34;scalef&#34;] = adata.uns[&#34;spatial&#34;][library_id][
+        &#34;scalefactors&#34;
+    ][f&#34;tissue_{img_key}_scalef&#34;]
+
+    # determine pixel bounds from spot coords, adding center-to-face distance
+    adata.uns[&#34;pixel_map_params&#34;][&#34;xmin_px&#34;] = int(
+        np.floor(
+            adata.uns[&#34;pixel_map_params&#34;][&#34;scalef&#34;]
+            * (
+                adata.obsm[&#34;spatial&#34;][:, 0].min()
+                - adata.uns[&#34;pixel_map_params&#34;][&#34;radius&#34;]
+            )
+        )
+    )
+    adata.uns[&#34;pixel_map_params&#34;][&#34;xmax_px&#34;] = int(
+        np.ceil(
+            adata.uns[&#34;pixel_map_params&#34;][&#34;scalef&#34;]
+            * (
+                adata.obsm[&#34;spatial&#34;][:, 0].max()
+                + adata.uns[&#34;pixel_map_params&#34;][&#34;radius&#34;]
+            )
+        )
+    )
+    adata.uns[&#34;pixel_map_params&#34;][&#34;ymin_px&#34;] = int(
+        np.floor(
+            adata.uns[&#34;pixel_map_params&#34;][&#34;scalef&#34;]
+            * (
+                adata.obsm[&#34;spatial&#34;][:, 1].min()
+                - adata.uns[&#34;pixel_map_params&#34;][&#34;radius&#34;]
+            )
+        )
+    )
+    adata.uns[&#34;pixel_map_params&#34;][&#34;ymax_px&#34;] = int(
+        np.ceil(
+            adata.uns[&#34;pixel_map_params&#34;][&#34;scalef&#34;]
+            * (
+                adata.obsm[&#34;spatial&#34;][:, 1].max()
+                + adata.uns[&#34;pixel_map_params&#34;][&#34;radius&#34;]
+            )
+        )
+    )
+
+    print(&#34;Creating pixel grid and mapping to nearest barcode coordinates&#34;)
+    # define grid for pixel space
+    grid_y, grid_x = np.mgrid[
+        adata.uns[&#34;pixel_map_params&#34;][&#34;ymin_px&#34;] : adata.uns[&#34;pixel_map_params&#34;][
+            &#34;ymax_px&#34;
+        ],
+        adata.uns[&#34;pixel_map_params&#34;][&#34;xmin_px&#34;] : adata.uns[&#34;pixel_map_params&#34;][
+            &#34;xmax_px&#34;
+        ],
+    ]
+    # map barcodes to pixel coordinates
+    pixel_coords = np.column_stack((grid_x.ravel(order=&#34;C&#34;), grid_y.ravel(order=&#34;C&#34;)))
+    barcode_list = griddata(
+        np.multiply(adata.obsm[&#34;spatial&#34;], adata.uns[&#34;pixel_map_params&#34;][&#34;scalef&#34;]),
+        adata.obs_names,
+        (pixel_coords[:, 0], pixel_coords[:, 1]),
+        method=&#34;nearest&#34;,
+    )
+    # save grid_x and grid_y to adata.uns
+    adata.uns[&#34;grid_x&#34;], adata.uns[&#34;grid_y&#34;] = grid_x, grid_y
+
+    # put results into DataFrame for filtering and reindexing
+    print(&#34;Saving barcode mapping to adata.uns[&#39;pixel_map_df&#39;] and adding metadata&#34;)
+    adata.uns[&#34;pixel_map_df&#34;] = pd.DataFrame(pixel_coords, columns=[&#34;x&#34;, &#34;y&#34;])
+    # add barcodes to long-form dataframe
+    adata.uns[&#34;pixel_map_df&#34;][&#34;barcode&#34;] = barcode_list
+    # merge master df with self.adata.obs for metadata
+    adata.uns[&#34;pixel_map_df&#34;] = adata.uns[&#34;pixel_map_df&#34;].merge(
+        adata.obs, how=&#34;outer&#34;, left_on=&#34;barcode&#34;, right_index=True
+    )
+    # filter using label from adata.obs if desired (i.e. &#34;in_tissue&#34;)
+    if filter_label is not None:
+        print(
+            &#34;Filtering barcodes using labels in self.adata.obs[&#39;{}&#39;]&#34;.format(
+                filter_label
+            )
+        )
+        # set empty pixels (no Visium spot) to &#34;none&#34;
+        adata.uns[&#34;pixel_map_df&#34;].loc[
+            adata.uns[&#34;pixel_map_df&#34;][filter_label].isin([&#34;False&#34;, False, 0, 0.0]),
+            &#34;barcode&#34;,
+        ] = &#34;none&#34;
+        # subset the entire anndata object using filter_label
+        adata = adata[adata.obs[filter_label].isin([&#34;True&#34;, True, 1.0, 1]), :].copy()
+        print(&#34;New size: {} spots x {} genes&#34;.format(adata.n_obs, adata.n_vars))
+
+    print(&#34;Done!&#34;)
+    return adata</code></pre>
+</details>
+</dd>
+<dt id="st_utils.show_pita"><code class="name flex">
+<span>def <span class="ident">show_pita</span></span>(<span>pita, features=None, RGB=False, histo=None, label='feature', ncols=4, figsize=(7, 7), save_to=None, **kwargs)</span>
+</code></dt>
+<dd>
+<div class="desc"><p>Plot assembled pita using <code>plt.imshow()</code></p>
+<h2 id="parameters">Parameters</h2>
+<dl>
+<dt><strong><code>pita</code></strong> :&ensp;<code>np.array</code></dt>
+<dd>Image of desired expression in pixel space from <code>.<a title="st_utils.assemble_pita" href="#st_utils.assemble_pita">assemble_pita()</a></code></dd>
+<dt><strong><code>features</code></strong> :&ensp;<code>list</code> of <code>int</code>, optional <code>(default=</code>None<code>)</code></dt>
+<dd>List of features by index to show in plot. If <code>None</code>, use all features.</dd>
+<dt><strong><code>RGB</code></strong> :&ensp;<code>bool</code>, optional <code>(default=</code>False<code>)</code></dt>
+<dd>Treat 3-dimensional array as RGB image</dd>
+<dt><strong><code>histo</code></strong> :&ensp;<code>np.array</code> or <code>None</code>, optional <code>(default=</code>None<code>)</code></dt>
+<dd>Histology image to show along with pita in gridspec. If <code>None</code>, ignore.</dd>
+<dt><strong><code>label</code></strong> :&ensp;<code>str</code></dt>
+<dd>What to title each panel of the gridspec (i.e. "PC" or "usage") or each
+channel in RGB image. Can also pass list of names e.g. ["NeuN","GFAP",
+"DAPI"] corresponding to channels.</dd>
+<dt><strong><code>ncols</code></strong> :&ensp;<code>int</code></dt>
+<dd>Number of columns for gridspec</dd>
+<dt><strong><code>figsize</code></strong> :&ensp;<code>tuple</code> of <code>float</code></dt>
+<dd>Size in inches of output figure</dd>
+<dt><strong><code>save_to</code></strong> :&ensp;<code>str</code> or <code>None</code></dt>
+<dd>Path to image file to save results. if <code>None</code>, show figure.</dd>
+<dt><strong><code>**kwargs</code></strong></dt>
+<dd>Arguments to pass to <code>plt.imshow()</code> function</dd>
+</dl>
+<h2 id="returns">Returns</h2>
+<dl>
+<dt><code>Matplotlib object (if plotting one feature</code> or <code>RGB)</code> or <code>gridspec object (for</code></dt>
+<dd>&nbsp;</dd>
+</dl>
+<p>multiple features). Saves plot to file if <code>save_to</code> is not <code>None</code>.</p></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def show_pita(
+    pita,
+    features=None,
+    RGB=False,
+    histo=None,
+    label=&#34;feature&#34;,
+    ncols=4,
+    figsize=(7, 7),
+    save_to=None,
+    **kwargs,
+):
+    &#34;&#34;&#34;
+    Plot assembled pita using `plt.imshow()`
+
+    Parameters
+    ----------
+    pita : np.array
+        Image of desired expression in pixel space from `.assemble_pita()`
+    features : list of int, optional (default=`None`)
+        List of features by index to show in plot. If `None`, use all features.
+    RGB : bool, optional (default=`False`)
+        Treat 3-dimensional array as RGB image
+    histo : np.array or `None`, optional (default=`None`)
+        Histology image to show along with pita in gridspec. If `None`, ignore.
+    label : str
+        What to title each panel of the gridspec (i.e. &#34;PC&#34; or &#34;usage&#34;) or each
+        channel in RGB image. Can also pass list of names e.g. [&#34;NeuN&#34;,&#34;GFAP&#34;,
+        &#34;DAPI&#34;] corresponding to channels.
+    ncols : int
+        Number of columns for gridspec
+    figsize : tuple of float
+        Size in inches of output figure
+    save_to : str or None
+        Path to image file to save results. if `None`, show figure.
+    **kwargs
+        Arguments to pass to `plt.imshow()` function
+
+    Returns
+    -------
+    Matplotlib object (if plotting one feature or RGB) or gridspec object (for
+    multiple features). Saves plot to file if `save_to` is not `None`.
+    &#34;&#34;&#34;
+    assert pita.ndim &gt; 1, &#34;Pita does not have enough dimensions: {} given&#34;.format(
+        pita.ndim
+    )
+    assert pita.ndim &lt; 4, &#34;Pita has too many dimensions: {} given&#34;.format(pita.ndim)
+    # if only one feature (2D), plot it quickly
+    if (pita.ndim == 2) and histo is None:
+        fig = plt.figure(figsize=figsize)
+        plt.imshow(pita, **kwargs)
+        plt.tick_params(labelbottom=False, labelleft=False)
+        sns.despine(bottom=True, left=True)
+        plt.colorbar(shrink=0.8)
+        plt.tight_layout()
+        if save_to:
+            plt.savefig(fname=save_to, transparent=True, bbox_inches=&#34;tight&#34;, dpi=800)
+        return fig
+    if RGB:
+        # if third dim has 3 features, treat as RGB and plot it quickly
+        assert (pita.ndim == 3) &amp; (
+            pita.shape[2] == 3
+        ), &#34;Need 3 dimensions and 3 given features for an RGB image; shape = {}; features given = {}&#34;.format(
+            pita.shape, len(features)
+        )
+        print(&#34;Plotting pita as RGB image&#34;)
+        if isinstance(label, str):
+            # if label is single string, name channels numerically
+            channels = [&#34;{}_{}&#34;.format(label, x) for x in range(pita.shape[2])]
+        else:
+            assert (
+                len(label) == 3
+            ), &#34;Please pass 3 channel names for RGB plot; {} labels given: {}&#34;.format(
+                len(label), label
+            )
+            channels = label
+        if histo is not None:
+            n_rows, n_cols = 1, 2  # two images here, histo and RGB
+            fig = plt.figure(figsize=(ncols * n_cols, ncols * n_rows))
+            # arrange axes as subplots
+            gs = gridspec.GridSpec(n_rows, n_cols, figure=fig)
+            # add plots to axes
+            ax = plt.subplot(gs[0])
+            im = ax.imshow(histo, **kwargs)
+            ax.tick_params(labelbottom=False, labelleft=False)
+            sns.despine(bottom=True, left=True)
+            ax.set_title(
+                label=&#34;Histology&#34;,
+                loc=&#34;left&#34;,
+                fontweight=&#34;bold&#34;,
+                fontsize=16,
+            )
+            ax = plt.subplot(gs[1])
+            im = ax.imshow(pita, **kwargs)
+            # add legend for channel IDs
+            custom_lines = [
+                Line2D([0], [0], color=(1, 0, 0), lw=5),
+                Line2D([0], [0], color=(0, 1, 0), lw=5),
+                Line2D([0], [0], color=(0, 0, 1), lw=5),
+            ]
+            plt.legend(custom_lines, channels, fontsize=&#34;medium&#34;)
+            ax.tick_params(labelbottom=False, labelleft=False)
+            sns.despine(bottom=True, left=True)
+            fig.tight_layout()
+            if save_to:
+                plt.savefig(
+                    fname=save_to, transparent=True, bbox_inches=&#34;tight&#34;, dpi=800
+                )
+            return fig
+        else:
+            fig = plt.figure(figsize=figsize)
+            plt.imshow(pita, **kwargs)
+            # add legend for channel IDs
+            custom_lines = [
+                Line2D([0], [0], color=(1, 0, 0), lw=5),
+                Line2D([0], [0], color=(0, 1, 0), lw=5),
+                Line2D([0], [0], color=(0, 0, 1), lw=5),
+            ]
+            plt.legend(custom_lines, channels, fontsize=&#34;medium&#34;)
+            plt.tick_params(labelbottom=False, labelleft=False)
+            sns.despine(bottom=True, left=True)
+            plt.tight_layout()
+            if save_to:
+                plt.savefig(
+                    fname=save_to, transparent=True, bbox_inches=&#34;tight&#34;, dpi=800
+                )
+            return fig
+    # if pita has multiple features, plot them in gridspec
+    if isinstance(features, int):  # force features into list if single integer
+        features = [features]
+    # if no features are given, use all of them
+    if features is None:
+        features = [x + 1 for x in range(pita.shape[2])]
+    else:
+        assert (
+            pita.ndim &gt; 2
+        ), &#34;Not enough features in pita: shape {}, expecting 3rd dim with length {}&#34;.format(
+            pita.shape, len(features)
+        )
+        assert (
+            len(features) &lt;= pita.shape[2]
+        ), &#34;Too many features given: pita has {}, expected {}&#34;.format(
+            pita.shape[2], len(features)
+        )
+    if isinstance(label, str):
+        # if label is single string, name channels numerically
+        labels = [&#34;{}_{}&#34;.format(label, x) for x in features]
+    else:
+        assert len(label) == len(
+            features
+        ), &#34;Please provide the same number of labels as features; {} labels given, {} features given.&#34;.format(
+            len(label), len(features)
+        )
+        labels = label
+    # calculate gridspec dimensions
+    if histo is not None:
+        labels = [&#34;Histology&#34;] + labels  # append histo to front of labels
+        if len(features) + 1 &lt;= ncols:
+            n_rows, n_cols = 1, len(features) + 1
+        else:
+            n_rows, n_cols = ceil((len(features) + 1) / ncols), ncols
+    else:
+        if len(features) &lt;= ncols:
+            n_rows, n_cols = 1, len(features)
+        else:
+            n_rows, n_cols = ceil(len(features) / ncols), ncols
+    fig = plt.figure(figsize=(ncols * n_cols, ncols * n_rows))
+    # arrange axes as subplots
+    gs = gridspec.GridSpec(n_rows, n_cols, figure=fig)
+    # add plots to axes
+    i = 0
+    if histo is not None:
+        # add histology plot to first axes
+        ax = plt.subplot(gs[i])
+        im = ax.imshow(histo, **kwargs)
+        ax.tick_params(labelbottom=False, labelleft=False)
+        sns.despine(bottom=True, left=True)
+        ax.set_title(
+            label=labels[i],
+            loc=&#34;left&#34;,
+            fontweight=&#34;bold&#34;,
+            fontsize=16,
+        )
+        i = i + 1
+    for feature in features:
+        ax = plt.subplot(gs[i])
+        im = ax.imshow(pita[:, :, feature - 1], **kwargs)
+        ax.tick_params(labelbottom=False, labelleft=False)
+        sns.despine(bottom=True, left=True)
+        ax.set_title(
+            label=labels[i],
+            loc=&#34;left&#34;,
+            fontweight=&#34;bold&#34;,
+            fontsize=16,
+        )
+        cbar = plt.colorbar(im, shrink=0.8)
+        i = i + 1
+    fig.tight_layout()
+    if save_to:
+        plt.savefig(fname=save_to, transparent=True, bbox_inches=&#34;tight&#34;, dpi=800)
+    return fig</code></pre>
+</details>
+</dd>
+<dt id="st_utils.trim_image"><code class="name flex">
+<span>def <span class="ident">trim_image</span></span>(<span>adata, distance_trim=False, threshold=None, channels=None, plot_out=True, **kwargs)</span>
+</code></dt>
+<dd>
+<div class="desc"><p>Trim pixels in image using pixel map output from Visium barcodes</p>
+<h2 id="parameters">Parameters</h2>
+<dl>
+<dt><strong><code>adata</code></strong> :&ensp;<code>AnnData.anndata</code></dt>
+<dd>The data</dd>
+<dt><strong><code>distance_trim</code></strong> :&ensp;<code>bool</code></dt>
+<dd>Manually trim pixels by distance to nearest Visium spot center</dd>
+<dt><strong><code>threshold</code></strong> :&ensp;<code>int</code> or <code>None</code></dt>
+<dd>Number of pixels from nearest Visium spot center to call barcode ID. Ignored
+if <code>distance_trim==False</code>.</dd>
+<dt><strong><code>channels</code></strong> :&ensp;<code>list</code> of <code>str</code> or <code>None</code></dt>
+<dd>Names of image channels in axis order. If None, channels are named "ch_0",
+"ch_1", etc.</dd>
+<dt><strong><code>plot_out</code></strong> :&ensp;<code>bool</code></dt>
+<dd>Plot final trimmed image</dd>
+<dt><strong><code>**kwargs</code></strong></dt>
+<dd>Arguments to pass to <code><a title="st_utils.show_pita" href="#st_utils.show_pita">show_pita()</a></code> function if <code>plot_out==True</code></dd>
+</dl>
+<h2 id="returns">Returns</h2>
+<dl>
+<dt><code>adata.uns["pixel_map_trim"] : np.array</code></dt>
+<dd>Contains image with unused pixels set to <code>np.nan</code></dd>
+<dt><code>adata.obsm["spatial_trim"] : np.array</code></dt>
+<dd>Contains spatial coords with adjusted pixel values after image cropping</dd>
+</dl></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def trim_image(
+    adata, distance_trim=False, threshold=None, channels=None, plot_out=True, **kwargs
+):
+    &#34;&#34;&#34;
+    Trim pixels in image using pixel map output from Visium barcodes
+
+    Parameters
+    ----------
+    adata : AnnData.anndata
+        The data
+    distance_trim : bool
+        Manually trim pixels by distance to nearest Visium spot center
+    threshold : int or None
+        Number of pixels from nearest Visium spot center to call barcode ID. Ignored
+        if `distance_trim==False`.
+    channels : list of str or None
+        Names of image channels in axis order. If None, channels are named &#34;ch_0&#34;,
+        &#34;ch_1&#34;, etc.
+    plot_out : bool
+        Plot final trimmed image
+    **kwargs
+        Arguments to pass to `show_pita()` function if `plot_out==True`
+
+    Returns
+    -------
+    adata.uns[&#34;pixel_map_trim&#34;] : np.array
+        Contains image with unused pixels set to `np.nan`
+    adata.obsm[&#34;spatial_trim&#34;] : np.array
+        Contains spatial coords with adjusted pixel values after image cropping
+    &#34;&#34;&#34;
+    assert (
+        adata.uns[&#34;pixel_map_params&#34;] is not None
+    ), &#34;Pixel map not yet created. Run map_pixels() first.&#34;
+
+    print(
+        &#34;Cropping image to pixel dimensions and adding values to adata.uns[&#39;pixel_map_df&#39;]&#34;
+    )
+    cropped = adata.uns[&#34;spatial&#34;][adata.uns[&#34;pixel_map_params&#34;][&#34;library_id&#34;]][
+        &#34;images&#34;
+    ][adata.uns[&#34;pixel_map_params&#34;][&#34;img_key&#34;]].transpose(1, 0, 2)[
+        int(adata.uns[&#34;pixel_map_params&#34;][&#34;xmin_px&#34;]) : int(
+            (adata.uns[&#34;pixel_map_params&#34;][&#34;xmax_px&#34;])
+        ),
+        int(adata.uns[&#34;pixel_map_params&#34;][&#34;ymin_px&#34;]) : int(
+            (adata.uns[&#34;pixel_map_params&#34;][&#34;ymax_px&#34;])
+        ),
+    ]
+    # crop x,y coords and save to .obsm as well
+    print(&#34;Cropping Visium spot coordinates and saving to adata.obsm[&#39;spatial_trim&#39;]&#34;)
+    adata.obsm[&#34;spatial_trim&#34;] = adata.obsm[&#34;spatial&#34;] - np.repeat(
+        [
+            [
+                adata.uns[&#34;pixel_map_params&#34;][&#34;xmin_px&#34;],
+                adata.uns[&#34;pixel_map_params&#34;][&#34;ymin_px&#34;],
+            ]
+        ],
+        adata.obsm[&#34;spatial&#34;].shape[0],
+        axis=0,
+    )
+
+    # manual trimming of pixels by distance if desired
+    if distance_trim:
+        print(&#34;Calculating pixel distances from spot centers for thresholding&#34;)
+        tree = cKDTree(adata.obsm[&#34;spatial&#34;])
+        xi = interpnd._ndim_coords_from_arrays(
+            (adata.uns[&#34;grid_x&#34;], adata.uns[&#34;grid_y&#34;]),
+            ndim=adata.obsm[&#34;spatial&#34;].shape[1],
+        )
+        dists, _ = tree.query(xi)
+
+        # determine distance threshold
+        if threshold is None:
+            threshold = int(adata.uns[&#34;pixel_map_params&#34;][&#34;ctr_to_vert&#34;] + 1)
+            print(
+                &#34;Using distance threshold of {} pixels from adata.uns[&#39;pixel_map_params&#39;][&#39;ctr_to_vert&#39;]&#34;.format(
+                    threshold
+                )
+            )
+
+        dist_mask = bin_threshold(dists, threshmax=threshold)
+        if plot_out:
+            # plot pixel distances from spot centers on image
+            show_pita(pita=dists, figsize=(4, 4))
+            # plot binary thresholded image
+            show_pita(pita=dist_mask, figsize=(4, 4))
+
+        print(
+            &#34;Trimming pixels by spot distance and adjusting labels in adata.uns[&#39;pixel_map_df&#39;]&#34;
+        )
+        mask_df = pd.DataFrame(dist_mask.T.ravel(order=&#34;F&#34;), columns=[&#34;manual_trim&#34;])
+        adata.uns[&#34;pixel_map_df&#34;] = adata.uns[&#34;pixel_map_df&#34;].merge(
+            mask_df, left_index=True, right_index=True
+        )
+        adata.uns[&#34;pixel_map_df&#34;].loc[
+            adata.uns[&#34;pixel_map_df&#34;][&#34;manual_trim&#34;] == 1, [&#34;barcode&#34;]
+        ] = &#34;none&#34;  # set empty pixels to empty barcode
+        adata.uns[&#34;pixel_map_df&#34;].drop(
+            columns=&#34;manual_trim&#34;, inplace=True
+        )  # remove unneeded label
+
+    if channels is None:
+        # if channel names not specified, name them numerically
+        channels = [&#34;ch_{}&#34;.format(x) for x in range(cropped.shape[2])]
+    # cast image intensity values to long-form and add to adata.uns[&#34;pixel_map_df&#34;]
+    rgb = pd.DataFrame(
+        np.column_stack(
+            [cropped[:, :, x].ravel(order=&#34;F&#34;) for x in range(cropped.shape[2])]
+        ),
+        columns=channels,
+    )
+    adata.uns[&#34;pixel_map_df&#34;] = adata.uns[&#34;pixel_map_df&#34;].merge(
+        rgb, left_index=True, right_index=True
+    )
+    adata.uns[&#34;pixel_map_df&#34;].loc[
+        adata.uns[&#34;pixel_map_df&#34;][&#34;barcode&#34;] == &#34;none&#34;, channels
+    ] = np.nan  # set empty pixels to invalid image intensity value
+
+    # calculate mean image values for each channel and create .obsm key
+    adata.obsm[&#34;image_means&#34;] = (
+        adata.uns[&#34;pixel_map_df&#34;]
+        .loc[adata.uns[&#34;pixel_map_df&#34;][&#34;barcode&#34;] != &#34;none&#34;, [&#34;barcode&#34;] + channels]
+        .groupby(&#34;barcode&#34;)
+        .mean()
+        .values
+    )
+
+    print(
+        &#34;Saving cropped and trimmed image to adata.uns[&#39;spatial&#39;][&#39;{}&#39;][&#39;images&#39;][&#39;{}_trim&#39;]&#34;.format(
+            adata.uns[&#34;pixel_map_params&#34;][&#34;library_id&#34;],
+            adata.uns[&#34;pixel_map_params&#34;][&#34;img_key&#34;],
+        )
+    )
+    adata.uns[&#34;spatial&#34;][adata.uns[&#34;pixel_map_params&#34;][&#34;library_id&#34;]][&#34;images&#34;][
+        &#34;{}_trim&#34;.format(adata.uns[&#34;pixel_map_params&#34;][&#34;img_key&#34;])
+    ] = np.dstack(
+        [
+            adata.uns[&#34;pixel_map_df&#34;]
+            .pivot(index=&#34;y&#34;, columns=&#34;x&#34;, values=[channels[x]])
+            .values
+            for x in range(len(channels))
+        ]
+    )
+    # save scale factor as well
+    adata.uns[&#34;spatial&#34;][adata.uns[&#34;pixel_map_params&#34;][&#34;library_id&#34;]][&#34;scalefactors&#34;][
+        &#34;tissue_{}_trim_scalef&#34;.format(adata.uns[&#34;pixel_map_params&#34;][&#34;img_key&#34;])
+    ] = adata.uns[&#34;spatial&#34;][adata.uns[&#34;pixel_map_params&#34;][&#34;library_id&#34;]][
+        &#34;scalefactors&#34;
+    ][
+        &#34;tissue_{}_scalef&#34;.format(adata.uns[&#34;pixel_map_params&#34;][&#34;img_key&#34;])
+    ]
+    # plot results if desired
+    if plot_out:
+        if len(channels) == 3:
+            show_pita(
+                pita=adata.uns[&#34;spatial&#34;][adata.uns[&#34;pixel_map_params&#34;][&#34;library_id&#34;]][
+                    &#34;images&#34;
+                ][&#34;{}_trim&#34;.format(adata.uns[&#34;pixel_map_params&#34;][&#34;img_key&#34;])],
+                RGB=True,
+                label=channels,
+                **kwargs,
+            )
+        else:
+            show_pita(
+                pita=adata.uns[&#34;spatial&#34;][adata.uns[&#34;pixel_map_params&#34;][&#34;library_id&#34;]][
+                    &#34;images&#34;
+                ][&#34;{}_trim&#34;.format(adata.uns[&#34;pixel_map_params&#34;][&#34;img_key&#34;])],
+                RGB=False,
+                label=channels,
+                **kwargs,
+            )
+    print(&#34;Done!&#34;)</code></pre>
+</details>
+</dd>
+</dl>
+</section>
+<section>
+</section>
+</article>
+<nav id="sidebar">
+<h1>Index</h1>
+<div class="toc">
+<ul></ul>
+</div>
+<ul id="index">
+<li><h3><a href="#header-functions">Functions</a></h3>
+<ul class="">
+<li><code><a title="st_utils.assemble_pita" href="#st_utils.assemble_pita">assemble_pita</a></code></li>
+<li><code><a title="st_utils.bin_threshold" href="#st_utils.bin_threshold">bin_threshold</a></code></li>
+<li><code><a title="st_utils.map_pixels" href="#st_utils.map_pixels">map_pixels</a></code></li>
+<li><code><a title="st_utils.show_pita" href="#st_utils.show_pita">show_pita</a></code></li>
+<li><code><a title="st_utils.trim_image" href="#st_utils.trim_image">trim_image</a></code></li>
+</ul>
+</li>
+</ul>
+</nav>
+</main>
+<footer id="footer">
+<p>Generated by <a href="https://pdoc3.github.io/pdoc"><cite>pdoc</cite> 0.9.2</a>.</p>
+</footer>
+</body>
+</html>
