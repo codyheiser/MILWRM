@@ -130,7 +130,7 @@ class img:
             self.n_ch = 1
         if channels is None:
             # if channel names not specified, name them numerically
-            self.ch = ("ch_{}".format(x) for x in range(self.n_ch))
+            self.ch = ["ch_{}".format(x) for x in range(self.n_ch)]
         else:
             assert (
                 len(channels) == self.n_ch
