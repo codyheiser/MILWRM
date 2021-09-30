@@ -11,6 +11,10 @@ import pandas as pd
 from sklearn.cluster import KMeans
 from skimage.filters import gaussian
 from img_utils import checktype
+from sklearn.metrics import silhouette_samples, silhouette_score
+import matplotlib.pyplot as plt
+import matplotlib.cm as cm
+import numpy as np
 
 
 class tissue_labeler:
@@ -23,15 +27,133 @@ class tissue_labeler:
         Initialize tissue labeler parent class
         """
         self.cluster_data = None  # start out with no data to cluster on
+        self.k = None # start out with no k value
+    
+    def find_optimal_k(self,plot_out=False,random_state=18):
+        """
+        Uses silhouette analysis to decide on k clusters for clustering in the 
+        corresponding `anndata` objects.
 
-    def find_tissue_regions(self, k, random_state=18):
+        Parameters
+        ----------
+        plot_out : boolean, optional (default=FALSE)
+            Determines if silhouette plots should be output
+        random_state : int, optional (default=18)
+            Seed for k-means clustering models.
+
+        Returns
+        -------
+        Does not return anything. `self.k` contains integer value for number of clusters.
+        Parameters are also captured as attributes for posterity.
+        """
+        if self.cluster_data is None:
+            print("No cluster data found. Run prep_cluster_data() first.")
+            pass
+        self.random_state = random_state
+        all_silhouette_scores = np.array([])
+        range_clusters = np.array(range(3,10))
+        
+        print("Running silhouette analysis for optimal k on cluster_data.")
+        
+        ## loop over possibilities
+        for n_clusters in range_clusters:
+            ## setup KMeans algorithm
+            clusterer = KMeans(n_clusters=n_clusters,random_state=random_state)
+    
+            ## fit to cluster data
+            cluster_labels = clusterer.fit_predict(self.cluster_data)
+    
+            ## calculate avg silhouette score
+            silhouette_avg = silhouette_score(self.cluster_data, cluster_labels)
+    
+            ## collect all scores
+            all_silhouette_scores = np.append(all_silhouette_scores,silhouette_avg)
+    
+    
+            sample_values = silhouette_samples(self.cluster_data, cluster_labels)
+            ## if plot_out, setup plt for each set of silhouette scores
+            ## adapted from: https://scikit-learn.org/stable/auto_examples/cluster/plot_kmeans_silhouette_analysis.html#sphx-glr-auto-examples-cluster-plot-kmeans-silhouette-analysis-py
+            if(plot_out):
+                # Create a subplot with 1 row and 2 columns
+                fig, (ax1, ax2) = plt.subplots(1, 2)
+                fig.set_size_inches(18, 7)
+        
+                # The 1st subplot is the silhouette plot
+                ax1.set_xlim([-.25, 1])
+                # The (n_clusters+1)*10 is for inserting blank space between silhouette
+                # plots of individual clusters, to demarcate them clearly.
+                ax1.set_ylim([0, len(self.cluster_data) + (n_clusters + 1) * 10])
+    
+                y_lower = 10
+                for i in range(n_clusters):
+                    # Aggregate the silhouette scores for samples belonging to
+                    # cluster i, and sort them
+                    ith_cluster_silhouette_values = \
+                        sample_values[cluster_labels == i]
+
+                    ith_cluster_silhouette_values.sort()
+
+                    size_cluster_i = ith_cluster_silhouette_values.shape[0]
+                    y_upper = y_lower + size_cluster_i
+
+                    color = cm.nipy_spectral(float(i) / n_clusters)
+                    ax1.fill_betweenx(np.arange(y_lower, y_upper),
+                                      0, ith_cluster_silhouette_values,
+                                      facecolor=color, edgecolor=color, alpha=0.7)
+
+                    # Label the silhouette plots with their cluster numbers at the middle
+                    ax1.text(-0.05, y_lower + 0.5 * size_cluster_i, str(i))
+
+                    # Compute the new y_lower for next plot
+                    y_lower = y_upper + 10  # 10 for the 0 samples
+
+                    ax1.set_title("The silhouette plot for the various clusters.")
+                    ax1.set_xlabel("The silhouette coefficient values")
+                    ax1.set_ylabel("Cluster label")
+
+                    # The vertical line for average silhouette score of all the values
+                    ax1.axvline(x=silhouette_avg, color="red", linestyle="--")
+
+                    ax1.set_yticks([])  # Clear the yaxis labels / ticks
+                    ax1.set_xticks([-.25, 0.0, 0.25,0.5,0.75, 1])
+
+                    # 2nd Plot showing the actual clusters formed
+                    colors = cm.nipy_spectral(cluster_labels.astype(float) / n_clusters)
+                    ax2.scatter(self.cluster_data[:, 0], self.cluster_data[:, 1], marker='.', s=30, lw=0, alpha=0.7,
+                                c=colors, edgecolor='k')
+
+                    # Labeling the clusters
+                    centers = clusterer.cluster_centers_
+                    # Draw white circles at cluster centers
+                    ax2.scatter(centers[:, 0], centers[:, 1], marker='o',
+                                c="white", alpha=1, s=200, edgecolor='k')
+
+                    for i, c in enumerate(centers):
+                        ax2.scatter(c[0], c[1], marker='$%d$' % i, alpha=1,
+                                    s=50, edgecolor='k')
+
+                    ax2.set_title("The visualization of the clustered data.")
+                    ax2.set_xlabel("Feature space for the 1st feature")
+                    ax2.set_ylabel("Feature space for the 2nd feature")
+
+                    plt.suptitle(("Silhouette analysis for KMeans clustering on sample data "
+                                  "with n_clusters = %d" % n_clusters),
+                                 fontsize=14, fontweight='bold')
+
+
+        ## determine optimal cluster by silhouette score
+        print("The optimal number of clusters is {}, with a mean silhouette score of {}.".format(range_clusters[all_silhouette_scores.argmax()],all_silhouette_scores.max()))
+        if(plot_out): plt.show()
+        self.k = range_clusters[all_silhouette_scores.argmax()]
+
+    def find_tissue_regions(self, k=None, random_state=18):
         """
         Perform tissue-level clustering and label pixels in the corresponding
         `anndata` objects.
 
         Parameters
         ----------
-        k : int
+        k : int, optional (default=None)
             Number of tissue regions to define
         random_state : int, optional (default=18)
             Seed for k-means clustering model.
@@ -44,11 +166,16 @@ class tissue_labeler:
         if self.cluster_data is None:
             print("No cluster data found. Run prep_cluster_data() first.")
             pass
+        if k is None and self.k is None:
+            print("No k found or provided. Run find_optimal_k() first or pass a k value.")
+            pass
+        if k is not None:
+            print("Overriding optimal k value with k={}.".format(k))
+            self.k = k
         # save the hyperparams as object attributes
-        self.k = k
         self.random_state = random_state
         print("Performing k-means clustering with {} target clusters".format(self.k))
-        self.kmeans = KMeans(n_clusters=k, random_state=random_state).fit(
+        self.kmeans = KMeans(n_clusters=self.k, random_state=random_state).fit(
             self.cluster_data
         )
 
@@ -186,15 +313,17 @@ class st_labeler(tissue_labeler):
         self.cluster_data = self.cluster_data.values
         print("Collected clustering data of shape: {}".format(self.cluster_data.shape))
 
-    def label_tissue_regions(self, k, random_state=18):
+    def label_tissue_regions(self, k=None, plot_out = False, random_state=18):
         """
         Perform tissue-level clustering and label pixels in the corresponding
         `anndata` objects.
 
         Parameters
         ----------
-        k : int
+        k : int, optional (default=None)
             Number of tissue regions to define
+        plot_out : boolean, optional (default=FALSE)
+            Determines if silhouette plots should be output
         random_state : int, optional (default=18)
             Seed for k-means clustering model.
 
@@ -204,8 +333,11 @@ class st_labeler(tissue_labeler):
         to `.obs`. `self.kmeans` contains trained `sklearn` clustering model.
         Parameters are also captured as attributes for posterity.
         """
+        # find optimal k with parent class
+        if k is None:
+            self.find_optimal_k(plot_out=plot_out,random_state=random_state)
         # call k-means model from parent class
-        self.find_tissue_regions(k=k, random_state=random_state)
+        self.find_tissue_regions(k=k,random_state=random_state)
         # loop through anndata object and add tissue labels to adata.obs dataframe
         start = 0
         print("Adding tissue_ID label to anndata objects")
@@ -318,15 +450,18 @@ class mxif_labeler(tissue_labeler):
                 self.cluster_data = np.row_stack([self.cluster_data, tmp])
         print("Collected clustering data of shape: {}".format(self.cluster_data.shape))
 
-    def label_tissue_regions(self, k, random_state=18):
+    def label_tissue_regions(self, k=None, plot_out=False, random_state=18):
         """
         Perform tissue-level clustering and label pixels in the corresponding
         images.
 
         Parameters
         ----------
-        k : int
+        ----------
+        k : int, optional (default=None)
             Number of tissue regions to define
+        plot_out : boolean, optional (default=FALSE)
+            Determines if silhouette plots should be output
         random_state : int, optional (default=18)
             Seed for k-means clustering model.
 
@@ -336,8 +471,11 @@ class mxif_labeler(tissue_labeler):
         final tissue region IDs. `self.kmeans` contains trained `sklearn` clustering
         model. Parameters are also captured as attributes for posterity.
         """
+        # find optimal k with parent class
+        if k is None:
+            self.find_optimal_k(plot_out=plot_out,random_state=random_state)
         # call k-means model from parent class
-        self.find_tissue_regions(k=k, random_state=random_state)
+        self.find_tissue_regions(random_state=random_state)
         # loop through image objects and create tissue label images
         print("Creating tissue_ID images for image objects:")
         self.tissue_IDs = []
