@@ -431,6 +431,7 @@ def assemble_pita(
             mapper = adata.obs.iloc[:, features].copy()
         else:
             mapper = adata.obs[features].copy()
+            features = None  # set features to None in case show==True
     else:
         if not features:
             print(
