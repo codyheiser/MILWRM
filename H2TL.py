@@ -79,7 +79,7 @@ class st_labeler(tissue_labeler):
         self.adatas = adatas
 
     def prep_cluster_data(
-        self, use_rep, features, blur_pix=2, histo=False, fluor_channels=None
+        self, use_rep, features=None, blur_pix=2, histo=False, fluor_channels=None
     ):
         """
         Prepare master dataframe for tissue-level clustering
@@ -88,9 +88,10 @@ class st_labeler(tissue_labeler):
         ----------
         use_rep : str
             Representation from `adata.obsm` to use as clustering data (e.g. "X_pca")
-        features : list of int
-            List of features (1-indexed) to use from `adata.obsm[use_rep]` (e.g.
-            [1,2,3,4,5] to use first 5 principal components when `use_rep`="X_pca)
+        features : list of int or None, optional (default=`None`)
+            List of features to use from `adata.obsm[use_rep]` (e.g. [0,1,2,3,4] to 
+            use first 5 principal components when `use_rep`="X_pca"). If `None`, use 
+            all features from `adata.obsm[use_rep]`
         blur_pix : int, optional (default=2)
             Radius of nearest spatial transcriptomics spots to blur features by for
             capturing regional information. Assumes hexagonal spot grid (10X Genomics
@@ -113,14 +114,14 @@ class st_labeler(tissue_labeler):
         if self.cluster_data is not None:
             print("WARNING: overwriting existing cluster data")
             self.cluster_data = None
+        if features is None:
+            self.features = [x for x in range(self.adatas[0].obsm[use_rep].shape[1])]
+        else:
+            self.features = features
         # save the hyperparams as object attributes
         self.rep = use_rep
-        self.features = features
         self.histo = histo
         self.blur_pix = blur_pix
-        indices = [
-            i - 1 for i in self.features
-        ]  # go back to zero indexing from 1-indexed feature list
         for adata_i, adata in enumerate(self.adatas):
             print(
                 "Collecting {} features from .obsm[{}] for adata #{}".format(
@@ -130,7 +131,7 @@ class st_labeler(tissue_labeler):
             tmp = adata.obs[["array_row", "array_col"]].copy()
             tmp[[use_rep + "_{}".format(x) for x in self.features]] = adata.obsm[
                 use_rep
-            ][:, indices]
+            ][:, self.features]
             if histo:
                 assert (
                     fluor_channels is None

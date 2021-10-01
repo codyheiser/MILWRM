@@ -379,8 +379,8 @@ def assemble_pita(
     adata : AnnData.anndata
         the data
     features : list of int or str
-        Names or indices of features to cast onto spot image. If `None`, cast all
-        features. If `plot_out`, first feature in list will be plotted. If not
+        Names or indices of features to cast onto spot image. If `None`, cast all 
+        features. If `plot_out`, first feature in list will be plotted. If not 
         specified and `plot_out`, first feature (index 0) will be plotted.
     use_rep : str
         Key from `adata.obsm` to use for plotting. If `None`, use `adata.X`.
@@ -463,7 +463,7 @@ def assemble_pita(
     ).squeeze()
 
     if plot_out:
-        show_pita(pita=assembled, **kwargs)
+        show_pita(pita=assembled, features=features, **kwargs)
     print("Done!")
     return assembled
 
@@ -524,6 +524,33 @@ def show_pita(
         plt.tight_layout()
         if save_to:
             plt.savefig(fname=save_to, transparent=True, bbox_inches="tight", dpi=800)
+        return fig
+    if (pita.ndim == 2) and histo is not None:
+        n_rows, n_cols = 1, 2  # two images here, histo and RGB
+        fig = plt.figure(figsize=(ncols * n_cols, ncols * n_rows))
+        # arrange axes as subplots
+        gs = gridspec.GridSpec(n_rows, n_cols, figure=fig)
+        # add plots to axes
+        ax = plt.subplot(gs[0])
+        im = ax.imshow(histo, **kwargs)
+        ax.tick_params(labelbottom=False, labelleft=False)
+        sns.despine(bottom=True, left=True)
+        ax.set_title(
+            label="Histology",
+            loc="left",
+            fontweight="bold",
+            fontsize=16,
+        )
+        ax = plt.subplot(gs[1])
+        im = ax.imshow(pita, **kwargs)
+        ax.tick_params(labelbottom=False, labelleft=False)
+        sns.despine(bottom=True, left=True)
+        cbar = plt.colorbar(im, shrink=0.8)
+        fig.tight_layout()
+        if save_to:
+            plt.savefig(
+                fname=save_to, transparent=True, bbox_inches="tight", dpi=800
+            )
         return fig
     if RGB:
         # if third dim has 3 features, treat as RGB and plot it quickly
