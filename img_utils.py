@@ -1,8 +1,6 @@
 # -*- coding: utf-8 -*-
 """
 Functions and classes for analyzing multiplex imaging data
-
-@author: C Heiser
 """
 import os
 import numpy as np

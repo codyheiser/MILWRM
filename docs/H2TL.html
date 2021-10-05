@@ -3,10 +3,10 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1" />
-<meta name="generator" content="pdoc 0.10.0" />
+<meta name="generator" content="pdoc 0.9.2" />
 <title>H2TL API documentation</title>
 <meta name="description" content="Classes for assigning tissue region IDs to multiplex immunofluorescence (MxIF) or 10X
-Visium spatial transcriptomic (ST) and histological imaging data …" />
+Visium spatial transcriptomic (ST) and histological imaging data" />
 <link rel="preload stylesheet" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/10up-sanitize.css/11.0.1/sanitize.min.css" integrity="sha256-PK9q560IAAa6WVRRh76LtCaI8pjTJ2z11v0miyNNjrs=" crossorigin>
 <link rel="preload stylesheet" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/10up-sanitize.css/11.0.1/typography.min.css" integrity="sha256-7l/o7C8jubJiy74VsKTidCy1yBkRtiUGbVkYBylBqUg=" crossorigin>
 <link rel="stylesheet preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/10.1.1/styles/github.min.css" crossorigin>
@@ -25,7 +25,6 @@ Visium spatial transcriptomic (ST) and histological imaging data …" />
 <section id="section-intro">
 <p>Classes for assigning tissue region IDs to multiplex immunofluorescence (MxIF) or 10X
 Visium spatial transcriptomic (ST) and histological imaging data</p>
-<p>@author: C Heiser</p>
 <details class="source">
 <summary>
 <span>Expand source code</span>
@@ -34,8 +33,6 @@ Visium spatial transcriptomic (ST) and histological imaging data</p>
 &#34;&#34;&#34;
 Classes for assigning tissue region IDs to multiplex immunofluorescence (MxIF) or 10X 
 Visium spatial transcriptomic (ST) and histological imaging data
-
-@author: C Heiser
 &#34;&#34;&#34;
 import numpy as np
 import pandas as pd
@@ -59,11 +56,11 @@ class tissue_labeler:
         Initialize tissue labeler parent class
         &#34;&#34;&#34;
         self.cluster_data = None  # start out with no data to cluster on
-        self.k = None # start out with no k value
-    
-    def find_optimal_k(self,plot_out=False,random_state=18):
+        self.k = None  # start out with no k value
+
+    def find_optimal_k(self, plot_out=False, random_state=18):
         &#34;&#34;&#34;
-        Uses silhouette analysis to decide on k clusters for clustering in the 
+        Uses silhouette analysis to decide on k clusters for clustering in the
         corresponding `anndata` objects.
 
         Parameters
@@ -83,45 +80,43 @@ class tissue_labeler:
             pass
         self.random_state = random_state
         all_silhouette_scores = np.array([])
-        range_clusters = np.array(range(3,10))
-        
+        range_clusters = np.array(range(3, 10))
+
         print(&#34;Running silhouette analysis for optimal k on cluster_data.&#34;)
-        
+
         ## loop over possibilities
         for n_clusters in range_clusters:
             ## setup KMeans algorithm
-            clusterer = KMeans(n_clusters=n_clusters,random_state=random_state)
-    
+            clusterer = KMeans(n_clusters=n_clusters, random_state=random_state)
+
             ## fit to cluster data
             cluster_labels = clusterer.fit_predict(self.cluster_data)
-    
+
             ## calculate avg silhouette score
             silhouette_avg = silhouette_score(self.cluster_data, cluster_labels)
-    
+
             ## collect all scores
-            all_silhouette_scores = np.append(all_silhouette_scores,silhouette_avg)
-    
-    
+            all_silhouette_scores = np.append(all_silhouette_scores, silhouette_avg)
+
             sample_values = silhouette_samples(self.cluster_data, cluster_labels)
             ## if plot_out, setup plt for each set of silhouette scores
             ## adapted from: https://scikit-learn.org/stable/auto_examples/cluster/plot_kmeans_silhouette_analysis.html#sphx-glr-auto-examples-cluster-plot-kmeans-silhouette-analysis-py
-            if(plot_out):
+            if plot_out:
                 # Create a subplot with 1 row and 2 columns
                 fig, (ax1, ax2) = plt.subplots(1, 2)
                 fig.set_size_inches(18, 7)
-        
+
                 # The 1st subplot is the silhouette plot
-                ax1.set_xlim([-.25, 1])
+                ax1.set_xlim([-0.25, 1])
                 # The (n_clusters+1)*10 is for inserting blank space between silhouette
                 # plots of individual clusters, to demarcate them clearly.
                 ax1.set_ylim([0, len(self.cluster_data) + (n_clusters + 1) * 10])
-    
+
                 y_lower = 10
                 for i in range(n_clusters):
                     # Aggregate the silhouette scores for samples belonging to
                     # cluster i, and sort them
-                    ith_cluster_silhouette_values = \
-                        sample_values[cluster_labels == i]
+                    ith_cluster_silhouette_values = sample_values[cluster_labels == i]
 
                     ith_cluster_silhouette_values.sort()
 
@@ -129,9 +124,14 @@ class tissue_labeler:
                     y_upper = y_lower + size_cluster_i
 
                     color = cm.nipy_spectral(float(i) / n_clusters)
-                    ax1.fill_betweenx(np.arange(y_lower, y_upper),
-                                      0, ith_cluster_silhouette_values,
-                                      facecolor=color, edgecolor=color, alpha=0.7)
+                    ax1.fill_betweenx(
+                        np.arange(y_lower, y_upper),
+                        0,
+                        ith_cluster_silhouette_values,
+                        facecolor=color,
+                        edgecolor=color,
+                        alpha=0.7,
+                    )
 
                     # Label the silhouette plots with their cluster numbers at the middle
                     ax1.text(-0.05, y_lower + 0.5 * size_cluster_i, str(i))
@@ -147,35 +147,61 @@ class tissue_labeler:
                     ax1.axvline(x=silhouette_avg, color=&#34;red&#34;, linestyle=&#34;--&#34;)
 
                     ax1.set_yticks([])  # Clear the yaxis labels / ticks
-                    ax1.set_xticks([-.25, 0.0, 0.25,0.5,0.75, 1])
+                    ax1.set_xticks([-0.25, 0.0, 0.25, 0.5, 0.75, 1])
 
                     # 2nd Plot showing the actual clusters formed
                     colors = cm.nipy_spectral(cluster_labels.astype(float) / n_clusters)
-                    ax2.scatter(self.cluster_data[:, 0], self.cluster_data[:, 1], marker=&#39;.&#39;, s=30, lw=0, alpha=0.7,
-                                c=colors, edgecolor=&#39;k&#39;)
+                    ax2.scatter(
+                        self.cluster_data[:, 0],
+                        self.cluster_data[:, 1],
+                        marker=&#34;.&#34;,
+                        s=30,
+                        lw=0,
+                        alpha=0.7,
+                        c=colors,
+                        edgecolor=&#34;k&#34;,
+                    )
 
                     # Labeling the clusters
                     centers = clusterer.cluster_centers_
                     # Draw white circles at cluster centers
-                    ax2.scatter(centers[:, 0], centers[:, 1], marker=&#39;o&#39;,
-                                c=&#34;white&#34;, alpha=1, s=200, edgecolor=&#39;k&#39;)
+                    ax2.scatter(
+                        centers[:, 0],
+                        centers[:, 1],
+                        marker=&#34;o&#34;,
+                        c=&#34;white&#34;,
+                        alpha=1,
+                        s=200,
+                        edgecolor=&#34;k&#34;,
+                    )
 
                     for i, c in enumerate(centers):
-                        ax2.scatter(c[0], c[1], marker=&#39;$%d$&#39; % i, alpha=1,
-                                    s=50, edgecolor=&#39;k&#39;)
+                        ax2.scatter(
+                            c[0], c[1], marker=&#34;$%d$&#34; % i, alpha=1, s=50, edgecolor=&#34;k&#34;
+                        )
 
                     ax2.set_title(&#34;The visualization of the clustered data.&#34;)
                     ax2.set_xlabel(&#34;Feature space for the 1st feature&#34;)
                     ax2.set_ylabel(&#34;Feature space for the 2nd feature&#34;)
 
-                    plt.suptitle((&#34;Silhouette analysis for KMeans clustering on sample data &#34;
-                                  &#34;with n_clusters = %d&#34; % n_clusters),
-                                 fontsize=14, fontweight=&#39;bold&#39;)
-
+                    plt.suptitle(
+                        (
+                            &#34;Silhouette analysis for KMeans clustering on sample data &#34;
+                            &#34;with n_clusters = %d&#34; % n_clusters
+                        ),
+                        fontsize=14,
+                        fontweight=&#34;bold&#34;,
+                    )
 
         ## determine optimal cluster by silhouette score
-        print(&#34;The optimal number of clusters is {}, with a mean silhouette score of {}.&#34;.format(range_clusters[all_silhouette_scores.argmax()],all_silhouette_scores.max()))
-        if(plot_out): plt.show()
+        print(
+            &#34;The optimal number of clusters is {}, with a mean silhouette score of {}.&#34;.format(
+                range_clusters[all_silhouette_scores.argmax()],
+                all_silhouette_scores.max(),
+            )
+        )
+        if plot_out:
+            plt.show()
         self.k = range_clusters[all_silhouette_scores.argmax()]
 
     def find_tissue_regions(self, k=None, random_state=18):
@@ -199,7 +225,9 @@ class tissue_labeler:
             print(&#34;No cluster data found. Run prep_cluster_data() first.&#34;)
             pass
         if k is None and self.k is None:
-            print(&#34;No k found or provided. Run find_optimal_k() first or pass a k value.&#34;)
+            print(
+                &#34;No k found or provided. Run find_optimal_k() first or pass a k value.&#34;
+            )
             pass
         if k is not None:
             print(&#34;Overriding optimal k value with k={}.&#34;.format(k))
@@ -238,7 +266,7 @@ class st_labeler(tissue_labeler):
         self.adatas = adatas
 
     def prep_cluster_data(
-        self, use_rep, features, blur_pix=2, histo=False, fluor_channels=None
+        self, use_rep, features=None, blur_pix=2, histo=False, fluor_channels=None
     ):
         &#34;&#34;&#34;
         Prepare master dataframe for tissue-level clustering
@@ -247,9 +275,10 @@ class st_labeler(tissue_labeler):
         ----------
         use_rep : str
             Representation from `adata.obsm` to use as clustering data (e.g. &#34;X_pca&#34;)
-        features : list of int
-            List of features (1-indexed) to use from `adata.obsm[use_rep]` (e.g.
-            [1,2,3,4,5] to use first 5 principal components when `use_rep`=&#34;X_pca)
+        features : list of int or None, optional (default=`None`)
+            List of features to use from `adata.obsm[use_rep]` (e.g. [0,1,2,3,4] to
+            use first 5 principal components when `use_rep`=&#34;X_pca&#34;). If `None`, use
+            all features from `adata.obsm[use_rep]`
         blur_pix : int, optional (default=2)
             Radius of nearest spatial transcriptomics spots to blur features by for
             capturing regional information. Assumes hexagonal spot grid (10X Genomics
@@ -272,14 +301,14 @@ class st_labeler(tissue_labeler):
         if self.cluster_data is not None:
             print(&#34;WARNING: overwriting existing cluster data&#34;)
             self.cluster_data = None
+        if features is None:
+            self.features = [x for x in range(self.adatas[0].obsm[use_rep].shape[1])]
+        else:
+            self.features = features
         # save the hyperparams as object attributes
         self.rep = use_rep
-        self.features = features
         self.histo = histo
         self.blur_pix = blur_pix
-        indices = [
-            i - 1 for i in self.features
-        ]  # go back to zero indexing from 1-indexed feature list
         for adata_i, adata in enumerate(self.adatas):
             print(
                 &#34;Collecting {} features from .obsm[{}] for adata #{}&#34;.format(
@@ -289,7 +318,7 @@ class st_labeler(tissue_labeler):
             tmp = adata.obs[[&#34;array_row&#34;, &#34;array_col&#34;]].copy()
             tmp[[use_rep + &#34;_{}&#34;.format(x) for x in self.features]] = adata.obsm[
                 use_rep
-            ][:, indices]
+            ][:, self.features]
             if histo:
                 assert (
                     fluor_channels is None
@@ -345,7 +374,7 @@ class st_labeler(tissue_labeler):
         self.cluster_data = self.cluster_data.values
         print(&#34;Collected clustering data of shape: {}&#34;.format(self.cluster_data.shape))
 
-    def label_tissue_regions(self, k=None, plot_out = False, random_state=18):
+    def label_tissue_regions(self, k=None, plot_out=False, random_state=18):
         &#34;&#34;&#34;
         Perform tissue-level clustering and label pixels in the corresponding
         `anndata` objects.
@@ -367,9 +396,9 @@ class st_labeler(tissue_labeler):
         &#34;&#34;&#34;
         # find optimal k with parent class
         if k is None:
-            self.find_optimal_k(plot_out=plot_out,random_state=random_state)
+            self.find_optimal_k(plot_out=plot_out, random_state=random_state)
         # call k-means model from parent class
-        self.find_tissue_regions(k=k,random_state=random_state)
+        self.find_tissue_regions(k=k, random_state=random_state)
         # loop through anndata object and add tissue labels to adata.obs dataframe
         start = 0
         print(&#34;Adding tissue_ID label to anndata objects&#34;)
@@ -505,7 +534,7 @@ class mxif_labeler(tissue_labeler):
         &#34;&#34;&#34;
         # find optimal k with parent class
         if k is None:
-            self.find_optimal_k(plot_out=plot_out,random_state=random_state)
+            self.find_optimal_k(plot_out=plot_out, random_state=random_state)
         # call k-means model from parent class
         self.find_tissue_regions(random_state=random_state)
         # loop through image objects and create tissue label images
@@ -687,7 +716,7 @@ class mxif_labeler(tissue_labeler):
         &#34;&#34;&#34;
         # find optimal k with parent class
         if k is None:
-            self.find_optimal_k(plot_out=plot_out,random_state=random_state)
+            self.find_optimal_k(plot_out=plot_out, random_state=random_state)
         # call k-means model from parent class
         self.find_tissue_regions(random_state=random_state)
         # loop through image objects and create tissue label images
@@ -773,7 +802,7 @@ model. Parameters are also captured as attributes for posterity.</p></div>
     &#34;&#34;&#34;
     # find optimal k with parent class
     if k is None:
-        self.find_optimal_k(plot_out=plot_out,random_state=random_state)
+        self.find_optimal_k(plot_out=plot_out, random_state=random_state)
     # call k-means model from parent class
     self.find_tissue_regions(random_state=random_state)
     # loop through image objects and create tissue label images
@@ -961,7 +990,7 @@ training. Parameters are also captured as attributes for posterity.</p></div>
         self.adatas = adatas
 
     def prep_cluster_data(
-        self, use_rep, features, blur_pix=2, histo=False, fluor_channels=None
+        self, use_rep, features=None, blur_pix=2, histo=False, fluor_channels=None
     ):
         &#34;&#34;&#34;
         Prepare master dataframe for tissue-level clustering
@@ -970,9 +999,10 @@ training. Parameters are also captured as attributes for posterity.</p></div>
         ----------
         use_rep : str
             Representation from `adata.obsm` to use as clustering data (e.g. &#34;X_pca&#34;)
-        features : list of int
-            List of features (1-indexed) to use from `adata.obsm[use_rep]` (e.g.
-            [1,2,3,4,5] to use first 5 principal components when `use_rep`=&#34;X_pca)
+        features : list of int or None, optional (default=`None`)
+            List of features to use from `adata.obsm[use_rep]` (e.g. [0,1,2,3,4] to
+            use first 5 principal components when `use_rep`=&#34;X_pca&#34;). If `None`, use
+            all features from `adata.obsm[use_rep]`
         blur_pix : int, optional (default=2)
             Radius of nearest spatial transcriptomics spots to blur features by for
             capturing regional information. Assumes hexagonal spot grid (10X Genomics
@@ -995,14 +1025,14 @@ training. Parameters are also captured as attributes for posterity.</p></div>
         if self.cluster_data is not None:
             print(&#34;WARNING: overwriting existing cluster data&#34;)
             self.cluster_data = None
+        if features is None:
+            self.features = [x for x in range(self.adatas[0].obsm[use_rep].shape[1])]
+        else:
+            self.features = features
         # save the hyperparams as object attributes
         self.rep = use_rep
-        self.features = features
         self.histo = histo
         self.blur_pix = blur_pix
-        indices = [
-            i - 1 for i in self.features
-        ]  # go back to zero indexing from 1-indexed feature list
         for adata_i, adata in enumerate(self.adatas):
             print(
                 &#34;Collecting {} features from .obsm[{}] for adata #{}&#34;.format(
@@ -1012,7 +1042,7 @@ training. Parameters are also captured as attributes for posterity.</p></div>
             tmp = adata.obs[[&#34;array_row&#34;, &#34;array_col&#34;]].copy()
             tmp[[use_rep + &#34;_{}&#34;.format(x) for x in self.features]] = adata.obsm[
                 use_rep
-            ][:, indices]
+            ][:, self.features]
             if histo:
                 assert (
                     fluor_channels is None
@@ -1068,7 +1098,7 @@ training. Parameters are also captured as attributes for posterity.</p></div>
         self.cluster_data = self.cluster_data.values
         print(&#34;Collected clustering data of shape: {}&#34;.format(self.cluster_data.shape))
 
-    def label_tissue_regions(self, k=None, plot_out = False, random_state=18):
+    def label_tissue_regions(self, k=None, plot_out=False, random_state=18):
         &#34;&#34;&#34;
         Perform tissue-level clustering and label pixels in the corresponding
         `anndata` objects.
@@ -1090,9 +1120,9 @@ training. Parameters are also captured as attributes for posterity.</p></div>
         &#34;&#34;&#34;
         # find optimal k with parent class
         if k is None:
-            self.find_optimal_k(plot_out=plot_out,random_state=random_state)
+            self.find_optimal_k(plot_out=plot_out, random_state=random_state)
         # call k-means model from parent class
-        self.find_tissue_regions(k=k,random_state=random_state)
+        self.find_tissue_regions(k=k, random_state=random_state)
         # loop through anndata object and add tissue labels to adata.obs dataframe
         start = 0
         print(&#34;Adding tissue_ID label to anndata objects&#34;)
@@ -1136,7 +1166,7 @@ Parameters are also captured as attributes for posterity.</p></div>
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">def label_tissue_regions(self, k=None, plot_out = False, random_state=18):
+<pre><code class="python">def label_tissue_regions(self, k=None, plot_out=False, random_state=18):
     &#34;&#34;&#34;
     Perform tissue-level clustering and label pixels in the corresponding
     `anndata` objects.
@@ -1158,9 +1188,9 @@ Parameters are also captured as attributes for posterity.</p></div>
     &#34;&#34;&#34;
     # find optimal k with parent class
     if k is None:
-        self.find_optimal_k(plot_out=plot_out,random_state=random_state)
+        self.find_optimal_k(plot_out=plot_out, random_state=random_state)
     # call k-means model from parent class
-    self.find_tissue_regions(k=k,random_state=random_state)
+    self.find_tissue_regions(k=k, random_state=random_state)
     # loop through anndata object and add tissue labels to adata.obs dataframe
     start = 0
     print(&#34;Adding tissue_ID label to anndata objects&#34;)
@@ -1177,7 +1207,7 @@ Parameters are also captured as attributes for posterity.</p></div>
 </details>
 </dd>
 <dt id="H2TL.st_labeler.prep_cluster_data"><code class="name flex">
-<span>def <span class="ident">prep_cluster_data</span></span>(<span>self, use_rep, features, blur_pix=2, histo=False, fluor_channels=None)</span>
+<span>def <span class="ident">prep_cluster_data</span></span>(<span>self, use_rep, features=None, blur_pix=2, histo=False, fluor_channels=None)</span>
 </code></dt>
 <dd>
 <div class="desc"><p>Prepare master dataframe for tissue-level clustering</p>
@@ -1185,9 +1215,10 @@ Parameters are also captured as attributes for posterity.</p></div>
 <dl>
 <dt><strong><code>use_rep</code></strong> :&ensp;<code>str</code></dt>
 <dd>Representation from <code>adata.obsm</code> to use as clustering data (e.g. "X_pca")</dd>
-<dt><strong><code>features</code></strong> :&ensp;<code>list</code> of <code>int</code></dt>
-<dd>List of features (1-indexed) to use from <code>adata.obsm[use_rep]</code> (e.g.
-[1,2,3,4,5] to use first 5 principal components when <code>use_rep</code>="X_pca)</dd>
+<dt><strong><code>features</code></strong> :&ensp;<code>list</code> of <code>int</code> or <code>None</code>, optional <code>(default=</code>None<code>)</code></dt>
+<dd>List of features to use from <code>adata.obsm[use_rep]</code> (e.g. [0,1,2,3,4] to
+use first 5 principal components when <code>use_rep</code>="X_pca"). If <code>None</code>, use
+all features from <code>adata.obsm[use_rep]</code></dd>
 <dt><strong><code>blur_pix</code></strong> :&ensp;<code>int</code>, optional <code>(default=2)</code></dt>
 <dd>Radius of nearest spatial transcriptomics spots to blur features by for
 capturing regional information. Assumes hexagonal spot grid (10X Genomics
@@ -1210,7 +1241,7 @@ Parameters are also captured as attributes for posterity.</p></div>
 <span>Expand source code</span>
 </summary>
 <pre><code class="python">def prep_cluster_data(
-    self, use_rep, features, blur_pix=2, histo=False, fluor_channels=None
+    self, use_rep, features=None, blur_pix=2, histo=False, fluor_channels=None
 ):
     &#34;&#34;&#34;
     Prepare master dataframe for tissue-level clustering
@@ -1219,9 +1250,10 @@ Parameters are also captured as attributes for posterity.</p></div>
     ----------
     use_rep : str
         Representation from `adata.obsm` to use as clustering data (e.g. &#34;X_pca&#34;)
-    features : list of int
-        List of features (1-indexed) to use from `adata.obsm[use_rep]` (e.g.
-        [1,2,3,4,5] to use first 5 principal components when `use_rep`=&#34;X_pca)
+    features : list of int or None, optional (default=`None`)
+        List of features to use from `adata.obsm[use_rep]` (e.g. [0,1,2,3,4] to
+        use first 5 principal components when `use_rep`=&#34;X_pca&#34;). If `None`, use
+        all features from `adata.obsm[use_rep]`
     blur_pix : int, optional (default=2)
         Radius of nearest spatial transcriptomics spots to blur features by for
         capturing regional information. Assumes hexagonal spot grid (10X Genomics
@@ -1244,14 +1276,14 @@ Parameters are also captured as attributes for posterity.</p></div>
     if self.cluster_data is not None:
         print(&#34;WARNING: overwriting existing cluster data&#34;)
         self.cluster_data = None
+    if features is None:
+        self.features = [x for x in range(self.adatas[0].obsm[use_rep].shape[1])]
+    else:
+        self.features = features
     # save the hyperparams as object attributes
     self.rep = use_rep
-    self.features = features
     self.histo = histo
     self.blur_pix = blur_pix
-    indices = [
-        i - 1 for i in self.features
-    ]  # go back to zero indexing from 1-indexed feature list
     for adata_i, adata in enumerate(self.adatas):
         print(
             &#34;Collecting {} features from .obsm[{}] for adata #{}&#34;.format(
@@ -1261,7 +1293,7 @@ Parameters are also captured as attributes for posterity.</p></div>
         tmp = adata.obs[[&#34;array_row&#34;, &#34;array_col&#34;]].copy()
         tmp[[use_rep + &#34;_{}&#34;.format(x) for x in self.features]] = adata.obsm[
             use_rep
-        ][:, indices]
+        ][:, self.features]
         if histo:
             assert (
                 fluor_channels is None
@@ -1349,11 +1381,11 @@ Parameters are also captured as attributes for posterity.</p></div>
         Initialize tissue labeler parent class
         &#34;&#34;&#34;
         self.cluster_data = None  # start out with no data to cluster on
-        self.k = None # start out with no k value
-    
-    def find_optimal_k(self,plot_out=False,random_state=18):
+        self.k = None  # start out with no k value
+
+    def find_optimal_k(self, plot_out=False, random_state=18):
         &#34;&#34;&#34;
-        Uses silhouette analysis to decide on k clusters for clustering in the 
+        Uses silhouette analysis to decide on k clusters for clustering in the
         corresponding `anndata` objects.
 
         Parameters
@@ -1373,45 +1405,43 @@ Parameters are also captured as attributes for posterity.</p></div>
             pass
         self.random_state = random_state
         all_silhouette_scores = np.array([])
-        range_clusters = np.array(range(3,10))
-        
+        range_clusters = np.array(range(3, 10))
+
         print(&#34;Running silhouette analysis for optimal k on cluster_data.&#34;)
-        
+
         ## loop over possibilities
         for n_clusters in range_clusters:
             ## setup KMeans algorithm
-            clusterer = KMeans(n_clusters=n_clusters,random_state=random_state)
-    
+            clusterer = KMeans(n_clusters=n_clusters, random_state=random_state)
+
             ## fit to cluster data
             cluster_labels = clusterer.fit_predict(self.cluster_data)
-    
+
             ## calculate avg silhouette score
             silhouette_avg = silhouette_score(self.cluster_data, cluster_labels)
-    
+
             ## collect all scores
-            all_silhouette_scores = np.append(all_silhouette_scores,silhouette_avg)
-    
-    
+            all_silhouette_scores = np.append(all_silhouette_scores, silhouette_avg)
+
             sample_values = silhouette_samples(self.cluster_data, cluster_labels)
             ## if plot_out, setup plt for each set of silhouette scores
             ## adapted from: https://scikit-learn.org/stable/auto_examples/cluster/plot_kmeans_silhouette_analysis.html#sphx-glr-auto-examples-cluster-plot-kmeans-silhouette-analysis-py
-            if(plot_out):
+            if plot_out:
                 # Create a subplot with 1 row and 2 columns
                 fig, (ax1, ax2) = plt.subplots(1, 2)
                 fig.set_size_inches(18, 7)
-        
+
                 # The 1st subplot is the silhouette plot
-                ax1.set_xlim([-.25, 1])
+                ax1.set_xlim([-0.25, 1])
                 # The (n_clusters+1)*10 is for inserting blank space between silhouette
                 # plots of individual clusters, to demarcate them clearly.
                 ax1.set_ylim([0, len(self.cluster_data) + (n_clusters + 1) * 10])
-    
+
                 y_lower = 10
                 for i in range(n_clusters):
                     # Aggregate the silhouette scores for samples belonging to
                     # cluster i, and sort them
-                    ith_cluster_silhouette_values = \
-                        sample_values[cluster_labels == i]
+                    ith_cluster_silhouette_values = sample_values[cluster_labels == i]
 
                     ith_cluster_silhouette_values.sort()
 
@@ -1419,9 +1449,14 @@ Parameters are also captured as attributes for posterity.</p></div>
                     y_upper = y_lower + size_cluster_i
 
                     color = cm.nipy_spectral(float(i) / n_clusters)
-                    ax1.fill_betweenx(np.arange(y_lower, y_upper),
-                                      0, ith_cluster_silhouette_values,
-                                      facecolor=color, edgecolor=color, alpha=0.7)
+                    ax1.fill_betweenx(
+                        np.arange(y_lower, y_upper),
+                        0,
+                        ith_cluster_silhouette_values,
+                        facecolor=color,
+                        edgecolor=color,
+                        alpha=0.7,
+                    )
 
                     # Label the silhouette plots with their cluster numbers at the middle
                     ax1.text(-0.05, y_lower + 0.5 * size_cluster_i, str(i))
@@ -1437,35 +1472,61 @@ Parameters are also captured as attributes for posterity.</p></div>
                     ax1.axvline(x=silhouette_avg, color=&#34;red&#34;, linestyle=&#34;--&#34;)
 
                     ax1.set_yticks([])  # Clear the yaxis labels / ticks
-                    ax1.set_xticks([-.25, 0.0, 0.25,0.5,0.75, 1])
+                    ax1.set_xticks([-0.25, 0.0, 0.25, 0.5, 0.75, 1])
 
                     # 2nd Plot showing the actual clusters formed
                     colors = cm.nipy_spectral(cluster_labels.astype(float) / n_clusters)
-                    ax2.scatter(self.cluster_data[:, 0], self.cluster_data[:, 1], marker=&#39;.&#39;, s=30, lw=0, alpha=0.7,
-                                c=colors, edgecolor=&#39;k&#39;)
+                    ax2.scatter(
+                        self.cluster_data[:, 0],
+                        self.cluster_data[:, 1],
+                        marker=&#34;.&#34;,
+                        s=30,
+                        lw=0,
+                        alpha=0.7,
+                        c=colors,
+                        edgecolor=&#34;k&#34;,
+                    )
 
                     # Labeling the clusters
                     centers = clusterer.cluster_centers_
                     # Draw white circles at cluster centers
-                    ax2.scatter(centers[:, 0], centers[:, 1], marker=&#39;o&#39;,
-                                c=&#34;white&#34;, alpha=1, s=200, edgecolor=&#39;k&#39;)
+                    ax2.scatter(
+                        centers[:, 0],
+                        centers[:, 1],
+                        marker=&#34;o&#34;,
+                        c=&#34;white&#34;,
+                        alpha=1,
+                        s=200,
+                        edgecolor=&#34;k&#34;,
+                    )
 
                     for i, c in enumerate(centers):
-                        ax2.scatter(c[0], c[1], marker=&#39;$%d$&#39; % i, alpha=1,
-                                    s=50, edgecolor=&#39;k&#39;)
+                        ax2.scatter(
+                            c[0], c[1], marker=&#34;$%d$&#34; % i, alpha=1, s=50, edgecolor=&#34;k&#34;
+                        )
 
                     ax2.set_title(&#34;The visualization of the clustered data.&#34;)
                     ax2.set_xlabel(&#34;Feature space for the 1st feature&#34;)
                     ax2.set_ylabel(&#34;Feature space for the 2nd feature&#34;)
 
-                    plt.suptitle((&#34;Silhouette analysis for KMeans clustering on sample data &#34;
-                                  &#34;with n_clusters = %d&#34; % n_clusters),
-                                 fontsize=14, fontweight=&#39;bold&#39;)
-
+                    plt.suptitle(
+                        (
+                            &#34;Silhouette analysis for KMeans clustering on sample data &#34;
+                            &#34;with n_clusters = %d&#34; % n_clusters
+                        ),
+                        fontsize=14,
+                        fontweight=&#34;bold&#34;,
+                    )
 
         ## determine optimal cluster by silhouette score
-        print(&#34;The optimal number of clusters is {}, with a mean silhouette score of {}.&#34;.format(range_clusters[all_silhouette_scores.argmax()],all_silhouette_scores.max()))
-        if(plot_out): plt.show()
+        print(
+            &#34;The optimal number of clusters is {}, with a mean silhouette score of {}.&#34;.format(
+                range_clusters[all_silhouette_scores.argmax()],
+                all_silhouette_scores.max(),
+            )
+        )
+        if plot_out:
+            plt.show()
         self.k = range_clusters[all_silhouette_scores.argmax()]
 
     def find_tissue_regions(self, k=None, random_state=18):
@@ -1489,7 +1550,9 @@ Parameters are also captured as attributes for posterity.</p></div>
             print(&#34;No cluster data found. Run prep_cluster_data() first.&#34;)
             pass
         if k is None and self.k is None:
-            print(&#34;No k found or provided. Run find_optimal_k() first or pass a k value.&#34;)
+            print(
+                &#34;No k found or provided. Run find_optimal_k() first or pass a k value.&#34;
+            )
             pass
         if k is not None:
             print(&#34;Overriding optimal k value with k={}.&#34;.format(k))
@@ -1528,9 +1591,9 @@ Parameters are also captured as attributes for posterity.</p></div>
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">def find_optimal_k(self,plot_out=False,random_state=18):
+<pre><code class="python">def find_optimal_k(self, plot_out=False, random_state=18):
     &#34;&#34;&#34;
-    Uses silhouette analysis to decide on k clusters for clustering in the 
+    Uses silhouette analysis to decide on k clusters for clustering in the
     corresponding `anndata` objects.
 
     Parameters
@@ -1550,14 +1613,14 @@ Parameters are also captured as attributes for posterity.</p></div>
         pass
     self.random_state = random_state
     all_silhouette_scores = np.array([])
-    range_clusters = np.array(range(3,10))
-    
+    range_clusters = np.array(range(3, 10))
+
     print(&#34;Running silhouette analysis for optimal k on cluster_data.&#34;)
-    
+
     ## loop over possibilities
     for n_clusters in range_clusters:
         ## setup KMeans algorithm
-        clusterer = KMeans(n_clusters=n_clusters,random_state=random_state)
+        clusterer = KMeans(n_clusters=n_clusters, random_state=random_state)
 
         ## fit to cluster data
         cluster_labels = clusterer.fit_predict(self.cluster_data)
@@ -1566,19 +1629,18 @@ Parameters are also captured as attributes for posterity.</p></div>
         silhouette_avg = silhouette_score(self.cluster_data, cluster_labels)
 
         ## collect all scores
-        all_silhouette_scores = np.append(all_silhouette_scores,silhouette_avg)
-
+        all_silhouette_scores = np.append(all_silhouette_scores, silhouette_avg)
 
         sample_values = silhouette_samples(self.cluster_data, cluster_labels)
         ## if plot_out, setup plt for each set of silhouette scores
         ## adapted from: https://scikit-learn.org/stable/auto_examples/cluster/plot_kmeans_silhouette_analysis.html#sphx-glr-auto-examples-cluster-plot-kmeans-silhouette-analysis-py
-        if(plot_out):
+        if plot_out:
             # Create a subplot with 1 row and 2 columns
             fig, (ax1, ax2) = plt.subplots(1, 2)
             fig.set_size_inches(18, 7)
-    
+
             # The 1st subplot is the silhouette plot
-            ax1.set_xlim([-.25, 1])
+            ax1.set_xlim([-0.25, 1])
             # The (n_clusters+1)*10 is for inserting blank space between silhouette
             # plots of individual clusters, to demarcate them clearly.
             ax1.set_ylim([0, len(self.cluster_data) + (n_clusters + 1) * 10])
@@ -1587,8 +1649,7 @@ Parameters are also captured as attributes for posterity.</p></div>
             for i in range(n_clusters):
                 # Aggregate the silhouette scores for samples belonging to
                 # cluster i, and sort them
-                ith_cluster_silhouette_values = \
-                    sample_values[cluster_labels == i]
+                ith_cluster_silhouette_values = sample_values[cluster_labels == i]
 
                 ith_cluster_silhouette_values.sort()
 
@@ -1596,9 +1657,14 @@ Parameters are also captured as attributes for posterity.</p></div>
                 y_upper = y_lower + size_cluster_i
 
                 color = cm.nipy_spectral(float(i) / n_clusters)
-                ax1.fill_betweenx(np.arange(y_lower, y_upper),
-                                  0, ith_cluster_silhouette_values,
-                                  facecolor=color, edgecolor=color, alpha=0.7)
+                ax1.fill_betweenx(
+                    np.arange(y_lower, y_upper),
+                    0,
+                    ith_cluster_silhouette_values,
+                    facecolor=color,
+                    edgecolor=color,
+                    alpha=0.7,
+                )
 
                 # Label the silhouette plots with their cluster numbers at the middle
                 ax1.text(-0.05, y_lower + 0.5 * size_cluster_i, str(i))
@@ -1614,35 +1680,61 @@ Parameters are also captured as attributes for posterity.</p></div>
                 ax1.axvline(x=silhouette_avg, color=&#34;red&#34;, linestyle=&#34;--&#34;)
 
                 ax1.set_yticks([])  # Clear the yaxis labels / ticks
-                ax1.set_xticks([-.25, 0.0, 0.25,0.5,0.75, 1])
+                ax1.set_xticks([-0.25, 0.0, 0.25, 0.5, 0.75, 1])
 
                 # 2nd Plot showing the actual clusters formed
                 colors = cm.nipy_spectral(cluster_labels.astype(float) / n_clusters)
-                ax2.scatter(self.cluster_data[:, 0], self.cluster_data[:, 1], marker=&#39;.&#39;, s=30, lw=0, alpha=0.7,
-                            c=colors, edgecolor=&#39;k&#39;)
+                ax2.scatter(
+                    self.cluster_data[:, 0],
+                    self.cluster_data[:, 1],
+                    marker=&#34;.&#34;,
+                    s=30,
+                    lw=0,
+                    alpha=0.7,
+                    c=colors,
+                    edgecolor=&#34;k&#34;,
+                )
 
                 # Labeling the clusters
                 centers = clusterer.cluster_centers_
                 # Draw white circles at cluster centers
-                ax2.scatter(centers[:, 0], centers[:, 1], marker=&#39;o&#39;,
-                            c=&#34;white&#34;, alpha=1, s=200, edgecolor=&#39;k&#39;)
+                ax2.scatter(
+                    centers[:, 0],
+                    centers[:, 1],
+                    marker=&#34;o&#34;,
+                    c=&#34;white&#34;,
+                    alpha=1,
+                    s=200,
+                    edgecolor=&#34;k&#34;,
+                )
 
                 for i, c in enumerate(centers):
-                    ax2.scatter(c[0], c[1], marker=&#39;$%d$&#39; % i, alpha=1,
-                                s=50, edgecolor=&#39;k&#39;)
+                    ax2.scatter(
+                        c[0], c[1], marker=&#34;$%d$&#34; % i, alpha=1, s=50, edgecolor=&#34;k&#34;
+                    )
 
                 ax2.set_title(&#34;The visualization of the clustered data.&#34;)
                 ax2.set_xlabel(&#34;Feature space for the 1st feature&#34;)
                 ax2.set_ylabel(&#34;Feature space for the 2nd feature&#34;)
 
-                plt.suptitle((&#34;Silhouette analysis for KMeans clustering on sample data &#34;
-                              &#34;with n_clusters = %d&#34; % n_clusters),
-                             fontsize=14, fontweight=&#39;bold&#39;)
-
+                plt.suptitle(
+                    (
+                        &#34;Silhouette analysis for KMeans clustering on sample data &#34;
+                        &#34;with n_clusters = %d&#34; % n_clusters
+                    ),
+                    fontsize=14,
+                    fontweight=&#34;bold&#34;,
+                )
 
     ## determine optimal cluster by silhouette score
-    print(&#34;The optimal number of clusters is {}, with a mean silhouette score of {}.&#34;.format(range_clusters[all_silhouette_scores.argmax()],all_silhouette_scores.max()))
-    if(plot_out): plt.show()
+    print(
+        &#34;The optimal number of clusters is {}, with a mean silhouette score of {}.&#34;.format(
+            range_clusters[all_silhouette_scores.argmax()],
+            all_silhouette_scores.max(),
+        )
+    )
+    if plot_out:
+        plt.show()
     self.k = range_clusters[all_silhouette_scores.argmax()]</code></pre>
 </details>
 </dd>
@@ -1687,7 +1779,9 @@ model. Parameters are also captured as attributes for posterity.</p></div>
         print(&#34;No cluster data found. Run prep_cluster_data() first.&#34;)
         pass
     if k is None and self.k is None:
-        print(&#34;No k found or provided. Run find_optimal_k() first or pass a k value.&#34;)
+        print(
+            &#34;No k found or provided. Run find_optimal_k() first or pass a k value.&#34;
+        )
         pass
     if k is not None:
         print(&#34;Overriding optimal k value with k={}.&#34;.format(k))
@@ -1740,7 +1834,7 @@ model. Parameters are also captured as attributes for posterity.</p></div>
 </nav>
 </main>
 <footer id="footer">
-<p>Generated by <a href="https://pdoc3.github.io/pdoc" title="pdoc: Python API documentation generator"><cite>pdoc</cite> 0.10.0</a>.</p>
+<p>Generated by <a href="https://pdoc3.github.io/pdoc"><cite>pdoc</cite> 0.9.2</a>.</p>
 </footer>
 </body>
 </html>

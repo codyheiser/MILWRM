@@ -2,8 +2,6 @@
 """
 Functions and classes for manipulating 10X Visium spatial transcriptomic (ST) and 
 histological imaging data
-
-@author: C Heiser
 """
 import numpy as np
 import pandas as pd
@@ -379,8 +377,8 @@ def assemble_pita(
     adata : AnnData.anndata
         the data
     features : list of int or str
-        Names or indices of features to cast onto spot image. If `None`, cast all 
-        features. If `plot_out`, first feature in list will be plotted. If not 
+        Names or indices of features to cast onto spot image. If `None`, cast all
+        features. If `plot_out`, first feature in list will be plotted. If not
         specified and `plot_out`, first feature (index 0) will be plotted.
     use_rep : str
         Key from `adata.obsm` to use for plotting. If `None`, use `adata.X`.
@@ -549,9 +547,7 @@ def show_pita(
         cbar = plt.colorbar(im, shrink=0.8)
         fig.tight_layout()
         if save_to:
-            plt.savefig(
-                fname=save_to, transparent=True, bbox_inches="tight", dpi=800
-            )
+            plt.savefig(fname=save_to, transparent=True, bbox_inches="tight", dpi=800)
         return fig
     if RGB:
         # if third dim has 3 features, treat as RGB and plot it quickly
