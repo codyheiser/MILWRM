@@ -182,11 +182,11 @@ def map_pixels(adata, filter_label="in_tissue", img_key="hires", library_id=None
         )
         # set empty pixels (no Visium spot) to "none"
         adata.uns["pixel_map_df"].loc[
-            adata.uns["pixel_map_df"][filter_label].isin(["False", False, 0, 0.0]),
+            adata.uns["pixel_map_df"][filter_label]==0,
             "barcode",
         ] = "none"
         # subset the entire anndata object using filter_label
-        adata = adata[adata.obs[filter_label].isin(["True", True, 1.0, 1]), :].copy()
+        adata = adata[adata.obs[filter_label]==1, :].copy()
         print("New size: {} spots x {} genes".format(adata.n_obs, adata.n_vars))
 
     print("Done!")
