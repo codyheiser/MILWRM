@@ -367,7 +367,7 @@ def trim_image(
 
 
 def assemble_pita(
-    adata, features=None, use_rep=None, layer=None, plot_out=True, **kwargs
+    adata, features=None, use_rep=None, layer=None, plot_out=True, histo=None, **kwargs
 ):
     """
     Cast feature into pixel space to construct gene expression image ("pita")
@@ -386,6 +386,9 @@ def assemble_pita(
         Key from `adata.layers` to use for plotting. Ignored if `use_rep` is not `None`
     plot_out : bool
         Show resulting image?
+    histo : str or `None`, optional (default=`None`)
+        Histology image to show along with pita in gridspec (i.e. "hires", 
+        "hires_trim", "lowres"). If `None` or if `plot_out`==`False`, ignore.
     **kwargs
         Arguments to pass to `show_pita()` function
 
@@ -462,7 +465,11 @@ def assemble_pita(
     ).squeeze()
 
     if plot_out:
-        show_pita(pita=assembled, features=features, **kwargs)
+        # determine where the histo image is in anndata
+        if histo is not None:
+            assert histo in adata.uns["spatial"][list(adata.uns["spatial"].keys())[0]]["images"].keys(), "Must provide one of {} for histo".format(adata.uns["spatial"][list(adata.uns["spatial"].keys())[0]]["images"].keys())
+            histo = adata.uns["spatial"][list(adata.uns["spatial"].keys())[0]]["images"][histo]
+        show_pita(pita=assembled, features=features, histo=histo, **kwargs)
     print("Done!")
     return assembled
 
