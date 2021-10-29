@@ -34,16 +34,74 @@ Visium spatial transcriptomic (ST) and histological imaging data</p>
 Classes for assigning tissue region IDs to multiplex immunofluorescence (MxIF) or 10X 
 Visium spatial transcriptomic (ST) and histological imaging data
 &#34;&#34;&#34;
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
-from sklearn.cluster import KMeans
-from skimage.filters import gaussian
 from img_utils import checktype
-from sklearn.metrics import silhouette_samples, silhouette_score
-import matplotlib.pyplot as plt
-import matplotlib.cm as cm
-import numpy as np
+from joblib import Parallel, delayed
+from sklearn.cluster import KMeans
+from sklearn.preprocessing import MinMaxScaler
+from skimage.filters import gaussian
+
+
+def kMeansRes(scaled_data, k, alpha_k=0.02, random_state=18):
+    &#34;&#34;&#34;
+    Adapted from
+    https://towardsdatascience.com/an-approach-for-choosing-number-of-clusters-for-k-means-c28e614ecb2c
+
+    Parameters
+    ----------
+    scaled_data: np.array
+        scaled data. rows are samples and columns are features for clustering
+    k: int
+        current k for applying KMeans
+    alpha_k: float
+        manually tuned factor that gives penalty to the number of clusters
+
+    Returns
+    -------
+    scaled_inertia: float
+        scaled inertia value for current k
+    &#34;&#34;&#34;
+    inertia_o = np.square((scaled_data - scaled_data.mean(axis=0))).sum()
+    # fit k-means
+    kmeans = KMeans(n_clusters=k, random_state=random_state).fit(scaled_data)
+    scaled_inertia = kmeans.inertia_ / inertia_o + alpha_k * k
+    return scaled_inertia
+
+
+def chooseBestKforKMeansParallel(scaled_data, k_range, n_jobs=-1, **kwargs):
+    &#34;&#34;&#34;
+    Adapted from
+    https://towardsdatascience.com/an-approach-for-choosing-number-of-clusters-for-k-means-c28e614ecb2c
+
+    Parameters
+    ----------
+    scaled_data: np.array
+        Scaled data. Rows are samples and columns are features for clustering.
+    k_range: list of int
+        k range for applying KMeans
+    n_jobs : int
+        Number of cores to parallelize k-choosing across
+    **kwargs
+        Arguments to pass to `kMeansRes()` (i.e. `alpha_k`, `random_state`)
+
+    Returns
+    -------
+    best_k: int
+        Chosen value of k out of the given k range. Chosen k is k with the minimum
+        scaled inertia value.
+    results: pd.DataFrame
+        Adjusted inertia value for each k in k_range
+    &#34;&#34;&#34;
+    ans = Parallel(n_jobs=n_jobs, verbose=10)(
+        delayed(kMeansRes)(scaled_data, k, **kwargs) for k in k_range
+    )
+    ans = list(zip(k_range, ans))
+    results = pd.DataFrame(ans, columns=[&#34;k&#34;, &#34;Scaled Inertia&#34;]).set_index(&#34;k&#34;)
+    best_k = results.idxmin()[0]
+    return best_k, results
 
 
 class tissue_labeler:
@@ -58,151 +116,52 @@ class tissue_labeler:
         self.cluster_data = None  # start out with no data to cluster on
         self.k = None  # start out with no k value
 
-    def find_optimal_k(self, plot_out=False, random_state=18):
+    def find_optimal_k(self, plot_out=False, alpha=0.02, random_state=18, n_jobs=-1):
         &#34;&#34;&#34;
-        Uses silhouette analysis to decide on k clusters for clustering in the
-        corresponding `anndata` objects.
+        Uses scaled inertia to decide on k clusters for clustering in the
+        corresponding `anndata` objects
 
         Parameters
         ----------
         plot_out : boolean, optional (default=FALSE)
-            Determines if silhouette plots should be output
+            Determines if scaled inertia graph should be output
+        alpha: float
+            Manually tuned factor on [0.0, 1.0] that penalizes the number of clusters
         random_state : int, optional (default=18)
-            Seed for k-means clustering models.
+            Seed for k-means clustering models
+        n_jobs : int
+            Number of cores to parallelize k-choosing across
 
         Returns
         -------
-        Does not return anything. `self.k` contains integer value for number of clusters.
-        Parameters are also captured as attributes for posterity.
+        Does not return anything. `self.k` contains integer value for number of
+        clusters. Parameters are also captured as attributes for posterity.
         &#34;&#34;&#34;
         if self.cluster_data is None:
-            print(&#34;No cluster data found. Run prep_cluster_data() first.&#34;)
-            pass
+            raise Exception(&#34;No cluster data found. Run prep_cluster_data() first.&#34;)
         self.random_state = random_state
-        all_silhouette_scores = np.array([])
-        range_clusters = np.array(range(3, 10))
 
-        print(&#34;Running silhouette analysis for optimal k on cluster_data.&#34;)
-
-        ## loop over possibilities
-        for n_clusters in range_clusters:
-            ## setup KMeans algorithm
-            clusterer = KMeans(n_clusters=n_clusters, random_state=random_state)
-
-            ## fit to cluster data
-            cluster_labels = clusterer.fit_predict(self.cluster_data)
-
-            ## calculate avg silhouette score
-            silhouette_avg = silhouette_score(self.cluster_data, cluster_labels)
-
-            ## collect all scores
-            all_silhouette_scores = np.append(all_silhouette_scores, silhouette_avg)
-
-            sample_values = silhouette_samples(self.cluster_data, cluster_labels)
-            ## if plot_out, setup plt for each set of silhouette scores
-            ## adapted from: https://scikit-learn.org/stable/auto_examples/cluster/plot_kmeans_silhouette_analysis.html#sphx-glr-auto-examples-cluster-plot-kmeans-silhouette-analysis-py
-            if plot_out:
-                # Create a subplot with 1 row and 2 columns
-                fig, (ax1, ax2) = plt.subplots(1, 2)
-                fig.set_size_inches(18, 7)
-
-                # The 1st subplot is the silhouette plot
-                ax1.set_xlim([-0.25, 1])
-                # The (n_clusters+1)*10 is for inserting blank space between silhouette
-                # plots of individual clusters, to demarcate them clearly.
-                ax1.set_ylim([0, len(self.cluster_data) + (n_clusters + 1) * 10])
-
-                y_lower = 10
-                for i in range(n_clusters):
-                    # Aggregate the silhouette scores for samples belonging to
-                    # cluster i, and sort them
-                    ith_cluster_silhouette_values = sample_values[cluster_labels == i]
-
-                    ith_cluster_silhouette_values.sort()
-
-                    size_cluster_i = ith_cluster_silhouette_values.shape[0]
-                    y_upper = y_lower + size_cluster_i
-
-                    color = cm.nipy_spectral(float(i) / n_clusters)
-                    ax1.fill_betweenx(
-                        np.arange(y_lower, y_upper),
-                        0,
-                        ith_cluster_silhouette_values,
-                        facecolor=color,
-                        edgecolor=color,
-                        alpha=0.7,
-                    )
-
-                    # Label the silhouette plots with their cluster numbers at the middle
-                    ax1.text(-0.05, y_lower + 0.5 * size_cluster_i, str(i))
-
-                    # Compute the new y_lower for next plot
-                    y_lower = y_upper + 10  # 10 for the 0 samples
-
-                    ax1.set_title(&#34;The silhouette plot for the various clusters.&#34;)
-                    ax1.set_xlabel(&#34;The silhouette coefficient values&#34;)
-                    ax1.set_ylabel(&#34;Cluster label&#34;)
-
-                    # The vertical line for average silhouette score of all the values
-                    ax1.axvline(x=silhouette_avg, color=&#34;red&#34;, linestyle=&#34;--&#34;)
-
-                    ax1.set_yticks([])  # Clear the yaxis labels / ticks
-                    ax1.set_xticks([-0.25, 0.0, 0.25, 0.5, 0.75, 1])
-
-                    # 2nd Plot showing the actual clusters formed
-                    colors = cm.nipy_spectral(cluster_labels.astype(float) / n_clusters)
-                    ax2.scatter(
-                        self.cluster_data[:, 0],
-                        self.cluster_data[:, 1],
-                        marker=&#34;.&#34;,
-                        s=30,
-                        lw=0,
-                        alpha=0.7,
-                        c=colors,
-                        edgecolor=&#34;k&#34;,
-                    )
-
-                    # Labeling the clusters
-                    centers = clusterer.cluster_centers_
-                    # Draw white circles at cluster centers
-                    ax2.scatter(
-                        centers[:, 0],
-                        centers[:, 1],
-                        marker=&#34;o&#34;,
-                        c=&#34;white&#34;,
-                        alpha=1,
-                        s=200,
-                        edgecolor=&#34;k&#34;,
-                    )
-
-                    for i, c in enumerate(centers):
-                        ax2.scatter(
-                            c[0], c[1], marker=&#34;$%d$&#34; % i, alpha=1, s=50, edgecolor=&#34;k&#34;
-                        )
-
-                    ax2.set_title(&#34;The visualization of the clustered data.&#34;)
-                    ax2.set_xlabel(&#34;Feature space for the 1st feature&#34;)
-                    ax2.set_ylabel(&#34;Feature space for the 2nd feature&#34;)
-
-                    plt.suptitle(
-                        (
-                            &#34;Silhouette analysis for KMeans clustering on sample data &#34;
-                            &#34;with n_clusters = %d&#34; % n_clusters
-                        ),
-                        fontsize=14,
-                        fontweight=&#34;bold&#34;,
-                    )
-
-        ## determine optimal cluster by silhouette score
-        print(
-            &#34;The optimal number of clusters is {}, with a mean silhouette score of {}.&#34;.format(
-                range_clusters[all_silhouette_scores.argmax()],
-                all_silhouette_scores.max(),
-            )
+        k_range = range(2, 21)  # choose k range
+        # compute scaled inertia
+        best_k, results = chooseBestKforKMeansParallel(
+            self.cluster_data,
+            k_range,
+            n_jobs=n_jobs,
+            random_state=random_state,
+            alpha_k=alpha,
         )
         if plot_out:
+            # plot the results
+            plt.figure(figsize=(7, 4))
+            plt.plot(results, &#34;o&#34;)
+            plt.title(&#34;Adjusted Inertia for each K&#34;)
+            plt.xlabel(&#34;K&#34;)
+            plt.ylabel(&#34;Adjusted Inertia&#34;)
+            plt.xticks(range(2, 21, 1))
             plt.show()
-        self.k = range_clusters[all_silhouette_scores.argmax()]
+        # save optimal k to object
+        print(&#34;The optimal number of clusters is {}&#34;.format(best_k))
+        self.k = best_k
 
     def find_tissue_regions(self, k=None, random_state=18):
         &#34;&#34;&#34;
@@ -222,13 +181,11 @@ class tissue_labeler:
         model. Parameters are also captured as attributes for posterity.
         &#34;&#34;&#34;
         if self.cluster_data is None:
-            print(&#34;No cluster data found. Run prep_cluster_data() first.&#34;)
-            pass
+            raise Exception(&#34;No cluster data found. Run prep_cluster_data() first.&#34;)
         if k is None and self.k is None:
-            print(
+            raise Exception(
                 &#34;No k found or provided. Run find_optimal_k() first or pass a k value.&#34;
             )
-            pass
         if k is not None:
             print(&#34;Overriding optimal k value with k={}.&#34;.format(k))
             self.k = k
@@ -371,10 +328,16 @@ class st_labeler(tissue_labeler):
                 self.cluster_data = tmp2.loc[:, cols].copy()
             else:
                 self.cluster_data = pd.concat([self.cluster_data, tmp2.loc[:, cols]])
-        self.cluster_data = self.cluster_data.values
+
+        # perform min-max scaling on final cluster data
+        mms = MinMaxScaler()
+        unscaled_data = self.cluster_data.values
+        self.cluster_data = mms.fit_transform(unscaled_data)
         print(&#34;Collected clustering data of shape: {}&#34;.format(self.cluster_data.shape))
 
-    def label_tissue_regions(self, k=None, plot_out=False, random_state=18):
+    def label_tissue_regions(
+        self, k=None, alpha=0.05, plot_out=False, random_state=18, n_jobs=-1
+    ):
         &#34;&#34;&#34;
         Perform tissue-level clustering and label pixels in the corresponding
         `anndata` objects.
@@ -383,10 +346,14 @@ class st_labeler(tissue_labeler):
         ----------
         k : int, optional (default=None)
             Number of tissue regions to define
+        alpha: float
+            Manually tuned factor on [0.0, 1.0] that penalizes the number of clusters
         plot_out : boolean, optional (default=FALSE)
             Determines if silhouette plots should be output
         random_state : int, optional (default=18)
             Seed for k-means clustering model.
+        n_jobs : int
+            Number of cores to parallelize k-choosing across
 
         Returns
         -------
@@ -396,7 +363,10 @@ class st_labeler(tissue_labeler):
         &#34;&#34;&#34;
         # find optimal k with parent class
         if k is None:
-            self.find_optimal_k(plot_out=plot_out, random_state=random_state)
+            print(&#34;Determining optimal cluster number k via scaled inertia&#34;)
+            self.find_optimal_k(
+                plot_out=plot_out, alpha=alpha, random_state=random_state, n_jobs=n_jobs
+            )
         # call k-means model from parent class
         self.find_tissue_regions(k=k, random_state=random_state)
         # loop through anndata object and add tissue labels to adata.obs dataframe
@@ -509,22 +479,27 @@ class mxif_labeler(tissue_labeler):
                 self.cluster_data = tmp.copy()
             else:
                 self.cluster_data = np.row_stack([self.cluster_data, tmp])
+        # perform min-max scaling on final cluster data
+        mms = MinMaxScaler()
+        unscaled_data = self.cluster_data.values
+        self.cluster_data = mms.fit_transform(unscaled_data)
         print(&#34;Collected clustering data of shape: {}&#34;.format(self.cluster_data.shape))
 
-    def label_tissue_regions(self, k=None, plot_out=False, random_state=18):
+    def label_tissue_regions(self, k=None, plot_out=False, random_state=18, n_jobs=-1):
         &#34;&#34;&#34;
         Perform tissue-level clustering and label pixels in the corresponding
         images.
 
         Parameters
         ----------
-        ----------
         k : int, optional (default=None)
             Number of tissue regions to define
         plot_out : boolean, optional (default=FALSE)
             Determines if silhouette plots should be output
         random_state : int, optional (default=18)
-            Seed for k-means clustering model.
+            Seed for k-means clustering model
+        n_jobs : int
+            Number of cores to parallelize k-choosing across
 
         Returns
         -------
@@ -534,7 +509,10 @@ class mxif_labeler(tissue_labeler):
         &#34;&#34;&#34;
         # find optimal k with parent class
         if k is None:
-            self.find_optimal_k(plot_out=plot_out, random_state=random_state)
+            print(&#34;Determining optimal cluster number k via scaled inertia&#34;)
+            self.find_optimal_k(
+                plot_out=plot_out, random_state=random_state, n_jobs=n_jobs
+            )
         # call k-means model from parent class
         self.find_tissue_regions(random_state=random_state)
         # loop through image objects and create tissue label images
@@ -573,6 +551,121 @@ class mxif_labeler(tissue_labeler):
 <section>
 </section>
 <section>
+<h2 class="section-title" id="header-functions">Functions</h2>
+<dl>
+<dt id="H2TL.chooseBestKforKMeansParallel"><code class="name flex">
+<span>def <span class="ident">chooseBestKforKMeansParallel</span></span>(<span>scaled_data, k_range, n_jobs=-1, **kwargs)</span>
+</code></dt>
+<dd>
+<div class="desc"><p>Adapted from
+<a href="https://towardsdatascience.com/an-approach-for-choosing-number-of-clusters-for-k-means-c28e614ecb2c">https://towardsdatascience.com/an-approach-for-choosing-number-of-clusters-for-k-means-c28e614ecb2c</a></p>
+<h2 id="parameters">Parameters</h2>
+<dl>
+<dt><strong><code>scaled_data</code></strong> :&ensp;<code>np.array</code></dt>
+<dd>Scaled data. Rows are samples and columns are features for clustering.</dd>
+<dt><strong><code>k_range</code></strong> :&ensp;<code>list</code> of <code>int</code></dt>
+<dd>k range for applying KMeans</dd>
+<dt><strong><code>n_jobs</code></strong> :&ensp;<code>int</code></dt>
+<dd>Number of cores to parallelize k-choosing across</dd>
+<dt><strong><code>**kwargs</code></strong></dt>
+<dd>Arguments to pass to <code><a title="H2TL.kMeansRes" href="#H2TL.kMeansRes">kMeansRes()</a></code> (i.e. <code>alpha_k</code>, <code>random_state</code>)</dd>
+</dl>
+<h2 id="returns">Returns</h2>
+<dl>
+<dt><strong><code>best_k</code></strong> :&ensp;<code>int</code></dt>
+<dd>Chosen value of k out of the given k range. Chosen k is k with the minimum
+scaled inertia value.</dd>
+<dt><strong><code>results</code></strong> :&ensp;<code>pd.DataFrame</code></dt>
+<dd>Adjusted inertia value for each k in k_range</dd>
+</dl></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def chooseBestKforKMeansParallel(scaled_data, k_range, n_jobs=-1, **kwargs):
+    &#34;&#34;&#34;
+    Adapted from
+    https://towardsdatascience.com/an-approach-for-choosing-number-of-clusters-for-k-means-c28e614ecb2c
+
+    Parameters
+    ----------
+    scaled_data: np.array
+        Scaled data. Rows are samples and columns are features for clustering.
+    k_range: list of int
+        k range for applying KMeans
+    n_jobs : int
+        Number of cores to parallelize k-choosing across
+    **kwargs
+        Arguments to pass to `kMeansRes()` (i.e. `alpha_k`, `random_state`)
+
+    Returns
+    -------
+    best_k: int
+        Chosen value of k out of the given k range. Chosen k is k with the minimum
+        scaled inertia value.
+    results: pd.DataFrame
+        Adjusted inertia value for each k in k_range
+    &#34;&#34;&#34;
+    ans = Parallel(n_jobs=n_jobs, verbose=10)(
+        delayed(kMeansRes)(scaled_data, k, **kwargs) for k in k_range
+    )
+    ans = list(zip(k_range, ans))
+    results = pd.DataFrame(ans, columns=[&#34;k&#34;, &#34;Scaled Inertia&#34;]).set_index(&#34;k&#34;)
+    best_k = results.idxmin()[0]
+    return best_k, results</code></pre>
+</details>
+</dd>
+<dt id="H2TL.kMeansRes"><code class="name flex">
+<span>def <span class="ident">kMeansRes</span></span>(<span>scaled_data, k, alpha_k=0.02, random_state=18)</span>
+</code></dt>
+<dd>
+<div class="desc"><p>Adapted from
+<a href="https://towardsdatascience.com/an-approach-for-choosing-number-of-clusters-for-k-means-c28e614ecb2c">https://towardsdatascience.com/an-approach-for-choosing-number-of-clusters-for-k-means-c28e614ecb2c</a></p>
+<h2 id="parameters">Parameters</h2>
+<dl>
+<dt><strong><code>scaled_data</code></strong> :&ensp;<code>np.array</code></dt>
+<dd>scaled data. rows are samples and columns are features for clustering</dd>
+<dt><strong><code>k</code></strong> :&ensp;<code>int</code></dt>
+<dd>current k for applying KMeans</dd>
+<dt><strong><code>alpha_k</code></strong> :&ensp;<code>float</code></dt>
+<dd>manually tuned factor that gives penalty to the number of clusters</dd>
+</dl>
+<h2 id="returns">Returns</h2>
+<dl>
+<dt><strong><code>scaled_inertia</code></strong> :&ensp;<code>float</code></dt>
+<dd>scaled inertia value for current k</dd>
+</dl></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def kMeansRes(scaled_data, k, alpha_k=0.02, random_state=18):
+    &#34;&#34;&#34;
+    Adapted from
+    https://towardsdatascience.com/an-approach-for-choosing-number-of-clusters-for-k-means-c28e614ecb2c
+
+    Parameters
+    ----------
+    scaled_data: np.array
+        scaled data. rows are samples and columns are features for clustering
+    k: int
+        current k for applying KMeans
+    alpha_k: float
+        manually tuned factor that gives penalty to the number of clusters
+
+    Returns
+    -------
+    scaled_inertia: float
+        scaled inertia value for current k
+    &#34;&#34;&#34;
+    inertia_o = np.square((scaled_data - scaled_data.mean(axis=0))).sum()
+    # fit k-means
+    kmeans = KMeans(n_clusters=k, random_state=random_state).fit(scaled_data)
+    scaled_inertia = kmeans.inertia_ / inertia_o + alpha_k * k
+    return scaled_inertia</code></pre>
+</details>
+</dd>
+</dl>
 </section>
 <section>
 <h2 class="section-title" id="header-classes">Classes</h2>
@@ -691,22 +784,27 @@ class mxif_labeler(tissue_labeler):
                 self.cluster_data = tmp.copy()
             else:
                 self.cluster_data = np.row_stack([self.cluster_data, tmp])
+        # perform min-max scaling on final cluster data
+        mms = MinMaxScaler()
+        unscaled_data = self.cluster_data.values
+        self.cluster_data = mms.fit_transform(unscaled_data)
         print(&#34;Collected clustering data of shape: {}&#34;.format(self.cluster_data.shape))
 
-    def label_tissue_regions(self, k=None, plot_out=False, random_state=18):
+    def label_tissue_regions(self, k=None, plot_out=False, random_state=18, n_jobs=-1):
         &#34;&#34;&#34;
         Perform tissue-level clustering and label pixels in the corresponding
         images.
 
         Parameters
         ----------
-        ----------
         k : int, optional (default=None)
             Number of tissue regions to define
         plot_out : boolean, optional (default=FALSE)
             Determines if silhouette plots should be output
         random_state : int, optional (default=18)
-            Seed for k-means clustering model.
+            Seed for k-means clustering model
+        n_jobs : int
+            Number of cores to parallelize k-choosing across
 
         Returns
         -------
@@ -716,7 +814,10 @@ class mxif_labeler(tissue_labeler):
         &#34;&#34;&#34;
         # find optimal k with parent class
         if k is None:
-            self.find_optimal_k(plot_out=plot_out, random_state=random_state)
+            print(&#34;Determining optimal cluster number k via scaled inertia&#34;)
+            self.find_optimal_k(
+                plot_out=plot_out, random_state=random_state, n_jobs=n_jobs
+            )
         # call k-means model from parent class
         self.find_tissue_regions(random_state=random_state)
         # loop through image objects and create tissue label images
@@ -756,20 +857,21 @@ class mxif_labeler(tissue_labeler):
 <h3>Methods</h3>
 <dl>
 <dt id="H2TL.mxif_labeler.label_tissue_regions"><code class="name flex">
-<span>def <span class="ident">label_tissue_regions</span></span>(<span>self, k=None, plot_out=False, random_state=18)</span>
+<span>def <span class="ident">label_tissue_regions</span></span>(<span>self, k=None, plot_out=False, random_state=18, n_jobs=-1)</span>
 </code></dt>
 <dd>
 <div class="desc"><p>Perform tissue-level clustering and label pixels in the corresponding
 images.</p>
 <h2 id="parameters">Parameters</h2>
-<hr>
 <dl>
 <dt><strong><code>k</code></strong> :&ensp;<code>int</code>, optional <code>(default=None)</code></dt>
 <dd>Number of tissue regions to define</dd>
 <dt><strong><code>plot_out</code></strong> :&ensp;<code>boolean</code>, optional <code>(default=FALSE)</code></dt>
 <dd>Determines if silhouette plots should be output</dd>
 <dt><strong><code>random_state</code></strong> :&ensp;<code>int</code>, optional <code>(default=18)</code></dt>
-<dd>Seed for k-means clustering model.</dd>
+<dd>Seed for k-means clustering model</dd>
+<dt><strong><code>n_jobs</code></strong> :&ensp;<code>int</code></dt>
+<dd>Number of cores to parallelize k-choosing across</dd>
 </dl>
 <h2 id="returns">Returns</h2>
 <p>Does not return anything. <code>self.tissue_ID</code> is added, containing image with
@@ -779,20 +881,21 @@ model. Parameters are also captured as attributes for posterity.</p></div>
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">def label_tissue_regions(self, k=None, plot_out=False, random_state=18):
+<pre><code class="python">def label_tissue_regions(self, k=None, plot_out=False, random_state=18, n_jobs=-1):
     &#34;&#34;&#34;
     Perform tissue-level clustering and label pixels in the corresponding
     images.
 
     Parameters
     ----------
-    ----------
     k : int, optional (default=None)
         Number of tissue regions to define
     plot_out : boolean, optional (default=FALSE)
         Determines if silhouette plots should be output
     random_state : int, optional (default=18)
-        Seed for k-means clustering model.
+        Seed for k-means clustering model
+    n_jobs : int
+        Number of cores to parallelize k-choosing across
 
     Returns
     -------
@@ -802,7 +905,10 @@ model. Parameters are also captured as attributes for posterity.</p></div>
     &#34;&#34;&#34;
     # find optimal k with parent class
     if k is None:
-        self.find_optimal_k(plot_out=plot_out, random_state=random_state)
+        print(&#34;Determining optimal cluster number k via scaled inertia&#34;)
+        self.find_optimal_k(
+            plot_out=plot_out, random_state=random_state, n_jobs=n_jobs
+        )
     # call k-means model from parent class
     self.find_tissue_regions(random_state=random_state)
     # loop through image objects and create tissue label images
@@ -931,6 +1037,10 @@ training. Parameters are also captured as attributes for posterity.</p></div>
             self.cluster_data = tmp.copy()
         else:
             self.cluster_data = np.row_stack([self.cluster_data, tmp])
+    # perform min-max scaling on final cluster data
+    mms = MinMaxScaler()
+    unscaled_data = self.cluster_data.values
+    self.cluster_data = mms.fit_transform(unscaled_data)
     print(&#34;Collected clustering data of shape: {}&#34;.format(self.cluster_data.shape))</code></pre>
 </details>
 </dd>
@@ -1095,10 +1205,16 @@ training. Parameters are also captured as attributes for posterity.</p></div>
                 self.cluster_data = tmp2.loc[:, cols].copy()
             else:
                 self.cluster_data = pd.concat([self.cluster_data, tmp2.loc[:, cols]])
-        self.cluster_data = self.cluster_data.values
+
+        # perform min-max scaling on final cluster data
+        mms = MinMaxScaler()
+        unscaled_data = self.cluster_data.values
+        self.cluster_data = mms.fit_transform(unscaled_data)
         print(&#34;Collected clustering data of shape: {}&#34;.format(self.cluster_data.shape))
 
-    def label_tissue_regions(self, k=None, plot_out=False, random_state=18):
+    def label_tissue_regions(
+        self, k=None, alpha=0.05, plot_out=False, random_state=18, n_jobs=-1
+    ):
         &#34;&#34;&#34;
         Perform tissue-level clustering and label pixels in the corresponding
         `anndata` objects.
@@ -1107,10 +1223,14 @@ training. Parameters are also captured as attributes for posterity.</p></div>
         ----------
         k : int, optional (default=None)
             Number of tissue regions to define
+        alpha: float
+            Manually tuned factor on [0.0, 1.0] that penalizes the number of clusters
         plot_out : boolean, optional (default=FALSE)
             Determines if silhouette plots should be output
         random_state : int, optional (default=18)
             Seed for k-means clustering model.
+        n_jobs : int
+            Number of cores to parallelize k-choosing across
 
         Returns
         -------
@@ -1120,7 +1240,10 @@ training. Parameters are also captured as attributes for posterity.</p></div>
         &#34;&#34;&#34;
         # find optimal k with parent class
         if k is None:
-            self.find_optimal_k(plot_out=plot_out, random_state=random_state)
+            print(&#34;Determining optimal cluster number k via scaled inertia&#34;)
+            self.find_optimal_k(
+                plot_out=plot_out, alpha=alpha, random_state=random_state, n_jobs=n_jobs
+            )
         # call k-means model from parent class
         self.find_tissue_regions(k=k, random_state=random_state)
         # loop through anndata object and add tissue labels to adata.obs dataframe
@@ -1144,7 +1267,7 @@ training. Parameters are also captured as attributes for posterity.</p></div>
 <h3>Methods</h3>
 <dl>
 <dt id="H2TL.st_labeler.label_tissue_regions"><code class="name flex">
-<span>def <span class="ident">label_tissue_regions</span></span>(<span>self, k=None, plot_out=False, random_state=18)</span>
+<span>def <span class="ident">label_tissue_regions</span></span>(<span>self, k=None, alpha=0.05, plot_out=False, random_state=18, n_jobs=-1)</span>
 </code></dt>
 <dd>
 <div class="desc"><p>Perform tissue-level clustering and label pixels in the corresponding
@@ -1153,10 +1276,14 @@ training. Parameters are also captured as attributes for posterity.</p></div>
 <dl>
 <dt><strong><code>k</code></strong> :&ensp;<code>int</code>, optional <code>(default=None)</code></dt>
 <dd>Number of tissue regions to define</dd>
+<dt><strong><code>alpha</code></strong> :&ensp;<code>float</code></dt>
+<dd>Manually tuned factor on [0.0, 1.0] that penalizes the number of clusters</dd>
 <dt><strong><code>plot_out</code></strong> :&ensp;<code>boolean</code>, optional <code>(default=FALSE)</code></dt>
 <dd>Determines if silhouette plots should be output</dd>
 <dt><strong><code>random_state</code></strong> :&ensp;<code>int</code>, optional <code>(default=18)</code></dt>
 <dd>Seed for k-means clustering model.</dd>
+<dt><strong><code>n_jobs</code></strong> :&ensp;<code>int</code></dt>
+<dd>Number of cores to parallelize k-choosing across</dd>
 </dl>
 <h2 id="returns">Returns</h2>
 <p>Does not return anything. <code>self.adatas</code> are updated, adding "tissue_ID" field
@@ -1166,7 +1293,9 @@ Parameters are also captured as attributes for posterity.</p></div>
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">def label_tissue_regions(self, k=None, plot_out=False, random_state=18):
+<pre><code class="python">def label_tissue_regions(
+    self, k=None, alpha=0.05, plot_out=False, random_state=18, n_jobs=-1
+):
     &#34;&#34;&#34;
     Perform tissue-level clustering and label pixels in the corresponding
     `anndata` objects.
@@ -1175,10 +1304,14 @@ Parameters are also captured as attributes for posterity.</p></div>
     ----------
     k : int, optional (default=None)
         Number of tissue regions to define
+    alpha: float
+        Manually tuned factor on [0.0, 1.0] that penalizes the number of clusters
     plot_out : boolean, optional (default=FALSE)
         Determines if silhouette plots should be output
     random_state : int, optional (default=18)
         Seed for k-means clustering model.
+    n_jobs : int
+        Number of cores to parallelize k-choosing across
 
     Returns
     -------
@@ -1188,7 +1321,10 @@ Parameters are also captured as attributes for posterity.</p></div>
     &#34;&#34;&#34;
     # find optimal k with parent class
     if k is None:
-        self.find_optimal_k(plot_out=plot_out, random_state=random_state)
+        print(&#34;Determining optimal cluster number k via scaled inertia&#34;)
+        self.find_optimal_k(
+            plot_out=plot_out, alpha=alpha, random_state=random_state, n_jobs=n_jobs
+        )
     # call k-means model from parent class
     self.find_tissue_regions(k=k, random_state=random_state)
     # loop through anndata object and add tissue labels to adata.obs dataframe
@@ -1346,7 +1482,11 @@ Parameters are also captured as attributes for posterity.</p></div>
             self.cluster_data = tmp2.loc[:, cols].copy()
         else:
             self.cluster_data = pd.concat([self.cluster_data, tmp2.loc[:, cols]])
-    self.cluster_data = self.cluster_data.values
+
+    # perform min-max scaling on final cluster data
+    mms = MinMaxScaler()
+    unscaled_data = self.cluster_data.values
+    self.cluster_data = mms.fit_transform(unscaled_data)
     print(&#34;Collected clustering data of shape: {}&#34;.format(self.cluster_data.shape))</code></pre>
 </details>
 </dd>
@@ -1383,151 +1523,52 @@ Parameters are also captured as attributes for posterity.</p></div>
         self.cluster_data = None  # start out with no data to cluster on
         self.k = None  # start out with no k value
 
-    def find_optimal_k(self, plot_out=False, random_state=18):
+    def find_optimal_k(self, plot_out=False, alpha=0.02, random_state=18, n_jobs=-1):
         &#34;&#34;&#34;
-        Uses silhouette analysis to decide on k clusters for clustering in the
-        corresponding `anndata` objects.
+        Uses scaled inertia to decide on k clusters for clustering in the
+        corresponding `anndata` objects
 
         Parameters
         ----------
         plot_out : boolean, optional (default=FALSE)
-            Determines if silhouette plots should be output
+            Determines if scaled inertia graph should be output
+        alpha: float
+            Manually tuned factor on [0.0, 1.0] that penalizes the number of clusters
         random_state : int, optional (default=18)
-            Seed for k-means clustering models.
+            Seed for k-means clustering models
+        n_jobs : int
+            Number of cores to parallelize k-choosing across
 
         Returns
         -------
-        Does not return anything. `self.k` contains integer value for number of clusters.
-        Parameters are also captured as attributes for posterity.
+        Does not return anything. `self.k` contains integer value for number of
+        clusters. Parameters are also captured as attributes for posterity.
         &#34;&#34;&#34;
         if self.cluster_data is None:
-            print(&#34;No cluster data found. Run prep_cluster_data() first.&#34;)
-            pass
+            raise Exception(&#34;No cluster data found. Run prep_cluster_data() first.&#34;)
         self.random_state = random_state
-        all_silhouette_scores = np.array([])
-        range_clusters = np.array(range(3, 10))
 
-        print(&#34;Running silhouette analysis for optimal k on cluster_data.&#34;)
-
-        ## loop over possibilities
-        for n_clusters in range_clusters:
-            ## setup KMeans algorithm
-            clusterer = KMeans(n_clusters=n_clusters, random_state=random_state)
-
-            ## fit to cluster data
-            cluster_labels = clusterer.fit_predict(self.cluster_data)
-
-            ## calculate avg silhouette score
-            silhouette_avg = silhouette_score(self.cluster_data, cluster_labels)
-
-            ## collect all scores
-            all_silhouette_scores = np.append(all_silhouette_scores, silhouette_avg)
-
-            sample_values = silhouette_samples(self.cluster_data, cluster_labels)
-            ## if plot_out, setup plt for each set of silhouette scores
-            ## adapted from: https://scikit-learn.org/stable/auto_examples/cluster/plot_kmeans_silhouette_analysis.html#sphx-glr-auto-examples-cluster-plot-kmeans-silhouette-analysis-py
-            if plot_out:
-                # Create a subplot with 1 row and 2 columns
-                fig, (ax1, ax2) = plt.subplots(1, 2)
-                fig.set_size_inches(18, 7)
-
-                # The 1st subplot is the silhouette plot
-                ax1.set_xlim([-0.25, 1])
-                # The (n_clusters+1)*10 is for inserting blank space between silhouette
-                # plots of individual clusters, to demarcate them clearly.
-                ax1.set_ylim([0, len(self.cluster_data) + (n_clusters + 1) * 10])
-
-                y_lower = 10
-                for i in range(n_clusters):
-                    # Aggregate the silhouette scores for samples belonging to
-                    # cluster i, and sort them
-                    ith_cluster_silhouette_values = sample_values[cluster_labels == i]
-
-                    ith_cluster_silhouette_values.sort()
-
-                    size_cluster_i = ith_cluster_silhouette_values.shape[0]
-                    y_upper = y_lower + size_cluster_i
-
-                    color = cm.nipy_spectral(float(i) / n_clusters)
-                    ax1.fill_betweenx(
-                        np.arange(y_lower, y_upper),
-                        0,
-                        ith_cluster_silhouette_values,
-                        facecolor=color,
-                        edgecolor=color,
-                        alpha=0.7,
-                    )
-
-                    # Label the silhouette plots with their cluster numbers at the middle
-                    ax1.text(-0.05, y_lower + 0.5 * size_cluster_i, str(i))
-
-                    # Compute the new y_lower for next plot
-                    y_lower = y_upper + 10  # 10 for the 0 samples
-
-                    ax1.set_title(&#34;The silhouette plot for the various clusters.&#34;)
-                    ax1.set_xlabel(&#34;The silhouette coefficient values&#34;)
-                    ax1.set_ylabel(&#34;Cluster label&#34;)
-
-                    # The vertical line for average silhouette score of all the values
-                    ax1.axvline(x=silhouette_avg, color=&#34;red&#34;, linestyle=&#34;--&#34;)
-
-                    ax1.set_yticks([])  # Clear the yaxis labels / ticks
-                    ax1.set_xticks([-0.25, 0.0, 0.25, 0.5, 0.75, 1])
-
-                    # 2nd Plot showing the actual clusters formed
-                    colors = cm.nipy_spectral(cluster_labels.astype(float) / n_clusters)
-                    ax2.scatter(
-                        self.cluster_data[:, 0],
-                        self.cluster_data[:, 1],
-                        marker=&#34;.&#34;,
-                        s=30,
-                        lw=0,
-                        alpha=0.7,
-                        c=colors,
-                        edgecolor=&#34;k&#34;,
-                    )
-
-                    # Labeling the clusters
-                    centers = clusterer.cluster_centers_
-                    # Draw white circles at cluster centers
-                    ax2.scatter(
-                        centers[:, 0],
-                        centers[:, 1],
-                        marker=&#34;o&#34;,
-                        c=&#34;white&#34;,
-                        alpha=1,
-                        s=200,
-                        edgecolor=&#34;k&#34;,
-                    )
-
-                    for i, c in enumerate(centers):
-                        ax2.scatter(
-                            c[0], c[1], marker=&#34;$%d$&#34; % i, alpha=1, s=50, edgecolor=&#34;k&#34;
-                        )
-
-                    ax2.set_title(&#34;The visualization of the clustered data.&#34;)
-                    ax2.set_xlabel(&#34;Feature space for the 1st feature&#34;)
-                    ax2.set_ylabel(&#34;Feature space for the 2nd feature&#34;)
-
-                    plt.suptitle(
-                        (
-                            &#34;Silhouette analysis for KMeans clustering on sample data &#34;
-                            &#34;with n_clusters = %d&#34; % n_clusters
-                        ),
-                        fontsize=14,
-                        fontweight=&#34;bold&#34;,
-                    )
-
-        ## determine optimal cluster by silhouette score
-        print(
-            &#34;The optimal number of clusters is {}, with a mean silhouette score of {}.&#34;.format(
-                range_clusters[all_silhouette_scores.argmax()],
-                all_silhouette_scores.max(),
-            )
+        k_range = range(2, 21)  # choose k range
+        # compute scaled inertia
+        best_k, results = chooseBestKforKMeansParallel(
+            self.cluster_data,
+            k_range,
+            n_jobs=n_jobs,
+            random_state=random_state,
+            alpha_k=alpha,
         )
         if plot_out:
+            # plot the results
+            plt.figure(figsize=(7, 4))
+            plt.plot(results, &#34;o&#34;)
+            plt.title(&#34;Adjusted Inertia for each K&#34;)
+            plt.xlabel(&#34;K&#34;)
+            plt.ylabel(&#34;Adjusted Inertia&#34;)
+            plt.xticks(range(2, 21, 1))
             plt.show()
-        self.k = range_clusters[all_silhouette_scores.argmax()]
+        # save optimal k to object
+        print(&#34;The optimal number of clusters is {}&#34;.format(best_k))
+        self.k = best_k
 
     def find_tissue_regions(self, k=None, random_state=18):
         &#34;&#34;&#34;
@@ -1547,13 +1588,11 @@ Parameters are also captured as attributes for posterity.</p></div>
         model. Parameters are also captured as attributes for posterity.
         &#34;&#34;&#34;
         if self.cluster_data is None:
-            print(&#34;No cluster data found. Run prep_cluster_data() first.&#34;)
-            pass
+            raise Exception(&#34;No cluster data found. Run prep_cluster_data() first.&#34;)
         if k is None and self.k is None:
-            print(
+            raise Exception(
                 &#34;No k found or provided. Run find_optimal_k() first or pass a k value.&#34;
             )
-            pass
         if k is not None:
             print(&#34;Overriding optimal k value with k={}.&#34;.format(k))
             self.k = k
@@ -1572,170 +1611,75 @@ Parameters are also captured as attributes for posterity.</p></div>
 <h3>Methods</h3>
 <dl>
 <dt id="H2TL.tissue_labeler.find_optimal_k"><code class="name flex">
-<span>def <span class="ident">find_optimal_k</span></span>(<span>self, plot_out=False, random_state=18)</span>
+<span>def <span class="ident">find_optimal_k</span></span>(<span>self, plot_out=False, alpha=0.02, random_state=18, n_jobs=-1)</span>
 </code></dt>
 <dd>
-<div class="desc"><p>Uses silhouette analysis to decide on k clusters for clustering in the
-corresponding <code>anndata</code> objects.</p>
+<div class="desc"><p>Uses scaled inertia to decide on k clusters for clustering in the
+corresponding <code>anndata</code> objects</p>
 <h2 id="parameters">Parameters</h2>
 <dl>
 <dt><strong><code>plot_out</code></strong> :&ensp;<code>boolean</code>, optional <code>(default=FALSE)</code></dt>
-<dd>Determines if silhouette plots should be output</dd>
+<dd>Determines if scaled inertia graph should be output</dd>
+<dt><strong><code>alpha</code></strong> :&ensp;<code>float</code></dt>
+<dd>Manually tuned factor on [0.0, 1.0] that penalizes the number of clusters</dd>
 <dt><strong><code>random_state</code></strong> :&ensp;<code>int</code>, optional <code>(default=18)</code></dt>
-<dd>Seed for k-means clustering models.</dd>
+<dd>Seed for k-means clustering models</dd>
+<dt><strong><code>n_jobs</code></strong> :&ensp;<code>int</code></dt>
+<dd>Number of cores to parallelize k-choosing across</dd>
 </dl>
 <h2 id="returns">Returns</h2>
-<p>Does not return anything. <code>self.k</code> contains integer value for number of clusters.
-Parameters are also captured as attributes for posterity.</p></div>
+<p>Does not return anything. <code>self.k</code> contains integer value for number of
+clusters. Parameters are also captured as attributes for posterity.</p></div>
 <details class="source">
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">def find_optimal_k(self, plot_out=False, random_state=18):
+<pre><code class="python">def find_optimal_k(self, plot_out=False, alpha=0.02, random_state=18, n_jobs=-1):
     &#34;&#34;&#34;
-    Uses silhouette analysis to decide on k clusters for clustering in the
-    corresponding `anndata` objects.
+    Uses scaled inertia to decide on k clusters for clustering in the
+    corresponding `anndata` objects
 
     Parameters
     ----------
     plot_out : boolean, optional (default=FALSE)
-        Determines if silhouette plots should be output
+        Determines if scaled inertia graph should be output
+    alpha: float
+        Manually tuned factor on [0.0, 1.0] that penalizes the number of clusters
     random_state : int, optional (default=18)
-        Seed for k-means clustering models.
+        Seed for k-means clustering models
+    n_jobs : int
+        Number of cores to parallelize k-choosing across
 
     Returns
     -------
-    Does not return anything. `self.k` contains integer value for number of clusters.
-    Parameters are also captured as attributes for posterity.
+    Does not return anything. `self.k` contains integer value for number of
+    clusters. Parameters are also captured as attributes for posterity.
     &#34;&#34;&#34;
     if self.cluster_data is None:
-        print(&#34;No cluster data found. Run prep_cluster_data() first.&#34;)
-        pass
+        raise Exception(&#34;No cluster data found. Run prep_cluster_data() first.&#34;)
     self.random_state = random_state
-    all_silhouette_scores = np.array([])
-    range_clusters = np.array(range(3, 10))
 
-    print(&#34;Running silhouette analysis for optimal k on cluster_data.&#34;)
-
-    ## loop over possibilities
-    for n_clusters in range_clusters:
-        ## setup KMeans algorithm
-        clusterer = KMeans(n_clusters=n_clusters, random_state=random_state)
-
-        ## fit to cluster data
-        cluster_labels = clusterer.fit_predict(self.cluster_data)
-
-        ## calculate avg silhouette score
-        silhouette_avg = silhouette_score(self.cluster_data, cluster_labels)
-
-        ## collect all scores
-        all_silhouette_scores = np.append(all_silhouette_scores, silhouette_avg)
-
-        sample_values = silhouette_samples(self.cluster_data, cluster_labels)
-        ## if plot_out, setup plt for each set of silhouette scores
-        ## adapted from: https://scikit-learn.org/stable/auto_examples/cluster/plot_kmeans_silhouette_analysis.html#sphx-glr-auto-examples-cluster-plot-kmeans-silhouette-analysis-py
-        if plot_out:
-            # Create a subplot with 1 row and 2 columns
-            fig, (ax1, ax2) = plt.subplots(1, 2)
-            fig.set_size_inches(18, 7)
-
-            # The 1st subplot is the silhouette plot
-            ax1.set_xlim([-0.25, 1])
-            # The (n_clusters+1)*10 is for inserting blank space between silhouette
-            # plots of individual clusters, to demarcate them clearly.
-            ax1.set_ylim([0, len(self.cluster_data) + (n_clusters + 1) * 10])
-
-            y_lower = 10
-            for i in range(n_clusters):
-                # Aggregate the silhouette scores for samples belonging to
-                # cluster i, and sort them
-                ith_cluster_silhouette_values = sample_values[cluster_labels == i]
-
-                ith_cluster_silhouette_values.sort()
-
-                size_cluster_i = ith_cluster_silhouette_values.shape[0]
-                y_upper = y_lower + size_cluster_i
-
-                color = cm.nipy_spectral(float(i) / n_clusters)
-                ax1.fill_betweenx(
-                    np.arange(y_lower, y_upper),
-                    0,
-                    ith_cluster_silhouette_values,
-                    facecolor=color,
-                    edgecolor=color,
-                    alpha=0.7,
-                )
-
-                # Label the silhouette plots with their cluster numbers at the middle
-                ax1.text(-0.05, y_lower + 0.5 * size_cluster_i, str(i))
-
-                # Compute the new y_lower for next plot
-                y_lower = y_upper + 10  # 10 for the 0 samples
-
-                ax1.set_title(&#34;The silhouette plot for the various clusters.&#34;)
-                ax1.set_xlabel(&#34;The silhouette coefficient values&#34;)
-                ax1.set_ylabel(&#34;Cluster label&#34;)
-
-                # The vertical line for average silhouette score of all the values
-                ax1.axvline(x=silhouette_avg, color=&#34;red&#34;, linestyle=&#34;--&#34;)
-
-                ax1.set_yticks([])  # Clear the yaxis labels / ticks
-                ax1.set_xticks([-0.25, 0.0, 0.25, 0.5, 0.75, 1])
-
-                # 2nd Plot showing the actual clusters formed
-                colors = cm.nipy_spectral(cluster_labels.astype(float) / n_clusters)
-                ax2.scatter(
-                    self.cluster_data[:, 0],
-                    self.cluster_data[:, 1],
-                    marker=&#34;.&#34;,
-                    s=30,
-                    lw=0,
-                    alpha=0.7,
-                    c=colors,
-                    edgecolor=&#34;k&#34;,
-                )
-
-                # Labeling the clusters
-                centers = clusterer.cluster_centers_
-                # Draw white circles at cluster centers
-                ax2.scatter(
-                    centers[:, 0],
-                    centers[:, 1],
-                    marker=&#34;o&#34;,
-                    c=&#34;white&#34;,
-                    alpha=1,
-                    s=200,
-                    edgecolor=&#34;k&#34;,
-                )
-
-                for i, c in enumerate(centers):
-                    ax2.scatter(
-                        c[0], c[1], marker=&#34;$%d$&#34; % i, alpha=1, s=50, edgecolor=&#34;k&#34;
-                    )
-
-                ax2.set_title(&#34;The visualization of the clustered data.&#34;)
-                ax2.set_xlabel(&#34;Feature space for the 1st feature&#34;)
-                ax2.set_ylabel(&#34;Feature space for the 2nd feature&#34;)
-
-                plt.suptitle(
-                    (
-                        &#34;Silhouette analysis for KMeans clustering on sample data &#34;
-                        &#34;with n_clusters = %d&#34; % n_clusters
-                    ),
-                    fontsize=14,
-                    fontweight=&#34;bold&#34;,
-                )
-
-    ## determine optimal cluster by silhouette score
-    print(
-        &#34;The optimal number of clusters is {}, with a mean silhouette score of {}.&#34;.format(
-            range_clusters[all_silhouette_scores.argmax()],
-            all_silhouette_scores.max(),
-        )
+    k_range = range(2, 21)  # choose k range
+    # compute scaled inertia
+    best_k, results = chooseBestKforKMeansParallel(
+        self.cluster_data,
+        k_range,
+        n_jobs=n_jobs,
+        random_state=random_state,
+        alpha_k=alpha,
     )
     if plot_out:
+        # plot the results
+        plt.figure(figsize=(7, 4))
+        plt.plot(results, &#34;o&#34;)
+        plt.title(&#34;Adjusted Inertia for each K&#34;)
+        plt.xlabel(&#34;K&#34;)
+        plt.ylabel(&#34;Adjusted Inertia&#34;)
+        plt.xticks(range(2, 21, 1))
         plt.show()
-    self.k = range_clusters[all_silhouette_scores.argmax()]</code></pre>
+    # save optimal k to object
+    print(&#34;The optimal number of clusters is {}&#34;.format(best_k))
+    self.k = best_k</code></pre>
 </details>
 </dd>
 <dt id="H2TL.tissue_labeler.find_tissue_regions"><code class="name flex">
@@ -1776,13 +1720,11 @@ model. Parameters are also captured as attributes for posterity.</p></div>
     model. Parameters are also captured as attributes for posterity.
     &#34;&#34;&#34;
     if self.cluster_data is None:
-        print(&#34;No cluster data found. Run prep_cluster_data() first.&#34;)
-        pass
+        raise Exception(&#34;No cluster data found. Run prep_cluster_data() first.&#34;)
     if k is None and self.k is None:
-        print(
+        raise Exception(
             &#34;No k found or provided. Run find_optimal_k() first or pass a k value.&#34;
         )
-        pass
     if k is not None:
         print(&#34;Overriding optimal k value with k={}.&#34;.format(k))
         self.k = k
@@ -1805,6 +1747,12 @@ model. Parameters are also captured as attributes for posterity.</p></div>
 <ul></ul>
 </div>
 <ul id="index">
+<li><h3><a href="#header-functions">Functions</a></h3>
+<ul class="">
+<li><code><a title="H2TL.chooseBestKforKMeansParallel" href="#H2TL.chooseBestKforKMeansParallel">chooseBestKforKMeansParallel</a></code></li>
+<li><code><a title="H2TL.kMeansRes" href="#H2TL.kMeansRes">kMeansRes</a></code></li>
+</ul>
+</li>
 <li><h3><a href="#header-classes">Classes</a></h3>
 <ul>
 <li>

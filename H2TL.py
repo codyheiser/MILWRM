@@ -16,7 +16,7 @@ from skimage.filters import gaussian
 
 def kMeansRes(scaled_data, k, alpha_k=0.02, random_state=18):
     """
-    Adapted from 
+    Adapted from
     https://towardsdatascience.com/an-approach-for-choosing-number-of-clusters-for-k-means-c28e614ecb2c
 
     Parameters
@@ -42,7 +42,7 @@ def kMeansRes(scaled_data, k, alpha_k=0.02, random_state=18):
 
 def chooseBestKforKMeansParallel(scaled_data, k_range, n_jobs=-1, **kwargs):
     """
-    Adapted from 
+    Adapted from
     https://towardsdatascience.com/an-approach-for-choosing-number-of-clusters-for-k-means-c28e614ecb2c
 
     Parameters
@@ -59,14 +59,16 @@ def chooseBestKforKMeansParallel(scaled_data, k_range, n_jobs=-1, **kwargs):
     Returns
     -------
     best_k: int
-        Chosen value of k out of the given k range. Chosen k is k with the minimum 
+        Chosen value of k out of the given k range. Chosen k is k with the minimum
         scaled inertia value.
     results: pd.DataFrame
         Adjusted inertia value for each k in k_range
     """
-    ans = Parallel(n_jobs=n_jobs,verbose=10)(delayed(kMeansRes)(scaled_data, k, **kwargs) for k in k_range)
-    ans = list(zip(k_range,ans))
-    results = pd.DataFrame(ans, columns = ['k','Scaled Inertia']).set_index('k')
+    ans = Parallel(n_jobs=n_jobs, verbose=10)(
+        delayed(kMeansRes)(scaled_data, k, **kwargs) for k in k_range
+    )
+    ans = list(zip(k_range, ans))
+    results = pd.DataFrame(ans, columns=["k", "Scaled Inertia"]).set_index("k")
     best_k = results.idxmin()[0]
     return best_k, results
 
@@ -83,7 +85,7 @@ class tissue_labeler:
         self.cluster_data = None  # start out with no data to cluster on
         self.k = None  # start out with no k value
 
-    def find_optimal_k(self, plot_out=False, random_state=18, n_jobs=-1):
+    def find_optimal_k(self, plot_out=False, alpha=0.02, random_state=18, n_jobs=-1):
         """
         Uses scaled inertia to decide on k clusters for clustering in the
         corresponding `anndata` objects
@@ -92,6 +94,8 @@ class tissue_labeler:
         ----------
         plot_out : boolean, optional (default=FALSE)
             Determines if scaled inertia graph should be output
+        alpha: float
+            Manually tuned factor on [0.0, 1.0] that penalizes the number of clusters
         random_state : int, optional (default=18)
             Seed for k-means clustering models
         n_jobs : int
@@ -99,30 +103,30 @@ class tissue_labeler:
 
         Returns
         -------
-        Does not return anything. `self.k` contains integer value for number of 
+        Does not return anything. `self.k` contains integer value for number of
         clusters. Parameters are also captured as attributes for posterity.
         """
         if self.cluster_data is None:
-            print("No cluster data found. Run prep_cluster_data() first.")
-            pass
+            raise Exception("No cluster data found. Run prep_cluster_data() first.")
         self.random_state = random_state
 
-        k_range=range(2,21)  # choose k range
+        k_range = range(2, 21)  # choose k range
         # compute scaled inertia
         best_k, results = chooseBestKforKMeansParallel(
             self.cluster_data,
             k_range,
             n_jobs=n_jobs,
             random_state=random_state,
+            alpha_k=alpha,
         )
         if plot_out:
             # plot the results
-            plt.figure(figsize=(7,4))
-            plt.plot(results,'o')
-            plt.title('Adjusted Inertia for each K')
-            plt.xlabel('K')
-            plt.ylabel('Adjusted Inertia')
-            plt.xticks(range(2,21,1))
+            plt.figure(figsize=(7, 4))
+            plt.plot(results, "o")
+            plt.title("Adjusted Inertia for each K")
+            plt.xlabel("K")
+            plt.ylabel("Adjusted Inertia")
+            plt.xticks(range(2, 21, 1))
             plt.show()
         # save optimal k to object
         print("The optimal number of clusters is {}".format(best_k))
@@ -142,17 +146,15 @@ class tissue_labeler:
 
         Returns
         -------
-        Does not return anything. `self.kmeans` contains trained `sklearn` clustering 
+        Does not return anything. `self.kmeans` contains trained `sklearn` clustering
         model. Parameters are also captured as attributes for posterity.
         """
         if self.cluster_data is None:
-            print("No cluster data found. Run prep_cluster_data() first.")
-            pass
+            raise Exception("No cluster data found. Run prep_cluster_data() first.")
         if k is None and self.k is None:
-            print(
+            raise Exception(
                 "No k found or provided. Run find_optimal_k() first or pass a k value."
             )
-            pass
         if k is not None:
             print("Overriding optimal k value with k={}.".format(k))
             self.k = k
@@ -302,7 +304,9 @@ class st_labeler(tissue_labeler):
         self.cluster_data = mms.fit_transform(unscaled_data)
         print("Collected clustering data of shape: {}".format(self.cluster_data.shape))
 
-    def label_tissue_regions(self, k=None, plot_out=False, random_state=18, n_jobs=-1):
+    def label_tissue_regions(
+        self, k=None, alpha=0.05, plot_out=False, random_state=18, n_jobs=-1
+    ):
         """
         Perform tissue-level clustering and label pixels in the corresponding
         `anndata` objects.
@@ -311,6 +315,8 @@ class st_labeler(tissue_labeler):
         ----------
         k : int, optional (default=None)
             Number of tissue regions to define
+        alpha: float
+            Manually tuned factor on [0.0, 1.0] that penalizes the number of clusters
         plot_out : boolean, optional (default=FALSE)
             Determines if silhouette plots should be output
         random_state : int, optional (default=18)
@@ -327,7 +333,9 @@ class st_labeler(tissue_labeler):
         # find optimal k with parent class
         if k is None:
             print("Determining optimal cluster number k via scaled inertia")
-            self.find_optimal_k(plot_out=plot_out, random_state=random_state, n_jobs=n_jobs)
+            self.find_optimal_k(
+                plot_out=plot_out, alpha=alpha, random_state=random_state, n_jobs=n_jobs
+            )
         # call k-means model from parent class
         self.find_tissue_regions(k=k, random_state=random_state)
         # loop through anndata object and add tissue labels to adata.obs dataframe
@@ -471,7 +479,9 @@ class mxif_labeler(tissue_labeler):
         # find optimal k with parent class
         if k is None:
             print("Determining optimal cluster number k via scaled inertia")
-            self.find_optimal_k(plot_out=plot_out, random_state=random_state, n_jobs=n_jobs)
+            self.find_optimal_k(
+                plot_out=plot_out, random_state=random_state, n_jobs=n_jobs
+            )
         # call k-means model from parent class
         self.find_tissue_regions(random_state=random_state)
         # loop through image objects and create tissue label images
