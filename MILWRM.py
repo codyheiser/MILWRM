@@ -172,6 +172,150 @@ class tissue_labeler:
             self.cluster_data
         )
 
+    def plot_feature_proportions(self, figsize=(10, 7), save_to=None):
+        """
+        Plots contributions of each training feature to k-means cluster centers as
+        percentages of total
+
+        Parameters
+        ----------
+        figsize : tuple of float, optional (default=(10,7))
+            Size of matplotlib figure
+        save_to : str, optional (default=`None`)
+            Path to image file to save plot
+
+        Returns
+        -------
+        `plt.figure` if `save_to` is `None`, else saves plot to file
+        """
+        assert (
+            self.kmeans is not None
+        ), "No cluster results found. Run \
+        label_tissue_regions() first."
+        if "st_labeler" in str(self.__class__):
+            labels = [self.rep + "_" + str(x) for x in self.features]
+            if self.histo:
+                labels = labels + ["R", "G", "B"]
+            if self.flour_channels is not None:
+                labels = labels + ["ch_" + str(x) for x in self.flour_channels]
+        elif "mxif_labeler" in str(self.__class__):
+            labels = self.model_features
+        # create pandas df and calculate percentages of total
+        ctr_df = pd.DataFrame(self.kmeans.cluster_centers_, columns=labels)
+        totals = ctr_df.sum(axis=1)
+        ctr_df_prop = ctr_df.div(totals, axis=0).multiply(100)
+        # make plot
+        fig, ax = plt.subplots(1, 1, figsize=figsize)
+        ctr_df_prop.plot.bar(stacked=True, ax=ax, width=0.85)
+        for p in ax.patches:
+            ax.annotate(
+                "{} %".format(str(np.round(p.get_height(), 2))),
+                (p.get_x() + 0.05, p.get_y() + (p.get_height() * 0.4)),
+                fontsize=10,
+            )
+        plt.ylim([0, 100])
+        plt.xlabel("tissue_ID")
+        plt.xticks(rotation=0)
+        plt.ylabel("% K-Means Loading")
+        plt.legend(bbox_to_anchor=(1, 1), loc="upper left", title="Feature")
+        plt.tight_layout()
+        if save_to is not None:
+            print("Saving feature proportions to {}".format(save_to))
+            plt.savefig(save_to)
+        else:
+            return fig
+
+    def plot_feature_loadings(self, ncols=None, figsize=(5, 5), save_to=None):
+        """
+        Plots contributions of each training feature to k-means cluster centers
+
+        Parameters
+        ----------
+        ncols : int, optional (default=`None`)
+            Number of columns for gridspec. If `None`, uses number of clusters k.
+        figsize : tuple of float, optional (default=(5,5))
+            Size of matplotlib figure
+        save_to : str, optional (default=`None`)
+            Path to image file to save plot
+
+        Returns
+        -------
+        `gridspec.GridSpec` if `save_to` is `None`, else saves plot to file
+        """
+        assert (
+            self.kmeans is not None
+        ), "No cluster results found. Run \
+        label_tissue_regions() first."
+        if "st_labeler" in str(self.__class__):
+            labels = [self.rep + "_" + str(x) for x in self.features]
+            if self.histo:
+                labels = labels + ["R", "G", "B"]
+            if self.flour_channels is not None:
+                labels = labels + ["ch_" + str(x) for x in self.flour_channels]
+        elif "mxif_labeler" in str(self.__class__):
+            labels = self.model_features
+        titles = [
+            "tissue_ID " + str(x) for x in range(self.kmeans.cluster_centers_.shape[0])
+        ]
+        scores = self.kmeans.cluster_centers_.copy()
+        n_panels = len(titles)
+        n_points = len(labels)
+        if ncols is None:
+            ncols = len(titles)
+        if n_panels <= ncols:
+            n_rows, n_cols = 1, n_panels
+        else:
+            n_rows, n_cols = ceil(n_panels / ncols), ncols
+        fig = plt.figure(figsize=(n_cols * figsize[0], n_rows * figsize[1]))
+        left, bottom = 0.1 / n_cols, 0.1 / n_rows
+        gs = gridspec.GridSpec(
+            nrows=n_rows,
+            ncols=n_cols,
+            wspace=0.1,
+            left=left,
+            bottom=bottom,
+            right=1 - (n_cols - 1) * left - 0.01 / n_cols,
+            top=1 - (n_rows - 1) * bottom - 0.1 / n_rows,
+        )
+        for iscore, score in enumerate(scores):
+            plt.subplot(gs[iscore])
+            indices = np.argsort(score)[::-1][: n_points + 1]
+            for ig, g in enumerate(indices[::-1]):
+                plt.text(
+                    x=score[g],
+                    y=ig,
+                    s=labels[g],
+                    color="black",
+                    # rotation="vertical",
+                    verticalalignment="center",
+                    horizontalalignment="right",
+                    fontsize="medium",
+                    fontstyle="italic",
+                )
+            plt.title(titles[iscore], fontsize="x-large")
+            plt.ylim(-0.9, ig + 0.9)
+            score_min, score_max = np.min(score[indices]), np.max(score[indices])
+            plt.xlim(
+                (0.95 if score_min > 0 else 1.05) * score_min,
+                (1.05 if score_max > 0 else 0.95) * score_max,
+            )
+            plt.xticks(rotation=45)
+            plt.tick_params(labelsize="medium")
+            plt.tick_params(
+                axis="y",  # changes apply to the y-axis
+                which="both",  # both major and minor ticks are affected
+                left=False,
+                right=False,
+                labelleft=False,
+            )
+            plt.grid(False)
+        gs.tight_layout(fig)
+        if save_to is not None:
+            print("Saving feature loadings to {}".format(save_to))
+            plt.savefig(save_to)
+        else:
+            return gs
+
 
 class st_labeler(tissue_labeler):
     """
@@ -313,7 +457,7 @@ class st_labeler(tissue_labeler):
         print("Collected clustering data of shape: {}".format(self.cluster_data.shape))
 
     def label_tissue_regions(
-        self, k=None, alpha=0.05, plot_out=False, random_state=18, n_jobs=-1
+        self, k=None, alpha=0.05, plot_out=True, random_state=18, n_jobs=-1
     ):
         """
         Perform tissue-level clustering and label pixels in the corresponding
@@ -325,7 +469,7 @@ class st_labeler(tissue_labeler):
             Number of tissue regions to define
         alpha: float
             Manually tuned factor on [0.0, 1.0] that penalizes the number of clusters
-        plot_out : boolean, optional (default=FALSE)
+        plot_out : boolean, optional (default=True)
             Determines if silhouette plots should be output
         random_state : int, optional (default=18)
             Seed for k-means clustering model.
@@ -359,142 +503,6 @@ class st_labeler(tissue_labeler):
                 self.adatas[i].obs["tissue_ID"].cat.set_categories(np.unique(IDs))
             )
             start += self.adatas[i].n_obs
-
-    def plot_feature_proportions(self, save_to=None):
-        """
-        Plots contributions of each training feature to k-means cluster centers as
-        percentages of total
-
-        Parameters
-        ----------
-        save_to : str, optional (default=`None`)
-            Path to image file to save plot
-
-        Returns
-        -------
-        `plt.figure` if `save_to` is `None`, else saves plot to file
-        """
-        assert (
-            self.kmeans is not None
-        ), "No cluster results found. Run \
-        label_tissue_regions() first."
-        columns = [self.rep + "_" + str(x) for x in self.features]
-        if self.histo:
-            columns = columns + ["R", "G", "B"]
-        if self.flour_channels is not None:
-            columns = columns + ["ch_" + str(x) for x in self.flour_channels]
-        # create pandas df and calculate percentages of total
-        ctr_df = pd.DataFrame(self.kmeans.cluster_centers_, columns=columns)
-        totals = ctr_df.sum(axis=1)
-        ctr_df_prop = ctr_df.div(totals, axis=0).multiply(100)
-        # make plot
-        fig, ax = plt.subplots(1, 1, figsize=(10, 7))
-        ctr_df_prop.plot.bar(stacked=True, ax=ax, width=0.85)
-        for p in ax.patches:
-            ax.annotate(
-                "{} %".format(str(np.round(p.get_height(), 2))),
-                (p.get_x() + 0.05, p.get_y() + (p.get_height() * 0.4)),
-                fontsize=10,
-            )
-        plt.ylim([0, 100])
-        plt.xlabel("tissue_ID")
-        plt.xticks(rotation=0)
-        plt.ylabel("% K-Means Loading")
-        plt.legend(bbox_to_anchor=(1, 1), loc="upper left", title="Feature")
-        plt.tight_layout()
-        if save_to is not None:
-            print("Saving feature proportions to {}".format(save_to))
-            plt.savefig(save_to)
-        else:
-            return fig
-
-    def plot_feature_loadings(self, ncols=None, figsize=(5, 5), save_to=None):
-        """
-        Plots contributions of each training feature to k-means cluster centers
-
-        Parameters
-        ----------
-        ncols : int, optional (default=`None`)
-            Number of columns for gridspec. If `None`, uses number of clusters k.
-        figsize : tuple of float, optional (default=(5,5))
-            Size of matplotlib figure
-        save_to : str, optional (default=`None`)
-            Path to image file to save plot
-
-        Returns
-        -------
-        `gridspec.GridSpec` if `save_to` is `None`, else saves plot to file
-        """
-        assert (
-            self.kmeans is not None
-        ), "No cluster results found. Run \
-        label_tissue_regions() first."
-        labels = [self.rep + "_" + str(x) for x in self.features]
-        if self.histo:
-            labels = labels + ["R", "G", "B"]
-        if self.flour_channels is not None:
-            labels = labels + ["ch_" + str(x) for x in self.flour_channels]
-        titles = [
-            "tissue_ID " + str(x) for x in range(self.kmeans.cluster_centers_.shape[0])
-        ]
-        scores = self.kmeans.cluster_centers_.copy()
-        n_panels = len(titles)
-        n_points = len(labels)
-        if ncols is None:
-            ncols = len(titles)
-        if n_panels <= ncols:
-            n_rows, n_cols = 1, n_panels
-        else:
-            n_rows, n_cols = ceil(n_panels / ncols), ncols
-        fig = plt.figure(figsize=(n_cols * figsize[0], n_rows * figsize[1]))
-        left, bottom = 0.1 / n_cols, 0.1 / n_rows
-        gs = gridspec.GridSpec(
-            nrows=n_rows,
-            ncols=n_cols,
-            wspace=0.1,
-            left=left,
-            bottom=bottom,
-            right=1 - (n_cols - 1) * left - 0.01 / n_cols,
-            top=1 - (n_rows - 1) * bottom - 0.1 / n_rows,
-        )
-        for iscore, score in enumerate(scores):
-            plt.subplot(gs[iscore])
-            indices = np.argsort(score)[::-1][: n_points + 1]
-            for ig, g in enumerate(indices[::-1]):
-                plt.text(
-                    x=score[g],
-                    y=ig,
-                    s=labels[g],
-                    color="black",
-                    # rotation="vertical",
-                    verticalalignment="center",
-                    horizontalalignment="right",
-                    fontsize="medium",
-                    fontstyle="italic",
-                )
-            plt.title(titles[iscore], fontsize="x-large")
-            plt.ylim(-0.9, ig + 0.9)
-            score_min, score_max = np.min(score[indices]), np.max(score[indices])
-            plt.xlim(
-                (0.95 if score_min > 0 else 1.05) * score_min,
-                (1.05 if score_max > 0 else 0.95) * score_max,
-            )
-            plt.xticks(rotation=45)
-            plt.tick_params(labelsize="medium")
-            plt.tick_params(
-                axis="y",  # changes apply to the y-axis
-                which="both",  # both major and minor ticks are affected
-                left=False,
-                right=False,
-                labelleft=False,
-            )
-            plt.grid(False)
-        gs.tight_layout(fig)
-        if save_to is not None:
-            print("Saving feature loadings to {}".format(save_to))
-            plt.savefig(save_to)
-        else:
-            return gs
 
 
 class mxif_labeler(tissue_labeler):
@@ -594,11 +602,11 @@ class mxif_labeler(tissue_labeler):
                 self.cluster_data = np.row_stack([self.cluster_data, tmp])
         # perform min-max scaling on final cluster data
         mms = MinMaxScaler()
-        unscaled_data = self.cluster_data.values
+        unscaled_data = self.cluster_data
         self.cluster_data = mms.fit_transform(unscaled_data)
         print("Collected clustering data of shape: {}".format(self.cluster_data.shape))
 
-    def label_tissue_regions(self, k=None, plot_out=False, random_state=18, n_jobs=-1):
+    def label_tissue_regions(self, k=None, plot_out=True, random_state=18, n_jobs=-1):
         """
         Perform tissue-level clustering and label pixels in the corresponding
         images.
@@ -607,7 +615,7 @@ class mxif_labeler(tissue_labeler):
         ----------
         k : int, optional (default=None)
             Number of tissue regions to define
-        plot_out : boolean, optional (default=FALSE)
+        plot_out : boolean, optional (default=True)
             Determines if silhouette plots should be output
         random_state : int, optional (default=18)
             Seed for k-means clustering model
