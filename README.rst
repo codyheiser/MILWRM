@@ -1,6 +1,6 @@
 |milwrm_logo|
 
-*M*ultiplex *I*mage *L*abeling *W*ith *R*egional *M*orphology
+Multiplex Image Labeling With Regional Morphology
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 |Latest Version|
