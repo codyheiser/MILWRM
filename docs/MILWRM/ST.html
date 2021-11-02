@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1" />
 <meta name="generator" content="pdoc 0.9.2" />
-<title>st_utils API documentation</title>
+<title>MILWRM.ST API documentation</title>
 <meta name="description" content="Functions and classes for manipulating 10X Visium spatial transcriptomic (ST) and
 histological imaging data" />
 <link rel="preload stylesheet" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/10up-sanitize.css/11.0.1/sanitize.min.css" integrity="sha256-PK9q560IAAa6WVRRh76LtCaI8pjTJ2z11v0miyNNjrs=" crossorigin>
@@ -20,7 +20,7 @@ histological imaging data" />
 <main>
 <article id="content">
 <header>
-<h1 class="title">Module <code>st_utils</code></h1>
+<h1 class="title">Module <code>MILWRM.ST</code></h1>
 </header>
 <section id="section-intro">
 <p>Functions and classes for manipulating 10X Visium spatial transcriptomic (ST) and
@@ -213,11 +213,11 @@ def map_pixels(adata, filter_label=&#34;in_tissue&#34;, img_key=&#34;hires&#34;,
         )
         # set empty pixels (no Visium spot) to &#34;none&#34;
         adata.uns[&#34;pixel_map_df&#34;].loc[
-            adata.uns[&#34;pixel_map_df&#34;][filter_label].isin([&#34;False&#34;, False, 0, 0.0]),
+            adata.uns[&#34;pixel_map_df&#34;][filter_label] == 0,
             &#34;barcode&#34;,
         ] = &#34;none&#34;
         # subset the entire anndata object using filter_label
-        adata = adata[adata.obs[filter_label].isin([&#34;True&#34;, True, 1.0, 1]), :].copy()
+        adata = adata[adata.obs[filter_label] == 1, :].copy()
         print(&#34;New size: {} spots x {} genes&#34;.format(adata.n_obs, adata.n_vars))
 
     print(&#34;Done!&#34;)
@@ -398,7 +398,7 @@ def trim_image(
 
 
 def assemble_pita(
-    adata, features=None, use_rep=None, layer=None, plot_out=True, **kwargs
+    adata, features=None, use_rep=None, layer=None, plot_out=True, histo=None, **kwargs
 ):
     &#34;&#34;&#34;
     Cast feature into pixel space to construct gene expression image (&#34;pita&#34;)
@@ -417,6 +417,9 @@ def assemble_pita(
         Key from `adata.layers` to use for plotting. Ignored if `use_rep` is not `None`
     plot_out : bool
         Show resulting image?
+    histo : str or `None`, optional (default=`None`)
+        Histology image to show along with pita in gridspec (i.e. &#34;hires&#34;,
+        &#34;hires_trim&#34;, &#34;lowres&#34;). If `None` or if `plot_out`==`False`, ignore.
     **kwargs
         Arguments to pass to `show_pita()` function
 
@@ -493,7 +496,22 @@ def assemble_pita(
     ).squeeze()
 
     if plot_out:
-        show_pita(pita=assembled, features=features, **kwargs)
+        # determine where the histo image is in anndata
+        if histo is not None:
+            assert (
+                histo
+                in adata.uns[&#34;spatial&#34;][list(adata.uns[&#34;spatial&#34;].keys())[0]][
+                    &#34;images&#34;
+                ].keys()
+            ), &#34;Must provide one of {} for histo&#34;.format(
+                adata.uns[&#34;spatial&#34;][list(adata.uns[&#34;spatial&#34;].keys())[0]][
+                    &#34;images&#34;
+                ].keys()
+            )
+            histo = adata.uns[&#34;spatial&#34;][list(adata.uns[&#34;spatial&#34;].keys())[0]][
+                &#34;images&#34;
+            ][histo]
+        show_pita(pita=assembled, features=features, histo=histo, **kwargs)
     print(&#34;Done!&#34;)
     return assembled
 
@@ -732,8 +750,8 @@ def show_pita(
 <section>
 <h2 class="section-title" id="header-functions">Functions</h2>
 <dl>
-<dt id="st_utils.assemble_pita"><code class="name flex">
-<span>def <span class="ident">assemble_pita</span></span>(<span>adata, features=None, use_rep=None, layer=None, plot_out=True, **kwargs)</span>
+<dt id="MILWRM.ST.assemble_pita"><code class="name flex">
+<span>def <span class="ident">assemble_pita</span></span>(<span>adata, features=None, use_rep=None, layer=None, plot_out=True, histo=None, **kwargs)</span>
 </code></dt>
 <dd>
 <div class="desc"><p>Cast feature into pixel space to construct gene expression image ("pita")</p>
@@ -751,8 +769,11 @@ specified and <code>plot_out</code>, first feature (index 0) will be plotted.</d
 <dt>Key from <code>adata.layers</code> to use for plotting. Ignored if <code>use_rep</code> is not <code>None</code></dt>
 <dt><strong><code>plot_out</code></strong> :&ensp;<code>bool</code></dt>
 <dd>Show resulting image?</dd>
+<dt><strong><code>histo</code></strong> :&ensp;<code>str</code> or <code>None</code>, optional <code>(default=</code>None<code>)</code></dt>
+<dd>Histology image to show along with pita in gridspec (i.e. "hires",
+"hires_trim", "lowres"). If <code>None</code> or if <code>plot_out</code>==<code>False</code>, ignore.</dd>
 <dt><strong><code>**kwargs</code></strong></dt>
-<dd>Arguments to pass to <code><a title="st_utils.show_pita" href="#st_utils.show_pita">show_pita()</a></code> function</dd>
+<dd>Arguments to pass to <code><a title="MILWRM.ST.show_pita" href="#MILWRM.ST.show_pita">show_pita()</a></code> function</dd>
 </dl>
 <h2 id="returns">Returns</h2>
 <dl>
@@ -764,7 +785,7 @@ specified and <code>plot_out</code>, first feature (index 0) will be plotted.</d
 <span>Expand source code</span>
 </summary>
 <pre><code class="python">def assemble_pita(
-    adata, features=None, use_rep=None, layer=None, plot_out=True, **kwargs
+    adata, features=None, use_rep=None, layer=None, plot_out=True, histo=None, **kwargs
 ):
     &#34;&#34;&#34;
     Cast feature into pixel space to construct gene expression image (&#34;pita&#34;)
@@ -783,6 +804,9 @@ specified and <code>plot_out</code>, first feature (index 0) will be plotted.</d
         Key from `adata.layers` to use for plotting. Ignored if `use_rep` is not `None`
     plot_out : bool
         Show resulting image?
+    histo : str or `None`, optional (default=`None`)
+        Histology image to show along with pita in gridspec (i.e. &#34;hires&#34;,
+        &#34;hires_trim&#34;, &#34;lowres&#34;). If `None` or if `plot_out`==`False`, ignore.
     **kwargs
         Arguments to pass to `show_pita()` function
 
@@ -859,12 +883,27 @@ specified and <code>plot_out</code>, first feature (index 0) will be plotted.</d
     ).squeeze()
 
     if plot_out:
-        show_pita(pita=assembled, features=features, **kwargs)
+        # determine where the histo image is in anndata
+        if histo is not None:
+            assert (
+                histo
+                in adata.uns[&#34;spatial&#34;][list(adata.uns[&#34;spatial&#34;].keys())[0]][
+                    &#34;images&#34;
+                ].keys()
+            ), &#34;Must provide one of {} for histo&#34;.format(
+                adata.uns[&#34;spatial&#34;][list(adata.uns[&#34;spatial&#34;].keys())[0]][
+                    &#34;images&#34;
+                ].keys()
+            )
+            histo = adata.uns[&#34;spatial&#34;][list(adata.uns[&#34;spatial&#34;].keys())[0]][
+                &#34;images&#34;
+            ][histo]
+        show_pita(pita=assembled, features=features, histo=histo, **kwargs)
     print(&#34;Done!&#34;)
     return assembled</code></pre>
 </details>
 </dd>
-<dt id="st_utils.bin_threshold"><code class="name flex">
+<dt id="MILWRM.ST.bin_threshold"><code class="name flex">
 <span>def <span class="ident">bin_threshold</span></span>(<span>mat, threshmin=None, threshmax=0.5)</span>
 </code></dt>
 <dd>
@@ -920,7 +959,7 @@ than threshmax -&gt; 1. Values lower than thresmax -&gt; 0.</dd>
     return a</code></pre>
 </details>
 </dd>
-<dt id="st_utils.map_pixels"><code class="name flex">
+<dt id="MILWRM.ST.map_pixels"><code class="name flex">
 <span>def <span class="ident">map_pixels</span></span>(<span>adata, filter_label='in_tissue', img_key='hires', library_id=None)</span>
 </code></dt>
 <dd>
@@ -1078,18 +1117,18 @@ Pixel space array of Visium spot barcode IDs</dd>
         )
         # set empty pixels (no Visium spot) to &#34;none&#34;
         adata.uns[&#34;pixel_map_df&#34;].loc[
-            adata.uns[&#34;pixel_map_df&#34;][filter_label].isin([&#34;False&#34;, False, 0, 0.0]),
+            adata.uns[&#34;pixel_map_df&#34;][filter_label] == 0,
             &#34;barcode&#34;,
         ] = &#34;none&#34;
         # subset the entire anndata object using filter_label
-        adata = adata[adata.obs[filter_label].isin([&#34;True&#34;, True, 1.0, 1]), :].copy()
+        adata = adata[adata.obs[filter_label] == 1, :].copy()
         print(&#34;New size: {} spots x {} genes&#34;.format(adata.n_obs, adata.n_vars))
 
     print(&#34;Done!&#34;)
     return adata</code></pre>
 </details>
 </dd>
-<dt id="st_utils.show_pita"><code class="name flex">
+<dt id="MILWRM.ST.show_pita"><code class="name flex">
 <span>def <span class="ident">show_pita</span></span>(<span>pita, features=None, RGB=False, histo=None, label='feature', ncols=4, figsize=(7, 7), save_to=None, **kwargs)</span>
 </code></dt>
 <dd>
@@ -1097,7 +1136,7 @@ Pixel space array of Visium spot barcode IDs</dd>
 <h2 id="parameters">Parameters</h2>
 <dl>
 <dt><strong><code>pita</code></strong> :&ensp;<code>np.array</code></dt>
-<dd>Image of desired expression in pixel space from <code>.<a title="st_utils.assemble_pita" href="#st_utils.assemble_pita">assemble_pita()</a></code></dd>
+<dd>Image of desired expression in pixel space from <code>.<a title="MILWRM.ST.assemble_pita" href="#MILWRM.ST.assemble_pita">assemble_pita()</a></code></dd>
 <dt><strong><code>features</code></strong> :&ensp;<code>list</code> of <code>int</code>, optional <code>(default=</code>None<code>)</code></dt>
 <dd>List of features by index to show in plot. If <code>None</code>, use all features.</dd>
 <dt><strong><code>RGB</code></strong> :&ensp;<code>bool</code>, optional <code>(default=</code>False<code>)</code></dt>
@@ -1354,7 +1393,7 @@ channel in RGB image. Can also pass list of names e.g. ["NeuN","GFAP",
     return fig</code></pre>
 </details>
 </dd>
-<dt id="st_utils.trim_image"><code class="name flex">
+<dt id="MILWRM.ST.trim_image"><code class="name flex">
 <span>def <span class="ident">trim_image</span></span>(<span>adata, distance_trim=False, threshold=None, channels=None, plot_out=True, **kwargs)</span>
 </code></dt>
 <dd>
@@ -1374,7 +1413,7 @@ if <code>distance_trim==False</code>.</dd>
 <dt><strong><code>plot_out</code></strong> :&ensp;<code>bool</code></dt>
 <dd>Plot final trimmed image</dd>
 <dt><strong><code>**kwargs</code></strong></dt>
-<dd>Arguments to pass to <code><a title="st_utils.show_pita" href="#st_utils.show_pita">show_pita()</a></code> function if <code>plot_out==True</code></dd>
+<dd>Arguments to pass to <code><a title="MILWRM.ST.show_pita" href="#MILWRM.ST.show_pita">show_pita()</a></code> function if <code>plot_out==True</code></dd>
 </dl>
 <h2 id="returns">Returns</h2>
 <dl>
@@ -1571,13 +1610,18 @@ if <code>distance_trim==False</code>.</dd>
 <ul></ul>
 </div>
 <ul id="index">
+<li><h3>Super-module</h3>
+<ul>
+<li><code><a title="MILWRM" href="index.html">MILWRM</a></code></li>
+</ul>
+</li>
 <li><h3><a href="#header-functions">Functions</a></h3>
 <ul class="">
-<li><code><a title="st_utils.assemble_pita" href="#st_utils.assemble_pita">assemble_pita</a></code></li>
-<li><code><a title="st_utils.bin_threshold" href="#st_utils.bin_threshold">bin_threshold</a></code></li>
-<li><code><a title="st_utils.map_pixels" href="#st_utils.map_pixels">map_pixels</a></code></li>
-<li><code><a title="st_utils.show_pita" href="#st_utils.show_pita">show_pita</a></code></li>
-<li><code><a title="st_utils.trim_image" href="#st_utils.trim_image">trim_image</a></code></li>
+<li><code><a title="MILWRM.ST.assemble_pita" href="#MILWRM.ST.assemble_pita">assemble_pita</a></code></li>
+<li><code><a title="MILWRM.ST.bin_threshold" href="#MILWRM.ST.bin_threshold">bin_threshold</a></code></li>
+<li><code><a title="MILWRM.ST.map_pixels" href="#MILWRM.ST.map_pixels">map_pixels</a></code></li>
+<li><code><a title="MILWRM.ST.show_pita" href="#MILWRM.ST.show_pita">show_pita</a></code></li>
+<li><code><a title="MILWRM.ST.trim_image" href="#MILWRM.ST.trim_image">trim_image</a></code></li>
 </ul>
 </li>
 </ul>

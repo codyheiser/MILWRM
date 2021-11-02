@@ -182,11 +182,11 @@ def map_pixels(adata, filter_label="in_tissue", img_key="hires", library_id=None
         )
         # set empty pixels (no Visium spot) to "none"
         adata.uns["pixel_map_df"].loc[
-            adata.uns["pixel_map_df"][filter_label]==0,
+            adata.uns["pixel_map_df"][filter_label] == 0,
             "barcode",
         ] = "none"
         # subset the entire anndata object using filter_label
-        adata = adata[adata.obs[filter_label]==1, :].copy()
+        adata = adata[adata.obs[filter_label] == 1, :].copy()
         print("New size: {} spots x {} genes".format(adata.n_obs, adata.n_vars))
 
     print("Done!")
@@ -387,7 +387,7 @@ def assemble_pita(
     plot_out : bool
         Show resulting image?
     histo : str or `None`, optional (default=`None`)
-        Histology image to show along with pita in gridspec (i.e. "hires", 
+        Histology image to show along with pita in gridspec (i.e. "hires",
         "hires_trim", "lowres"). If `None` or if `plot_out`==`False`, ignore.
     **kwargs
         Arguments to pass to `show_pita()` function
@@ -467,8 +467,19 @@ def assemble_pita(
     if plot_out:
         # determine where the histo image is in anndata
         if histo is not None:
-            assert histo in adata.uns["spatial"][list(adata.uns["spatial"].keys())[0]]["images"].keys(), "Must provide one of {} for histo".format(adata.uns["spatial"][list(adata.uns["spatial"].keys())[0]]["images"].keys())
-            histo = adata.uns["spatial"][list(adata.uns["spatial"].keys())[0]]["images"][histo]
+            assert (
+                histo
+                in adata.uns["spatial"][list(adata.uns["spatial"].keys())[0]][
+                    "images"
+                ].keys()
+            ), "Must provide one of {} for histo".format(
+                adata.uns["spatial"][list(adata.uns["spatial"].keys())[0]][
+                    "images"
+                ].keys()
+            )
+            histo = adata.uns["spatial"][list(adata.uns["spatial"].keys())[0]][
+                "images"
+            ][histo]
         show_pita(pita=assembled, features=features, histo=histo, **kwargs)
     print("Done!")
     return assembled

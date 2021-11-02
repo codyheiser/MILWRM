@@ -9,12 +9,12 @@ import numpy as np
 import pandas as pd
 
 from math import ceil
-from img_utils import checktype
 from joblib import Parallel, delayed
 from sklearn.cluster import KMeans
 from sklearn.preprocessing import MinMaxScaler
 from skimage.filters import gaussian
 
+from .MxIF import checktype
 
 def kMeansRes(scaled_data, k, alpha_k=0.02, random_state=18):
     """

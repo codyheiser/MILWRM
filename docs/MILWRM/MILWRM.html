@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1" />
 <meta name="generator" content="pdoc 0.9.2" />
-<title>MILWRM API documentation</title>
+<title>MILWRM.MILWRM API documentation</title>
 <meta name="description" content="Classes for assigning tissue region IDs to multiplex immunofluorescence (MxIF) or 10X
 Visium spatial transcriptomic (ST) and histological imaging data" />
 <link rel="preload stylesheet" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/10up-sanitize.css/11.0.1/sanitize.min.css" integrity="sha256-PK9q560IAAa6WVRRh76LtCaI8pjTJ2z11v0miyNNjrs=" crossorigin>
@@ -20,7 +20,7 @@ Visium spatial transcriptomic (ST) and histological imaging data" />
 <main>
 <article id="content">
 <header>
-<h1 class="title">Module <code>MILWRM</code></h1>
+<h1 class="title">Module <code>MILWRM.MILWRM</code></h1>
 </header>
 <section id="section-intro">
 <p>Classes for assigning tissue region IDs to multiplex immunofluorescence (MxIF) or 10X
@@ -40,12 +40,12 @@ import numpy as np
 import pandas as pd
 
 from math import ceil
-from img_utils import checktype
 from joblib import Parallel, delayed
 from sklearn.cluster import KMeans
 from sklearn.preprocessing import MinMaxScaler
 from skimage.filters import gaussian
 
+from .MxIF import checktype
 
 def kMeansRes(scaled_data, k, alpha_k=0.02, random_state=18):
     &#34;&#34;&#34;
@@ -705,7 +705,7 @@ class mxif_labeler(tissue_labeler):
 <section>
 <h2 class="section-title" id="header-functions">Functions</h2>
 <dl>
-<dt id="MILWRM.chooseBestKforKMeansParallel"><code class="name flex">
+<dt id="MILWRM.MILWRM.chooseBestKforKMeansParallel"><code class="name flex">
 <span>def <span class="ident">chooseBestKforKMeansParallel</span></span>(<span>scaled_data, k_range, n_jobs=-1, **kwargs)</span>
 </code></dt>
 <dd>
@@ -722,7 +722,7 @@ scaled inertia</p>
 <dt><strong><code>n_jobs</code></strong> :&ensp;<code>int</code></dt>
 <dd>Number of cores to parallelize k-choosing across</dd>
 <dt><strong><code>**kwargs</code></strong></dt>
-<dd>Arguments to pass to <code><a title="MILWRM.kMeansRes" href="#MILWRM.kMeansRes">kMeansRes()</a></code> (i.e. <code>alpha_k</code>, <code>random_state</code>)</dd>
+<dd>Arguments to pass to <code><a title="MILWRM.MILWRM.kMeansRes" href="#MILWRM.MILWRM.kMeansRes">kMeansRes()</a></code> (i.e. <code>alpha_k</code>, <code>random_state</code>)</dd>
 </dl>
 <h2 id="returns">Returns</h2>
 <dl>
@@ -772,7 +772,7 @@ scaled inertia value.</dd>
     return best_k, results</code></pre>
 </details>
 </dd>
-<dt id="MILWRM.kMeansRes"><code class="name flex">
+<dt id="MILWRM.MILWRM.kMeansRes"><code class="name flex">
 <span>def <span class="ident">kMeansRes</span></span>(<span>scaled_data, k, alpha_k=0.02, random_state=18)</span>
 </code></dt>
 <dd>
@@ -830,7 +830,7 @@ scaled inertia value.</dd>
 <section>
 <h2 class="section-title" id="header-classes">Classes</h2>
 <dl>
-<dt id="MILWRM.mxif_labeler"><code class="flex name class">
+<dt id="MILWRM.MILWRM.mxif_labeler"><code class="flex name class">
 <span>class <span class="ident">mxif_labeler</span></span>
 <span>(</span><span>images)</span>
 </code></dt>
@@ -1012,11 +1012,11 @@ scaled inertia value.</dd>
 </details>
 <h3>Ancestors</h3>
 <ul class="hlist">
-<li><a title="MILWRM.tissue_labeler" href="#MILWRM.tissue_labeler">tissue_labeler</a></li>
+<li><a title="MILWRM.MILWRM.tissue_labeler" href="#MILWRM.MILWRM.tissue_labeler">tissue_labeler</a></li>
 </ul>
 <h3>Methods</h3>
 <dl>
-<dt id="MILWRM.mxif_labeler.label_tissue_regions"><code class="name flex">
+<dt id="MILWRM.MILWRM.mxif_labeler.label_tissue_regions"><code class="name flex">
 <span>def <span class="ident">label_tissue_regions</span></span>(<span>self, k=None, plot_out=True, random_state=18, n_jobs=-1)</span>
 </code></dt>
 <dd>
@@ -1102,7 +1102,7 @@ model. Parameters are also captured as attributes for posterity.</p></div>
         self.tissue_IDs.append(tID)  # append tID to list of cluster images</code></pre>
 </details>
 </dd>
-<dt id="MILWRM.mxif_labeler.prep_cluster_data"><code class="name flex">
+<dt id="MILWRM.MILWRM.mxif_labeler.prep_cluster_data"><code class="name flex">
 <span>def <span class="ident">prep_cluster_data</span></span>(<span>self, features, downsample_factor=8, sigma=2, fract=0.2)</span>
 </code></dt>
 <dd>
@@ -1207,17 +1207,17 @@ training. Parameters are also captured as attributes for posterity.</p></div>
 </dl>
 <h3>Inherited members</h3>
 <ul class="hlist">
-<li><code><b><a title="MILWRM.tissue_labeler" href="#MILWRM.tissue_labeler">tissue_labeler</a></b></code>:
+<li><code><b><a title="MILWRM.MILWRM.tissue_labeler" href="#MILWRM.MILWRM.tissue_labeler">tissue_labeler</a></b></code>:
 <ul class="hlist">
-<li><code><a title="MILWRM.tissue_labeler.find_optimal_k" href="#MILWRM.tissue_labeler.find_optimal_k">find_optimal_k</a></code></li>
-<li><code><a title="MILWRM.tissue_labeler.find_tissue_regions" href="#MILWRM.tissue_labeler.find_tissue_regions">find_tissue_regions</a></code></li>
-<li><code><a title="MILWRM.tissue_labeler.plot_feature_loadings" href="#MILWRM.tissue_labeler.plot_feature_loadings">plot_feature_loadings</a></code></li>
-<li><code><a title="MILWRM.tissue_labeler.plot_feature_proportions" href="#MILWRM.tissue_labeler.plot_feature_proportions">plot_feature_proportions</a></code></li>
+<li><code><a title="MILWRM.MILWRM.tissue_labeler.find_optimal_k" href="#MILWRM.MILWRM.tissue_labeler.find_optimal_k">find_optimal_k</a></code></li>
+<li><code><a title="MILWRM.MILWRM.tissue_labeler.find_tissue_regions" href="#MILWRM.MILWRM.tissue_labeler.find_tissue_regions">find_tissue_regions</a></code></li>
+<li><code><a title="MILWRM.MILWRM.tissue_labeler.plot_feature_loadings" href="#MILWRM.MILWRM.tissue_labeler.plot_feature_loadings">plot_feature_loadings</a></code></li>
+<li><code><a title="MILWRM.MILWRM.tissue_labeler.plot_feature_proportions" href="#MILWRM.MILWRM.tissue_labeler.plot_feature_proportions">plot_feature_proportions</a></code></li>
 </ul>
 </li>
 </ul>
 </dd>
-<dt id="MILWRM.st_labeler"><code class="flex name class">
+<dt id="MILWRM.MILWRM.st_labeler"><code class="flex name class">
 <span>class <span class="ident">st_labeler</span></span>
 <span>(</span><span>adatas)</span>
 </code></dt>
@@ -1425,11 +1425,11 @@ training. Parameters are also captured as attributes for posterity.</p></div>
 </details>
 <h3>Ancestors</h3>
 <ul class="hlist">
-<li><a title="MILWRM.tissue_labeler" href="#MILWRM.tissue_labeler">tissue_labeler</a></li>
+<li><a title="MILWRM.MILWRM.tissue_labeler" href="#MILWRM.MILWRM.tissue_labeler">tissue_labeler</a></li>
 </ul>
 <h3>Methods</h3>
 <dl>
-<dt id="MILWRM.st_labeler.label_tissue_regions"><code class="name flex">
+<dt id="MILWRM.MILWRM.st_labeler.label_tissue_regions"><code class="name flex">
 <span>def <span class="ident">label_tissue_regions</span></span>(<span>self, k=None, alpha=0.05, plot_out=True, random_state=18, n_jobs=-1)</span>
 </code></dt>
 <dd>
@@ -1505,7 +1505,7 @@ Parameters are also captured as attributes for posterity.</p></div>
         start += self.adatas[i].n_obs</code></pre>
 </details>
 </dd>
-<dt id="MILWRM.st_labeler.prep_cluster_data"><code class="name flex">
+<dt id="MILWRM.MILWRM.st_labeler.prep_cluster_data"><code class="name flex">
 <span>def <span class="ident">prep_cluster_data</span></span>(<span>self, use_rep, features=None, blur_pix=2, histo=False, fluor_channels=None)</span>
 </code></dt>
 <dd>
@@ -1657,17 +1657,17 @@ Parameters are also captured as attributes for posterity.</p></div>
 </dl>
 <h3>Inherited members</h3>
 <ul class="hlist">
-<li><code><b><a title="MILWRM.tissue_labeler" href="#MILWRM.tissue_labeler">tissue_labeler</a></b></code>:
+<li><code><b><a title="MILWRM.MILWRM.tissue_labeler" href="#MILWRM.MILWRM.tissue_labeler">tissue_labeler</a></b></code>:
 <ul class="hlist">
-<li><code><a title="MILWRM.tissue_labeler.find_optimal_k" href="#MILWRM.tissue_labeler.find_optimal_k">find_optimal_k</a></code></li>
-<li><code><a title="MILWRM.tissue_labeler.find_tissue_regions" href="#MILWRM.tissue_labeler.find_tissue_regions">find_tissue_regions</a></code></li>
-<li><code><a title="MILWRM.tissue_labeler.plot_feature_loadings" href="#MILWRM.tissue_labeler.plot_feature_loadings">plot_feature_loadings</a></code></li>
-<li><code><a title="MILWRM.tissue_labeler.plot_feature_proportions" href="#MILWRM.tissue_labeler.plot_feature_proportions">plot_feature_proportions</a></code></li>
+<li><code><a title="MILWRM.MILWRM.tissue_labeler.find_optimal_k" href="#MILWRM.MILWRM.tissue_labeler.find_optimal_k">find_optimal_k</a></code></li>
+<li><code><a title="MILWRM.MILWRM.tissue_labeler.find_tissue_regions" href="#MILWRM.MILWRM.tissue_labeler.find_tissue_regions">find_tissue_regions</a></code></li>
+<li><code><a title="MILWRM.MILWRM.tissue_labeler.plot_feature_loadings" href="#MILWRM.MILWRM.tissue_labeler.plot_feature_loadings">plot_feature_loadings</a></code></li>
+<li><code><a title="MILWRM.MILWRM.tissue_labeler.plot_feature_proportions" href="#MILWRM.MILWRM.tissue_labeler.plot_feature_proportions">plot_feature_proportions</a></code></li>
 </ul>
 </li>
 </ul>
 </dd>
-<dt id="MILWRM.tissue_labeler"><code class="flex name class">
+<dt id="MILWRM.MILWRM.tissue_labeler"><code class="flex name class">
 <span>class <span class="ident">tissue_labeler</span></span>
 </code></dt>
 <dd>
@@ -1915,12 +1915,12 @@ Parameters are also captured as attributes for posterity.</p></div>
 </details>
 <h3>Subclasses</h3>
 <ul class="hlist">
-<li><a title="MILWRM.mxif_labeler" href="#MILWRM.mxif_labeler">mxif_labeler</a></li>
-<li><a title="MILWRM.st_labeler" href="#MILWRM.st_labeler">st_labeler</a></li>
+<li><a title="MILWRM.MILWRM.mxif_labeler" href="#MILWRM.MILWRM.mxif_labeler">mxif_labeler</a></li>
+<li><a title="MILWRM.MILWRM.st_labeler" href="#MILWRM.MILWRM.st_labeler">st_labeler</a></li>
 </ul>
 <h3>Methods</h3>
 <dl>
-<dt id="MILWRM.tissue_labeler.find_optimal_k"><code class="name flex">
+<dt id="MILWRM.MILWRM.tissue_labeler.find_optimal_k"><code class="name flex">
 <span>def <span class="ident">find_optimal_k</span></span>(<span>self, plot_out=False, alpha=0.02, random_state=18, n_jobs=-1)</span>
 </code></dt>
 <dd>
@@ -1992,7 +1992,7 @@ clusters. Parameters are also captured as attributes for posterity.</p></div>
     self.k = best_k</code></pre>
 </details>
 </dd>
-<dt id="MILWRM.tissue_labeler.find_tissue_regions"><code class="name flex">
+<dt id="MILWRM.MILWRM.tissue_labeler.find_tissue_regions"><code class="name flex">
 <span>def <span class="ident">find_tissue_regions</span></span>(<span>self, k=None, random_state=18)</span>
 </code></dt>
 <dd>
@@ -2046,7 +2046,7 @@ model. Parameters are also captured as attributes for posterity.</p></div>
     )</code></pre>
 </details>
 </dd>
-<dt id="MILWRM.tissue_labeler.plot_feature_loadings"><code class="name flex">
+<dt id="MILWRM.MILWRM.tissue_labeler.plot_feature_loadings"><code class="name flex">
 <span>def <span class="ident">plot_feature_loadings</span></span>(<span>self, ncols=None, figsize=(5, 5), save_to=None)</span>
 </code></dt>
 <dd>
@@ -2158,7 +2158,7 @@ model. Parameters are also captured as attributes for posterity.</p></div>
         return gs</code></pre>
 </details>
 </dd>
-<dt id="MILWRM.tissue_labeler.plot_feature_proportions"><code class="name flex">
+<dt id="MILWRM.MILWRM.tissue_labeler.plot_feature_proportions"><code class="name flex">
 <span>def <span class="ident">plot_feature_proportions</span></span>(<span>self, figsize=(10, 7), save_to=None)</span>
 </code></dt>
 <dd>
@@ -2242,35 +2242,40 @@ percentages of total</p>
 <ul></ul>
 </div>
 <ul id="index">
+<li><h3>Super-module</h3>
+<ul>
+<li><code><a title="MILWRM" href="index.html">MILWRM</a></code></li>
+</ul>
+</li>
 <li><h3><a href="#header-functions">Functions</a></h3>
 <ul class="">
-<li><code><a title="MILWRM.chooseBestKforKMeansParallel" href="#MILWRM.chooseBestKforKMeansParallel">chooseBestKforKMeansParallel</a></code></li>
-<li><code><a title="MILWRM.kMeansRes" href="#MILWRM.kMeansRes">kMeansRes</a></code></li>
+<li><code><a title="MILWRM.MILWRM.chooseBestKforKMeansParallel" href="#MILWRM.MILWRM.chooseBestKforKMeansParallel">chooseBestKforKMeansParallel</a></code></li>
+<li><code><a title="MILWRM.MILWRM.kMeansRes" href="#MILWRM.MILWRM.kMeansRes">kMeansRes</a></code></li>
 </ul>
 </li>
 <li><h3><a href="#header-classes">Classes</a></h3>
 <ul>
 <li>
-<h4><code><a title="MILWRM.mxif_labeler" href="#MILWRM.mxif_labeler">mxif_labeler</a></code></h4>
+<h4><code><a title="MILWRM.MILWRM.mxif_labeler" href="#MILWRM.MILWRM.mxif_labeler">mxif_labeler</a></code></h4>
 <ul class="">
-<li><code><a title="MILWRM.mxif_labeler.label_tissue_regions" href="#MILWRM.mxif_labeler.label_tissue_regions">label_tissue_regions</a></code></li>
-<li><code><a title="MILWRM.mxif_labeler.prep_cluster_data" href="#MILWRM.mxif_labeler.prep_cluster_data">prep_cluster_data</a></code></li>
+<li><code><a title="MILWRM.MILWRM.mxif_labeler.label_tissue_regions" href="#MILWRM.MILWRM.mxif_labeler.label_tissue_regions">label_tissue_regions</a></code></li>
+<li><code><a title="MILWRM.MILWRM.mxif_labeler.prep_cluster_data" href="#MILWRM.MILWRM.mxif_labeler.prep_cluster_data">prep_cluster_data</a></code></li>
 </ul>
 </li>
 <li>
-<h4><code><a title="MILWRM.st_labeler" href="#MILWRM.st_labeler">st_labeler</a></code></h4>
+<h4><code><a title="MILWRM.MILWRM.st_labeler" href="#MILWRM.MILWRM.st_labeler">st_labeler</a></code></h4>
 <ul class="">
-<li><code><a title="MILWRM.st_labeler.label_tissue_regions" href="#MILWRM.st_labeler.label_tissue_regions">label_tissue_regions</a></code></li>
-<li><code><a title="MILWRM.st_labeler.prep_cluster_data" href="#MILWRM.st_labeler.prep_cluster_data">prep_cluster_data</a></code></li>
+<li><code><a title="MILWRM.MILWRM.st_labeler.label_tissue_regions" href="#MILWRM.MILWRM.st_labeler.label_tissue_regions">label_tissue_regions</a></code></li>
+<li><code><a title="MILWRM.MILWRM.st_labeler.prep_cluster_data" href="#MILWRM.MILWRM.st_labeler.prep_cluster_data">prep_cluster_data</a></code></li>
 </ul>
 </li>
 <li>
-<h4><code><a title="MILWRM.tissue_labeler" href="#MILWRM.tissue_labeler">tissue_labeler</a></code></h4>
+<h4><code><a title="MILWRM.MILWRM.tissue_labeler" href="#MILWRM.MILWRM.tissue_labeler">tissue_labeler</a></code></h4>
 <ul class="">
-<li><code><a title="MILWRM.tissue_labeler.find_optimal_k" href="#MILWRM.tissue_labeler.find_optimal_k">find_optimal_k</a></code></li>
-<li><code><a title="MILWRM.tissue_labeler.find_tissue_regions" href="#MILWRM.tissue_labeler.find_tissue_regions">find_tissue_regions</a></code></li>
-<li><code><a title="MILWRM.tissue_labeler.plot_feature_loadings" href="#MILWRM.tissue_labeler.plot_feature_loadings">plot_feature_loadings</a></code></li>
-<li><code><a title="MILWRM.tissue_labeler.plot_feature_proportions" href="#MILWRM.tissue_labeler.plot_feature_proportions">plot_feature_proportions</a></code></li>
+<li><code><a title="MILWRM.MILWRM.tissue_labeler.find_optimal_k" href="#MILWRM.MILWRM.tissue_labeler.find_optimal_k">find_optimal_k</a></code></li>
+<li><code><a title="MILWRM.MILWRM.tissue_labeler.find_tissue_regions" href="#MILWRM.MILWRM.tissue_labeler.find_tissue_regions">find_tissue_regions</a></code></li>
+<li><code><a title="MILWRM.MILWRM.tissue_labeler.plot_feature_loadings" href="#MILWRM.MILWRM.tissue_labeler.plot_feature_loadings">plot_feature_loadings</a></code></li>
+<li><code><a title="MILWRM.MILWRM.tissue_labeler.plot_feature_proportions" href="#MILWRM.MILWRM.tissue_labeler.plot_feature_proportions">plot_feature_proportions</a></code></li>
 </ul>
 </li>
 </ul>
