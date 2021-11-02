@@ -1,4 +1,4 @@
-![alt text](data/milwrm_logo.jpg)
+![alt text](docs/milwrm_logo.jpg)
 
 [![Latest Version][pypi-version]][pypi-url]
 
