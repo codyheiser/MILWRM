@@ -1783,8 +1783,9 @@ channels.</dd>
 <p>Initialize MxIF tissue labeler class</p>
 <h2 id="parameters">Parameters</h2>
 <dl>
-<dt><strong><code>images</code></strong> :&ensp;<code>list</code> of <code>[img class?]</code></dt>
-<dd>Single img object or list of objects to label consensus tissue regions</dd>
+<dt><strong><code>images</code></strong> :&ensp;<code>list</code> of <code><a title="MILWRM.MxIF.img" href="MxIF.html#MILWRM.MxIF.img">img</a></code></dt>
+<dd>Single MILWRM.MxIF.img object or list of objects to label consensus
+tissue regions</dd>
 </dl>
 <h2 id="returns">Returns</h2>
 <p>Does not return anything. <code>self.images</code> attribute is updated,
@@ -1804,8 +1805,9 @@ channels.</dd>
 
         Parameters
         ----------
-        images : list of [img class?]
-            Single img object or list of objects to label consensus tissue regions
+        images : list of MILWRM.MxIF.img
+            Single MILWRM.MxIF.img object or list of objects to label consensus
+            tissue regions
 
         Returns
         -------
@@ -1818,7 +1820,9 @@ channels.</dd>
         print(&#34;Initiating MxIF labeler with {} images&#34;.format(len(images)))
         self.images = images
 
-    def prep_cluster_data(self, features, downsample_factor=8, sigma=2, fract=0.2):
+    def prep_cluster_data(
+        self, features, downsample_factor=8, sigma=2, fract=0.2, n_jobs=-1
+    ):
         &#34;&#34;&#34;
         Prepare master dataframe for tissue-level clustering
 
@@ -1833,6 +1837,8 @@ channels.</dd>
         fract : float, optional (default=0.2)
             Fraction of cluster data from each image to randomly select for model
             building
+        n_jobs : int, optional (default=-1)
+            Number of cores to parallelize over. Default all available cores.
 
         Returns
         -------
@@ -1847,54 +1853,30 @@ channels.</dd>
         self.model_features = features
         self.downsample_factor = downsample_factor
         self.sigma = sigma
-        # perform image downsampling, blurring, subsampling, and compile cluster_data
-        for image_i, image in enumerate(self.images):
-            print(
-                &#34;Downsampling, log-normalizing, and blurring image #{}&#34;.format(image_i)
+        # downsampling, blurring, subsampling, and compiling cluster_data in parallel
+        print(
+            &#34;Downsampling, log-normalizing, and blurring {} features from {} images...&#34;.format(
+                len(features),
+                len(self.images),
             )
-            # downsample image
-            image.downsample(fact=downsample_factor, func=np.mean)
-            # normalize and log-transform image
-            image.log_normalize(pseudoval=1, mask=True)
-            # blur downsampled image
-            image.img = gaussian(image.img, sigma=sigma, multichannel=True)
-            print(&#34;Collecting {} features for image #{}&#34;.format(len(features), image_i))
-            # get list of int for features
-            self.features = features
-            if isinstance(
-                self.features, int
-            ):  # force features into list if single integer
-                self.features = [self.features]
-            if isinstance(
-                self.features, str
-            ):  # force features into int if single string
-                self.features = [image.ch.index(self.features)]
-            if checktype(
-                self.features
-            ):  # force features into list of int if list of strings
-                self.features = [image.ch.index(x) for x in self.features]
-            if self.features is None:  # if no features are given, use all of them
-                self.features = [x for x in range(image.n_ch)]
-            # get cluster data for image_i
-            tmp = []
-            for i in range(image.img.shape[2]):
-                tmp.append(image.img[:, :, i][image.mask != 0])
-            tmp = np.column_stack(tmp)
-            # select cluster data
-            i = np.random.choice(tmp.shape[0], int(tmp.shape[0] * fract))
-            tmp = tmp[np.ix_(i, self.features)]
-            # append blurred features to cluster_data df for cluster training
-            if self.cluster_data is None:
-                self.cluster_data = tmp.copy()
-            else:
-                self.cluster_data = np.row_stack([self.cluster_data, tmp])
+        )
+        cluster_data = Parallel(n_jobs=n_jobs, verbose=10)(
+            delayed(prep_data_single_sample_mxif)(
+                image, features, downsample_factor, sigma, fract
+            )
+            for image in self.images
+        )
+        # concatenate blurred features into cluster_data df for cluster training
+        self.cluster_data = np.row_stack(cluster_data)
         # perform min-max scaling on final cluster data
         mms = MinMaxScaler()
         unscaled_data = self.cluster_data
         self.cluster_data = mms.fit_transform(unscaled_data)
         print(&#34;Collected clustering data of shape: {}&#34;.format(self.cluster_data.shape))
 
-    def label_tissue_regions(self, k=None, plot_out=True, random_state=18, n_jobs=-1):
+    def label_tissue_regions(
+        self, k=None, alpha=0.05, plot_out=True, random_state=18, n_jobs=-1
+    ):
         &#34;&#34;&#34;
         Perform tissue-level clustering and label pixels in the corresponding
         images.
@@ -1903,12 +1885,15 @@ channels.</dd>
         ----------
         k : int, optional (default=None)
             Number of tissue regions to define
+        alpha: float
+            Manually tuned factor on [0.0, 1.0] that penalizes the number of clusters
         plot_out : boolean, optional (default=True)
             Determines if silhouette plots should be output
         random_state : int, optional (default=18)
             Seed for k-means clustering model
         n_jobs : int
-            Number of cores to parallelize k-choosing across
+            Number of cores to parallelize k-choosing and tissue ID assignment across.
+            Default all available cores.
 
         Returns
         -------
@@ -1920,39 +1905,18 @@ channels.</dd>
         if k is None:
             print(&#34;Determining optimal cluster number k via scaled inertia&#34;)
             self.find_optimal_k(
-                plot_out=plot_out, random_state=random_state, n_jobs=n_jobs
+                alpha=alpha, plot_out=plot_out, random_state=random_state, n_jobs=n_jobs
             )
         # call k-means model from parent class
         self.find_tissue_regions(random_state=random_state)
         # loop through image objects and create tissue label images
-        print(&#34;Creating tissue_ID images for image objects:&#34;)
-        self.tissue_IDs = []
-        for i in range(len(self.images)):
-            print(&#34;\tImage #{}&#34;.format(i))
-            # get list of int for features
-            self.features = self.model_features
-            if isinstance(
-                self.features, int
-            ):  # force features into list if single integer
-                self.features = [self.features]
-            if isinstance(
-                self.features, str
-            ):  # force features into int if single string
-                self.features = [self.images[i].ch.index(self.features)]
-            if checktype(
-                self.features
-            ):  # force features into list of int if list of strings
-                self.features = [self.images[i].ch.index(x) for x in self.features]
-            if self.features is None:  # if no features are given, use all of them
-                self.features = [x for x in range(self.images[i].n_ch)]
-            # subset to features used in prep_cluster_data
-            tmp = self.images[i].img[:, :, self.features]
-            tID = np.zeros(tmp.shape[:2])
-            for x in range(tmp.shape[0]):
-                for y in range(tmp.shape[1]):
-                    tID[x, y] = self.kmeans.predict(tmp[x, y, :].reshape(1, -1))
-            tID[self.images[i].mask == 0] = np.nan  # set masked-out pixels to NaN
-            self.tissue_IDs.append(tID)  # append tID to list of cluster images</code></pre>
+        print(&#34;Creating tissue_ID images for image objects...&#34;)
+        self.tissue_IDs = Parallel(n_jobs=n_jobs, verbose=10)(
+            delayed(add_tissue_ID_single_sample_mxif)(
+                image, self.model_features, self.kmeans
+            )
+            for image in self.images
+        )</code></pre>
 </details>
 <h3>Ancestors</h3>
 <ul class="hlist">
@@ -1961,7 +1925,7 @@ channels.</dd>
 <h3>Methods</h3>
 <dl>
 <dt id="MILWRM.mxif_labeler.label_tissue_regions"><code class="name flex">
-<span>def <span class="ident">label_tissue_regions</span></span>(<span>self, k=None, plot_out=True, random_state=18, n_jobs=-1)</span>
+<span>def <span class="ident">label_tissue_regions</span></span>(<span>self, k=None, alpha=0.05, plot_out=True, random_state=18, n_jobs=-1)</span>
 </code></dt>
 <dd>
 <div class="desc"><p>Perform tissue-level clustering and label pixels in the corresponding
@@ -1970,12 +1934,15 @@ images.</p>
 <dl>
 <dt><strong><code>k</code></strong> :&ensp;<code>int</code>, optional <code>(default=None)</code></dt>
 <dd>Number of tissue regions to define</dd>
+<dt><strong><code>alpha</code></strong> :&ensp;<code>float</code></dt>
+<dd>Manually tuned factor on [0.0, 1.0] that penalizes the number of clusters</dd>
 <dt><strong><code>plot_out</code></strong> :&ensp;<code>boolean</code>, optional <code>(default=True)</code></dt>
 <dd>Determines if silhouette plots should be output</dd>
 <dt><strong><code>random_state</code></strong> :&ensp;<code>int</code>, optional <code>(default=18)</code></dt>
 <dd>Seed for k-means clustering model</dd>
 <dt><strong><code>n_jobs</code></strong> :&ensp;<code>int</code></dt>
-<dd>Number of cores to parallelize k-choosing across</dd>
+<dd>Number of cores to parallelize k-choosing and tissue ID assignment across.
+Default all available cores.</dd>
 </dl>
 <h2 id="returns">Returns</h2>
 <p>Does not return anything. <code>self.tissue_ID</code> is added, containing image with
@@ -1985,7 +1952,9 @@ model. Parameters are also captured as attributes for posterity.</p></div>
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">def label_tissue_regions(self, k=None, plot_out=True, random_state=18, n_jobs=-1):
+<pre><code class="python">def label_tissue_regions(
+    self, k=None, alpha=0.05, plot_out=True, random_state=18, n_jobs=-1
+):
     &#34;&#34;&#34;
     Perform tissue-level clustering and label pixels in the corresponding
     images.
@@ -1994,12 +1963,15 @@ model. Parameters are also captured as attributes for posterity.</p></div>
     ----------
     k : int, optional (default=None)
         Number of tissue regions to define
+    alpha: float
+        Manually tuned factor on [0.0, 1.0] that penalizes the number of clusters
     plot_out : boolean, optional (default=True)
         Determines if silhouette plots should be output
     random_state : int, optional (default=18)
         Seed for k-means clustering model
     n_jobs : int
-        Number of cores to parallelize k-choosing across
+        Number of cores to parallelize k-choosing and tissue ID assignment across.
+        Default all available cores.
 
     Returns
     -------
@@ -2011,43 +1983,22 @@ model. Parameters are also captured as attributes for posterity.</p></div>
     if k is None:
         print(&#34;Determining optimal cluster number k via scaled inertia&#34;)
         self.find_optimal_k(
-            plot_out=plot_out, random_state=random_state, n_jobs=n_jobs
+            alpha=alpha, plot_out=plot_out, random_state=random_state, n_jobs=n_jobs
         )
     # call k-means model from parent class
     self.find_tissue_regions(random_state=random_state)
     # loop through image objects and create tissue label images
-    print(&#34;Creating tissue_ID images for image objects:&#34;)
-    self.tissue_IDs = []
-    for i in range(len(self.images)):
-        print(&#34;\tImage #{}&#34;.format(i))
-        # get list of int for features
-        self.features = self.model_features
-        if isinstance(
-            self.features, int
-        ):  # force features into list if single integer
-            self.features = [self.features]
-        if isinstance(
-            self.features, str
-        ):  # force features into int if single string
-            self.features = [self.images[i].ch.index(self.features)]
-        if checktype(
-            self.features
-        ):  # force features into list of int if list of strings
-            self.features = [self.images[i].ch.index(x) for x in self.features]
-        if self.features is None:  # if no features are given, use all of them
-            self.features = [x for x in range(self.images[i].n_ch)]
-        # subset to features used in prep_cluster_data
-        tmp = self.images[i].img[:, :, self.features]
-        tID = np.zeros(tmp.shape[:2])
-        for x in range(tmp.shape[0]):
-            for y in range(tmp.shape[1]):
-                tID[x, y] = self.kmeans.predict(tmp[x, y, :].reshape(1, -1))
-        tID[self.images[i].mask == 0] = np.nan  # set masked-out pixels to NaN
-        self.tissue_IDs.append(tID)  # append tID to list of cluster images</code></pre>
+    print(&#34;Creating tissue_ID images for image objects...&#34;)
+    self.tissue_IDs = Parallel(n_jobs=n_jobs, verbose=10)(
+        delayed(add_tissue_ID_single_sample_mxif)(
+            image, self.model_features, self.kmeans
+        )
+        for image in self.images
+    )</code></pre>
 </details>
 </dd>
 <dt id="MILWRM.mxif_labeler.prep_cluster_data"><code class="name flex">
-<span>def <span class="ident">prep_cluster_data</span></span>(<span>self, features, downsample_factor=8, sigma=2, fract=0.2)</span>
+<span>def <span class="ident">prep_cluster_data</span></span>(<span>self, features, downsample_factor=8, sigma=2, fract=0.2, n_jobs=-1)</span>
 </code></dt>
 <dd>
 <div class="desc"><p>Prepare master dataframe for tissue-level clustering</p>
@@ -2062,6 +2013,8 @@ model. Parameters are also captured as attributes for posterity.</p></div>
 <dt><strong><code>fract</code></strong> :&ensp;<code>float</code>, optional <code>(default=0.2)</code></dt>
 <dd>Fraction of cluster data from each image to randomly select for model
 building</dd>
+<dt><strong><code>n_jobs</code></strong> :&ensp;<code>int</code>, optional <code>(default=-1)</code></dt>
+<dd>Number of cores to parallelize over. Default all available cores.</dd>
 </dl>
 <h2 id="returns">Returns</h2>
 <p>Does not return anything. <code>self.images</code> are downsampled and blurred according
@@ -2071,7 +2024,9 @@ training. Parameters are also captured as attributes for posterity.</p></div>
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">def prep_cluster_data(self, features, downsample_factor=8, sigma=2, fract=0.2):
+<pre><code class="python">def prep_cluster_data(
+    self, features, downsample_factor=8, sigma=2, fract=0.2, n_jobs=-1
+):
     &#34;&#34;&#34;
     Prepare master dataframe for tissue-level clustering
 
@@ -2086,6 +2041,8 @@ training. Parameters are also captured as attributes for posterity.</p></div>
     fract : float, optional (default=0.2)
         Fraction of cluster data from each image to randomly select for model
         building
+    n_jobs : int, optional (default=-1)
+        Number of cores to parallelize over. Default all available cores.
 
     Returns
     -------
@@ -2100,47 +2057,21 @@ training. Parameters are also captured as attributes for posterity.</p></div>
     self.model_features = features
     self.downsample_factor = downsample_factor
     self.sigma = sigma
-    # perform image downsampling, blurring, subsampling, and compile cluster_data
-    for image_i, image in enumerate(self.images):
-        print(
-            &#34;Downsampling, log-normalizing, and blurring image #{}&#34;.format(image_i)
+    # downsampling, blurring, subsampling, and compiling cluster_data in parallel
+    print(
+        &#34;Downsampling, log-normalizing, and blurring {} features from {} images...&#34;.format(
+            len(features),
+            len(self.images),
         )
-        # downsample image
-        image.downsample(fact=downsample_factor, func=np.mean)
-        # normalize and log-transform image
-        image.log_normalize(pseudoval=1, mask=True)
-        # blur downsampled image
-        image.img = gaussian(image.img, sigma=sigma, multichannel=True)
-        print(&#34;Collecting {} features for image #{}&#34;.format(len(features), image_i))
-        # get list of int for features
-        self.features = features
-        if isinstance(
-            self.features, int
-        ):  # force features into list if single integer
-            self.features = [self.features]
-        if isinstance(
-            self.features, str
-        ):  # force features into int if single string
-            self.features = [image.ch.index(self.features)]
-        if checktype(
-            self.features
-        ):  # force features into list of int if list of strings
-            self.features = [image.ch.index(x) for x in self.features]
-        if self.features is None:  # if no features are given, use all of them
-            self.features = [x for x in range(image.n_ch)]
-        # get cluster data for image_i
-        tmp = []
-        for i in range(image.img.shape[2]):
-            tmp.append(image.img[:, :, i][image.mask != 0])
-        tmp = np.column_stack(tmp)
-        # select cluster data
-        i = np.random.choice(tmp.shape[0], int(tmp.shape[0] * fract))
-        tmp = tmp[np.ix_(i, self.features)]
-        # append blurred features to cluster_data df for cluster training
-        if self.cluster_data is None:
-            self.cluster_data = tmp.copy()
-        else:
-            self.cluster_data = np.row_stack([self.cluster_data, tmp])
+    )
+    cluster_data = Parallel(n_jobs=n_jobs, verbose=10)(
+        delayed(prep_data_single_sample_mxif)(
+            image, features, downsample_factor, sigma, fract
+        )
+        for image in self.images
+    )
+    # concatenate blurred features into cluster_data df for cluster training
+    self.cluster_data = np.row_stack(cluster_data)
     # perform min-max scaling on final cluster data
     mms = MinMaxScaler()
     unscaled_data = self.cluster_data
@@ -2206,7 +2137,13 @@ training. Parameters are also captured as attributes for posterity.</p></div>
         self.adatas = adatas
 
     def prep_cluster_data(
-        self, use_rep, features=None, blur_pix=2, histo=False, fluor_channels=None
+        self,
+        use_rep,
+        features=None,
+        blur_pix=2,
+        histo=False,
+        fluor_channels=None,
+        n_jobs=-1,
     ):
         &#34;&#34;&#34;
         Prepare master dataframe for tissue-level clustering
@@ -2231,6 +2168,8 @@ training. Parameters are also captured as attributes for posterity.</p></div>
             Channels from fluorescent image to use for model training (e.g. [1,3] for
             channels 1 and 3 of Visium fluorescent imaging data). If `None`, do not
             use imaging data for training.
+        n_jobs : int, optional (default=-1)
+            Number of cores to parallelize over. Default all available cores.
 
         Returns
         -------
@@ -2250,69 +2189,21 @@ training. Parameters are also captured as attributes for posterity.</p></div>
         self.histo = histo
         self.flour_channels = fluor_channels
         self.blur_pix = blur_pix
-        for adata_i, adata in enumerate(self.adatas):
-            print(
-                &#34;Collecting {} features from .obsm[{}] for adata #{}&#34;.format(
-                    len(self.features), self.rep, adata_i
-                )
+        # collect clustering data from self.adatas in parallel
+        print(
+            &#34;Collecting and blurring {} features from .obsm[{}]...&#34;.format(
+                len(features),
+                use_rep,
             )
-            tmp = adata.obs[[&#34;array_row&#34;, &#34;array_col&#34;]].copy()
-            tmp[[use_rep + &#34;_{}&#34;.format(x) for x in self.features]] = adata.obsm[
-                use_rep
-            ][:, self.features]
-            if histo:
-                assert (
-                    fluor_channels is None
-                ), &#34;If histo is True, fluor_channels must be None. \
-                    Histology specifies brightfield H&amp;E with three (3) features.&#34;
-                print(
-                    &#34;Adding mean RGB histology features for adata #{}&#34;.format(adata_i)
-                )
-                tmp[[&#34;R_mean&#34;, &#34;G_mean&#34;, &#34;B_mean&#34;]] = adata.obsm[&#34;image_means&#34;]
-            if fluor_channels:
-                assert (
-                    histo is False
-                ), &#34;If fluorescence channels are given, histo must be False. \
-                    Histology specifies brightfield H&amp;E with three (3) features.&#34;
-                print(
-                    &#34;Adding mean fluorescent channels {} for adata #{}&#34;.format(
-                        fluor_channels, adata_i
-                    )
-                )
-                tmp[[&#34;ch_{}_mean&#34;.format(x) for x in fluor_channels]] = adata.obsm[
-                    &#34;image_means&#34;
-                ][:, fluor_channels]
-            tmp2 = (
-                tmp.copy()
-            )  # copy of temporary dataframe for dropping blurred features into
-            cols = tmp.columns[
-                ~tmp.columns.str.startswith(&#34;array_&#34;)
-            ]  # get names of training features to blur
-            # perform blurring by nearest spot neighbors
-            print(&#34;Blurring training features for adata #{}&#34;.format(adata_i))
-            for y in range(tmp.array_row.min(), tmp.array_row.max() + 1):
-                for x in range(tmp.array_col.min(), tmp.array_col.max() + 1):
-                    vals = tmp.loc[
-                        tmp.array_row.isin(
-                            [i for i in range(y - blur_pix, y + blur_pix + 1)]
-                        )
-                        &amp; tmp.array_col.isin(
-                            [i for i in range(x - 2 * blur_pix, x + 2 * blur_pix + 1)]
-                        ),
-                        :,
-                    ]
-                    vals = vals.loc[:, cols].mean()
-                    tmp2.loc[
-                        tmp2.array_row.isin([y]) &amp; tmp2.array_col.isin([x]), cols
-                    ] = vals.values
-            # add blurred features to anndata object
-            adata.obs[[&#34;blur_&#34; + x for x in cols]] = tmp2.loc[:, cols].values
-            # append blurred features to cluster_data df for cluster training
-            if self.cluster_data is None:
-                self.cluster_data = tmp2.loc[:, cols].copy()
-            else:
-                self.cluster_data = pd.concat([self.cluster_data, tmp2.loc[:, cols]])
-
+        )
+        cluster_data = Parallel(n_jobs=n_jobs, verbose=10)(
+            delayed(prep_data_single_sample_st)(
+                adata, adata_i, use_rep, features, blur_pix, histo, fluor_channels
+            )
+            for adata_i, adata in enumerate(self.adatas)
+        )
+        # concatenate blurred features into cluster_data df for cluster training
+        self.cluster_data = pd.concat(cluster_data)
         # perform min-max scaling on final cluster data
         mms = MinMaxScaler()
         unscaled_data = self.cluster_data.values
@@ -2450,7 +2341,7 @@ Parameters are also captured as attributes for posterity.</p></div>
 </details>
 </dd>
 <dt id="MILWRM.st_labeler.prep_cluster_data"><code class="name flex">
-<span>def <span class="ident">prep_cluster_data</span></span>(<span>self, use_rep, features=None, blur_pix=2, histo=False, fluor_channels=None)</span>
+<span>def <span class="ident">prep_cluster_data</span></span>(<span>self, use_rep, features=None, blur_pix=2, histo=False, fluor_channels=None, n_jobs=-1)</span>
 </code></dt>
 <dd>
 <div class="desc"><p>Prepare master dataframe for tissue-level clustering</p>
@@ -2474,6 +2365,8 @@ than brightfield, use <code>fluor_channels</code> argument instead.</dd>
 <dd>Channels from fluorescent image to use for model training (e.g. [1,3] for
 channels 1 and 3 of Visium fluorescent imaging data). If <code>None</code>, do not
 use imaging data for training.</dd>
+<dt><strong><code>n_jobs</code></strong> :&ensp;<code>int</code>, optional <code>(default=-1)</code></dt>
+<dd>Number of cores to parallelize over. Default all available cores.</dd>
 </dl>
 <h2 id="returns">Returns</h2>
 <p>Does not return anything. <code>self.adatas</code> are updated, adding "blur_*" features
@@ -2484,7 +2377,13 @@ Parameters are also captured as attributes for posterity.</p></div>
 <span>Expand source code</span>
 </summary>
 <pre><code class="python">def prep_cluster_data(
-    self, use_rep, features=None, blur_pix=2, histo=False, fluor_channels=None
+    self,
+    use_rep,
+    features=None,
+    blur_pix=2,
+    histo=False,
+    fluor_channels=None,
+    n_jobs=-1,
 ):
     &#34;&#34;&#34;
     Prepare master dataframe for tissue-level clustering
@@ -2509,6 +2408,8 @@ Parameters are also captured as attributes for posterity.</p></div>
         Channels from fluorescent image to use for model training (e.g. [1,3] for
         channels 1 and 3 of Visium fluorescent imaging data). If `None`, do not
         use imaging data for training.
+    n_jobs : int, optional (default=-1)
+        Number of cores to parallelize over. Default all available cores.
 
     Returns
     -------
@@ -2528,69 +2429,21 @@ Parameters are also captured as attributes for posterity.</p></div>
     self.histo = histo
     self.flour_channels = fluor_channels
     self.blur_pix = blur_pix
-    for adata_i, adata in enumerate(self.adatas):
-        print(
-            &#34;Collecting {} features from .obsm[{}] for adata #{}&#34;.format(
-                len(self.features), self.rep, adata_i
-            )
+    # collect clustering data from self.adatas in parallel
+    print(
+        &#34;Collecting and blurring {} features from .obsm[{}]...&#34;.format(
+            len(features),
+            use_rep,
         )
-        tmp = adata.obs[[&#34;array_row&#34;, &#34;array_col&#34;]].copy()
-        tmp[[use_rep + &#34;_{}&#34;.format(x) for x in self.features]] = adata.obsm[
-            use_rep
-        ][:, self.features]
-        if histo:
-            assert (
-                fluor_channels is None
-            ), &#34;If histo is True, fluor_channels must be None. \
-                Histology specifies brightfield H&amp;E with three (3) features.&#34;
-            print(
-                &#34;Adding mean RGB histology features for adata #{}&#34;.format(adata_i)
-            )
-            tmp[[&#34;R_mean&#34;, &#34;G_mean&#34;, &#34;B_mean&#34;]] = adata.obsm[&#34;image_means&#34;]
-        if fluor_channels:
-            assert (
-                histo is False
-            ), &#34;If fluorescence channels are given, histo must be False. \
-                Histology specifies brightfield H&amp;E with three (3) features.&#34;
-            print(
-                &#34;Adding mean fluorescent channels {} for adata #{}&#34;.format(
-                    fluor_channels, adata_i
-                )
-            )
-            tmp[[&#34;ch_{}_mean&#34;.format(x) for x in fluor_channels]] = adata.obsm[
-                &#34;image_means&#34;
-            ][:, fluor_channels]
-        tmp2 = (
-            tmp.copy()
-        )  # copy of temporary dataframe for dropping blurred features into
-        cols = tmp.columns[
-            ~tmp.columns.str.startswith(&#34;array_&#34;)
-        ]  # get names of training features to blur
-        # perform blurring by nearest spot neighbors
-        print(&#34;Blurring training features for adata #{}&#34;.format(adata_i))
-        for y in range(tmp.array_row.min(), tmp.array_row.max() + 1):
-            for x in range(tmp.array_col.min(), tmp.array_col.max() + 1):
-                vals = tmp.loc[
-                    tmp.array_row.isin(
-                        [i for i in range(y - blur_pix, y + blur_pix + 1)]
-                    )
-                    &amp; tmp.array_col.isin(
-                        [i for i in range(x - 2 * blur_pix, x + 2 * blur_pix + 1)]
-                    ),
-                    :,
-                ]
-                vals = vals.loc[:, cols].mean()
-                tmp2.loc[
-                    tmp2.array_row.isin([y]) &amp; tmp2.array_col.isin([x]), cols
-                ] = vals.values
-        # add blurred features to anndata object
-        adata.obs[[&#34;blur_&#34; + x for x in cols]] = tmp2.loc[:, cols].values
-        # append blurred features to cluster_data df for cluster training
-        if self.cluster_data is None:
-            self.cluster_data = tmp2.loc[:, cols].copy()
-        else:
-            self.cluster_data = pd.concat([self.cluster_data, tmp2.loc[:, cols]])
-
+    )
+    cluster_data = Parallel(n_jobs=n_jobs, verbose=10)(
+        delayed(prep_data_single_sample_st)(
+            adata, adata_i, use_rep, features, blur_pix, histo, fluor_channels
+        )
+        for adata_i, adata in enumerate(self.adatas)
+    )
+    # concatenate blurred features into cluster_data df for cluster training
+    self.cluster_data = pd.concat(cluster_data)
     # perform min-max scaling on final cluster data
     mms = MinMaxScaler()
     unscaled_data = self.cluster_data.values

@@ -51,17 +51,6 @@ def checktype(obj):
     return bool(obj) and all(isinstance(elem, str) for elem in obj)
 
 
-def plot_hist(ax, data, title=None):
-    &#34;&#34;&#34;
-    Helper function for plotting histograms
-    &#34;&#34;&#34;
-    ax.hist(data.ravel(), bins=256)
-    # ax.ticklabel_format(ax=&#39;y&#39;, style=&#39;scientific&#39;, scilimits=(0, 0))
-    if title:
-        ax.set_title(title)
-    return None
-
-
 def clip_values(img, channels=None):
     &#34;&#34;&#34;
     Clip outlier values from specified channels of an image
@@ -571,26 +560,6 @@ class img:
             )
             img_cp[:, :, z] = plane_clip
     return img_cp</code></pre>
-</details>
-</dd>
-<dt id="MILWRM.MxIF.plot_hist"><code class="name flex">
-<span>def <span class="ident">plot_hist</span></span>(<span>ax, data, title=None)</span>
-</code></dt>
-<dd>
-<div class="desc"><p>Helper function for plotting histograms</p></div>
-<details class="source">
-<summary>
-<span>Expand source code</span>
-</summary>
-<pre><code class="python">def plot_hist(ax, data, title=None):
-    &#34;&#34;&#34;
-    Helper function for plotting histograms
-    &#34;&#34;&#34;
-    ax.hist(data.ravel(), bins=256)
-    # ax.ticklabel_format(ax=&#39;y&#39;, style=&#39;scientific&#39;, scilimits=(0, 0))
-    if title:
-        ax.set_title(title)
-    return None</code></pre>
 </details>
 </dd>
 <dt id="MILWRM.MxIF.scale_rgb"><code class="name flex">
@@ -1558,7 +1527,6 @@ channels.</dd>
 <ul class="">
 <li><code><a title="MILWRM.MxIF.checktype" href="#MILWRM.MxIF.checktype">checktype</a></code></li>
 <li><code><a title="MILWRM.MxIF.clip_values" href="#MILWRM.MxIF.clip_values">clip_values</a></code></li>
-<li><code><a title="MILWRM.MxIF.plot_hist" href="#MILWRM.MxIF.plot_hist">plot_hist</a></code></li>
 <li><code><a title="MILWRM.MxIF.scale_rgb" href="#MILWRM.MxIF.scale_rgb">scale_rgb</a></code></li>
 </ul>
 </li>

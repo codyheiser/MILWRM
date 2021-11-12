@@ -22,17 +22,6 @@ def checktype(obj):
     return bool(obj) and all(isinstance(elem, str) for elem in obj)
 
 
-def plot_hist(ax, data, title=None):
-    """
-    Helper function for plotting histograms
-    """
-    ax.hist(data.ravel(), bins=256)
-    # ax.ticklabel_format(ax='y', style='scientific', scilimits=(0, 0))
-    if title:
-        ax.set_title(title)
-    return None
-
-
 def clip_values(img, channels=None):
     """
     Clip outlier values from specified channels of an image
