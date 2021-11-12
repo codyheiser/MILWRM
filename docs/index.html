@@ -1860,12 +1860,15 @@ tissue regions</dd>
                 len(self.images),
             )
         )
-        cluster_data = Parallel(n_jobs=n_jobs, verbose=10)(
+        out = Parallel(n_jobs=n_jobs, verbose=10)(
             delayed(prep_data_single_sample_mxif)(
                 image, features, downsample_factor, sigma, fract
             )
             for image in self.images
         )
+        # unpack results from parallel process
+        self.images = [x[0] for x in out]
+        cluster_data = [x[1] for x in out]
         # concatenate blurred features into cluster_data df for cluster training
         self.cluster_data = np.row_stack(cluster_data)
         # perform min-max scaling on final cluster data
@@ -2064,12 +2067,15 @@ training. Parameters are also captured as attributes for posterity.</p></div>
             len(self.images),
         )
     )
-    cluster_data = Parallel(n_jobs=n_jobs, verbose=10)(
+    out = Parallel(n_jobs=n_jobs, verbose=10)(
         delayed(prep_data_single_sample_mxif)(
             image, features, downsample_factor, sigma, fract
         )
         for image in self.images
     )
+    # unpack results from parallel process
+    self.images = [x[0] for x in out]
+    cluster_data = [x[1] for x in out]
     # concatenate blurred features into cluster_data df for cluster training
     self.cluster_data = np.row_stack(cluster_data)
     # perform min-max scaling on final cluster data

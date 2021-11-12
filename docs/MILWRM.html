@@ -202,7 +202,7 @@ def prep_data_single_sample_mxif(image, features, downsample_factor, sigma, frac
     Parameters
     ----------
     image : MILWRM.MxIF.img
-        AnnData object containing Visium data
+        Image object containing MxIF data
     features : list of int or str
         Indices or names of MxIF channels to use for tissue labeling
     downsample_factor : int
@@ -215,7 +215,9 @@ def prep_data_single_sample_mxif(image, features, downsample_factor, sigma, frac
 
     Returns
     -------
-    pd.DataFrame
+    image : MILWRM.MxIF.img
+        Image object containing MxIF data downsampled and blurred
+    tmp : np.array
         Clustering data from `image`
     &#34;&#34;&#34;
     # downsample image
@@ -225,7 +227,6 @@ def prep_data_single_sample_mxif(image, features, downsample_factor, sigma, frac
     # blur downsampled image
     image.img = gaussian(image.img, sigma=sigma, multichannel=True)
     # get list of int for features
-    features = features
     if isinstance(features, int):  # force features into list if single integer
         features = [features]
     if isinstance(features, str):  # force features into int if single string
@@ -242,6 +243,7 @@ def prep_data_single_sample_mxif(image, features, downsample_factor, sigma, frac
     # select cluster data
     i = np.random.choice(tmp.shape[0], int(tmp.shape[0] * fract))
     tmp = tmp[np.ix_(i, features)]
+    return image, tmp
 
 
 def add_tissue_ID_single_sample_mxif(image, features, kmeans):
@@ -731,12 +733,15 @@ class mxif_labeler(tissue_labeler):
                 len(self.images),
             )
         )
-        cluster_data = Parallel(n_jobs=n_jobs, verbose=10)(
+        out = Parallel(n_jobs=n_jobs, verbose=10)(
             delayed(prep_data_single_sample_mxif)(
                 image, features, downsample_factor, sigma, fract
             )
             for image in self.images
         )
+        # unpack results from parallel process
+        self.images = [x[0] for x in out]
+        cluster_data = [x[1] for x in out]
         # concatenate blurred features into cluster_data df for cluster training
         self.cluster_data = np.row_stack(cluster_data)
         # perform min-max scaling on final cluster data
@@ -984,7 +989,7 @@ scaled inertia value.</dd>
 <h2 id="parameters">Parameters</h2>
 <dl>
 <dt><strong><code>image</code></strong> :&ensp;<code><a title="MILWRM.MxIF.img" href="MxIF.html#MILWRM.MxIF.img">img</a></code></dt>
-<dd>AnnData object containing Visium data</dd>
+<dd>Image object containing MxIF data</dd>
 <dt><strong><code>features</code></strong> :&ensp;<code>list</code> of <code>int</code> or <code>str</code></dt>
 <dd>Indices or names of MxIF channels to use for tissue labeling</dd>
 <dt><strong><code>downsample_factor</code></strong> :&ensp;<code>int</code></dt>
@@ -997,7 +1002,9 @@ building</dd>
 </dl>
 <h2 id="returns">Returns</h2>
 <dl>
-<dt><code>pd.DataFrame</code></dt>
+<dt><strong><code>image</code></strong> :&ensp;<code><a title="MILWRM.MxIF.img" href="MxIF.html#MILWRM.MxIF.img">img</a></code></dt>
+<dd>Image object containing MxIF data downsampled and blurred</dd>
+<dt><strong><code>tmp</code></strong> :&ensp;<code>np.array</code></dt>
 <dd>Clustering data from <code>image</code></dd>
 </dl></div>
 <details class="source">
@@ -1011,7 +1018,7 @@ building</dd>
     Parameters
     ----------
     image : MILWRM.MxIF.img
-        AnnData object containing Visium data
+        Image object containing MxIF data
     features : list of int or str
         Indices or names of MxIF channels to use for tissue labeling
     downsample_factor : int
@@ -1024,7 +1031,9 @@ building</dd>
 
     Returns
     -------
-    pd.DataFrame
+    image : MILWRM.MxIF.img
+        Image object containing MxIF data downsampled and blurred
+    tmp : np.array
         Clustering data from `image`
     &#34;&#34;&#34;
     # downsample image
@@ -1034,7 +1043,6 @@ building</dd>
     # blur downsampled image
     image.img = gaussian(image.img, sigma=sigma, multichannel=True)
     # get list of int for features
-    features = features
     if isinstance(features, int):  # force features into list if single integer
         features = [features]
     if isinstance(features, str):  # force features into int if single string
@@ -1050,7 +1058,8 @@ building</dd>
     tmp = np.column_stack(tmp)
     # select cluster data
     i = np.random.choice(tmp.shape[0], int(tmp.shape[0] * fract))
-    tmp = tmp[np.ix_(i, features)]</code></pre>
+    tmp = tmp[np.ix_(i, features)]
+    return image, tmp</code></pre>
 </details>
 </dd>
 <dt id="MILWRM.MILWRM.prep_data_single_sample_st"><code class="name flex">
@@ -1266,12 +1275,15 @@ tissue regions</dd>
                 len(self.images),
             )
         )
-        cluster_data = Parallel(n_jobs=n_jobs, verbose=10)(
+        out = Parallel(n_jobs=n_jobs, verbose=10)(
             delayed(prep_data_single_sample_mxif)(
                 image, features, downsample_factor, sigma, fract
             )
             for image in self.images
         )
+        # unpack results from parallel process
+        self.images = [x[0] for x in out]
+        cluster_data = [x[1] for x in out]
         # concatenate blurred features into cluster_data df for cluster training
         self.cluster_data = np.row_stack(cluster_data)
         # perform min-max scaling on final cluster data
@@ -1470,12 +1482,15 @@ training. Parameters are also captured as attributes for posterity.</p></div>
             len(self.images),
         )
     )
-    cluster_data = Parallel(n_jobs=n_jobs, verbose=10)(
+    out = Parallel(n_jobs=n_jobs, verbose=10)(
         delayed(prep_data_single_sample_mxif)(
             image, features, downsample_factor, sigma, fract
         )
         for image in self.images
     )
+    # unpack results from parallel process
+    self.images = [x[0] for x in out]
+    cluster_data = [x[1] for x in out]
     # concatenate blurred features into cluster_data df for cluster training
     self.cluster_data = np.row_stack(cluster_data)
     # perform min-max scaling on final cluster data

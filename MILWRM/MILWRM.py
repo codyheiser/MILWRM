@@ -171,7 +171,7 @@ def prep_data_single_sample_mxif(image, features, downsample_factor, sigma, frac
     Parameters
     ----------
     image : MILWRM.MxIF.img
-        AnnData object containing Visium data
+        Image object containing MxIF data
     features : list of int or str
         Indices or names of MxIF channels to use for tissue labeling
     downsample_factor : int
@@ -184,7 +184,9 @@ def prep_data_single_sample_mxif(image, features, downsample_factor, sigma, frac
 
     Returns
     -------
-    pd.DataFrame
+    image : MILWRM.MxIF.img
+        Image object containing MxIF data downsampled and blurred
+    tmp : np.array
         Clustering data from `image`
     """
     # downsample image
@@ -194,7 +196,6 @@ def prep_data_single_sample_mxif(image, features, downsample_factor, sigma, frac
     # blur downsampled image
     image.img = gaussian(image.img, sigma=sigma, multichannel=True)
     # get list of int for features
-    features = features
     if isinstance(features, int):  # force features into list if single integer
         features = [features]
     if isinstance(features, str):  # force features into int if single string
@@ -211,6 +212,7 @@ def prep_data_single_sample_mxif(image, features, downsample_factor, sigma, frac
     # select cluster data
     i = np.random.choice(tmp.shape[0], int(tmp.shape[0] * fract))
     tmp = tmp[np.ix_(i, features)]
+    return image, tmp
 
 
 def add_tissue_ID_single_sample_mxif(image, features, kmeans):
@@ -700,12 +702,15 @@ class mxif_labeler(tissue_labeler):
                 len(self.images),
             )
         )
-        cluster_data = Parallel(n_jobs=n_jobs, verbose=10)(
+        out = Parallel(n_jobs=n_jobs, verbose=10)(
             delayed(prep_data_single_sample_mxif)(
                 image, features, downsample_factor, sigma, fract
             )
             for image in self.images
         )
+        # unpack results from parallel process
+        self.images = [x[0] for x in out]
+        cluster_data = [x[1] for x in out]
         # concatenate blurred features into cluster_data df for cluster training
         self.cluster_data = np.row_stack(cluster_data)
         # perform min-max scaling on final cluster data
