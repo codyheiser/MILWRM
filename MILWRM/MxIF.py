@@ -138,7 +138,7 @@ class img:
                 self.img.shape[0],
                 self.img.shape[1],
             )
-            + "{} image channels:\n\t{}".format(self.ch)
+            + "{} image channels:\n\t{}".format(self.n_ch, self.ch)
         )
         if self.mask is not None:
             descr += "\n\ntissue mask {} of {} and shape {}px x {}px".format(
