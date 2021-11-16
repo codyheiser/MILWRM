@@ -159,6 +159,25 @@ class img:
             ), &#34;Shape of mask must match the first two dimensions of img_arr&#34;
         self.mask = mask  # set mask attribute, regardless of value given
 
+    def __repr__(self) -&gt; str:
+        descr = (
+            &#34;img object with {} of {} and shape {}px x {}px\n&#34;.format(
+                type(self.img),
+                self.img.dtype,
+                self.img.shape[0],
+                self.img.shape[1],
+            )
+            + &#34;{} image channels:\n\t{}&#34;.format(self.n_ch, self.ch)
+        )
+        if self.mask is not None:
+            descr += &#34;\n\ntissue mask {} of {} and shape {}px x {}px&#34;.format(
+                type(self.mask),
+                self.mask.dtype,
+                self.mask.shape[0],
+                self.mask.shape[1],
+            )
+        return descr
+
     @classmethod
     def from_tiffs(cls, tiffdir, channels, common_strings=None, mask=None):
         &#34;&#34;&#34;
@@ -329,6 +348,11 @@ class img:
             assert self.mask is not None, &#34;No tissue mask available&#34;
             for i in range(self.img.shape[2]):
                 fact = self.img[:, :, i][self.mask != 0].mean()
+                self.img[:, :, i] = np.log10(self.img[:, :, i] / fact + pseudoval)
+        else:
+            print(&#34;WARNING: Performing normalization without a tissue mask.&#34;)
+            for i in range(self.img.shape[2]):
+                fact = self.img[:, :, i].mean()
                 self.img[:, :, i] = np.log10(self.img[:, :, i] / fact + pseudoval)
 
     def downsample(self, fact, func=np.mean):
@@ -680,6 +704,25 @@ class img:
             ), &#34;Shape of mask must match the first two dimensions of img_arr&#34;
         self.mask = mask  # set mask attribute, regardless of value given
 
+    def __repr__(self) -&gt; str:
+        descr = (
+            &#34;img object with {} of {} and shape {}px x {}px\n&#34;.format(
+                type(self.img),
+                self.img.dtype,
+                self.img.shape[0],
+                self.img.shape[1],
+            )
+            + &#34;{} image channels:\n\t{}&#34;.format(self.n_ch, self.ch)
+        )
+        if self.mask is not None:
+            descr += &#34;\n\ntissue mask {} of {} and shape {}px x {}px&#34;.format(
+                type(self.mask),
+                self.mask.dtype,
+                self.mask.shape[0],
+                self.mask.shape[1],
+            )
+        return descr
+
     @classmethod
     def from_tiffs(cls, tiffdir, channels, common_strings=None, mask=None):
         &#34;&#34;&#34;
@@ -850,6 +893,11 @@ class img:
             assert self.mask is not None, &#34;No tissue mask available&#34;
             for i in range(self.img.shape[2]):
                 fact = self.img[:, :, i][self.mask != 0].mean()
+                self.img[:, :, i] = np.log10(self.img[:, :, i] / fact + pseudoval)
+        else:
+            print(&#34;WARNING: Performing normalization without a tissue mask.&#34;)
+            for i in range(self.img.shape[2]):
+                fact = self.img[:, :, i].mean()
                 self.img[:, :, i] = np.log10(self.img[:, :, i] / fact + pseudoval)
 
     def downsample(self, fact, func=np.mean):
@@ -1275,6 +1323,11 @@ with zeros</dd>
         assert self.mask is not None, &#34;No tissue mask available&#34;
         for i in range(self.img.shape[2]):
             fact = self.img[:, :, i][self.mask != 0].mean()
+            self.img[:, :, i] = np.log10(self.img[:, :, i] / fact + pseudoval)
+    else:
+        print(&#34;WARNING: Performing normalization without a tissue mask.&#34;)
+        for i in range(self.img.shape[2]):
+            fact = self.img[:, :, i].mean()
             self.img[:, :, i] = np.log10(self.img[:, :, i] / fact + pseudoval)</code></pre>
 </details>
 </dd>
