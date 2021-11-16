@@ -131,7 +131,7 @@ class img:
         self.mask = mask  # set mask attribute, regardless of value given
 
     def __repr__(self) -> str:
-        descr = "img object in {} format of shape {}px x {}px with {} channels:\n\
+        descr = "img object with {} of shape {}px x {}px\n{} image channels:\n\
         {}\n".format(
             type(self.img),
             self.img.shape[0],
@@ -140,7 +140,7 @@ class img:
             self.ch,
         )
         if self.mask is not None:
-            descr += "\nmask of shape {}px x {}px".format(
+            descr += "\ntissue mask of shape {}px x {}px".format(
                 self.mask.shape[0], self.mask.shape[1]
             )
         return descr
