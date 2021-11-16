@@ -130,6 +130,23 @@ class img:
             ), "Shape of mask must match the first two dimensions of img_arr"
         self.mask = mask  # set mask attribute, regardless of value given
 
+    def _gen_repr(self) -> str:
+        descr = "img object in {} format of shape {}px x {}px with {} channels:\n\
+        {}\n".format(
+            type(self.img),
+            self.img.shape[0],
+            self.img.shape[1],
+            self.img.shape[2],
+            self.ch,
+        )
+        if self.mask is not None:
+            descr += "\nmask of shape {}px x {}px".format(
+                self.mask.shape[0], self.mask.shape[1]
+            )
+
+    def __repr__(self) -> str:
+        return self._gen_repr()
+
     @classmethod
     def from_tiffs(cls, tiffdir, channels, common_strings=None, mask=None):
         """
@@ -300,6 +317,11 @@ class img:
             assert self.mask is not None, "No tissue mask available"
             for i in range(self.img.shape[2]):
                 fact = self.img[:, :, i][self.mask != 0].mean()
+                self.img[:, :, i] = np.log10(self.img[:, :, i] / fact + pseudoval)
+        else:
+            print("WARNING: Performing normalization without a tissue mask.")
+            for i in range(self.img.shape[2]):
+                fact = self.img[:, :, i].mean()
                 self.img[:, :, i] = np.log10(self.img[:, :, i] / fact + pseudoval)
 
     def downsample(self, fact, func=np.mean):
