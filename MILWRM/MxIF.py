@@ -130,7 +130,7 @@ class img:
             ), "Shape of mask must match the first two dimensions of img_arr"
         self.mask = mask  # set mask attribute, regardless of value given
 
-    def _gen_repr(self) -> str:
+    def __repr__(self) -> str:
         descr = "img object in {} format of shape {}px x {}px with {} channels:\n\
         {}\n".format(
             type(self.img),
@@ -143,9 +143,7 @@ class img:
             descr += "\nmask of shape {}px x {}px".format(
                 self.mask.shape[0], self.mask.shape[1]
             )
-
-    def __repr__(self) -> str:
-        return self._gen_repr()
+        return descr
 
     @classmethod
     def from_tiffs(cls, tiffdir, channels, common_strings=None, mask=None):
