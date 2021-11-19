@@ -22,70 +22,100 @@ def checktype(obj):
     return bool(obj) and all(isinstance(elem, str) for elem in obj)
 
 
-def clip_values(img, channels=None):
+def clip_values(image, channels=None):
     """
     Clip outlier values from specified channels of an image
 
     Parameters
     ----------
-    img : np.ndarray
+    image : np.ndarray
         The image
     channels : tuple of int or None, optional (default=`None`)
         Channels to clip on img.shape[2]. If None, clip values in all channels.
 
     Returns
     -------
-    img_cp : np.ndarray
+    image_cp : np.ndarray
         Image with clipped values
     """
-    img_cp = img.copy()
-    if channels is None or img.ndim == 2:
-        vmin, vmax = np.nanpercentile(img_cp[img_cp != -99999], q=(0.5, 99.5))
+    image_cp = image.copy()
+    if channels is None or image.ndim == 2:
+        vmin, vmax = np.nanpercentile(image_cp[image_cp != -99999], q=(0.5, 99.5))
         plane_clip = exposure.rescale_intensity(
-            img_cp,
+            image_cp,
             in_range=(vmin, vmax),
             out_range=np.float32,
         )
-        img_cp = plane_clip
+        image_cp = plane_clip
     else:
         for z in channels:
-            plane = img_cp[:, :, z].copy()
+            plane = image_cp[:, :, z].copy()
             vmin, vmax = np.nanpercentile(plane, q=(0.5, 99.5))
             plane_clip = exposure.rescale_intensity(
                 plane,
                 in_range=(vmin, vmax),
                 out_range=np.float32,
             )
-            img_cp[:, :, z] = plane_clip
-    return img_cp
+            image_cp[:, :, z] = plane_clip
+    return image_cp
 
 
-def scale_rgb(img, channels=None):
+def scale_rgb(image, channels=None):
     """
     Scale to [0.0, 1.0] for RGB image
 
     Parameters
     ----------
-    img : np.ndarray
+    image : np.ndarray
         The image
     channels : tuple of int or None, optional (default=`None`)
         Channels to scale on img.shape[2]. If None, scale values in all channels.
 
     Returns
     -------
-    img_cp : np.ndarray
+    image_cp : np.ndarray
         Image with scaled values
     """
-    img_cp = img.copy()
-    if channels is None or img.ndim == 2:
-        img_cp = img_cp - img_cp.min()
-        img_cp = img_cp / img_cp.max()
+    image_cp = image.copy()
+    if channels is None or image.ndim == 2:
+        image_cp = image_cp - image_cp.min()
+        image_cp = image_cp / image_cp.max()
     else:
         for z in channels:
-            plane = img_cp[:, :, z].copy()
+            plane = image_cp[:, :, z].copy()
             plane = plane - plane.min()
-            img_cp[:, :, z] = plane / plane.max()
-    return img_cp
+            image_cp[:, :, z] = plane / plane.max()
+    return image_cp
+
+
+def CLAHE(image, channels=None, **kwargs):
+    """
+    Contrast Limited Adaptive Histogram Equalization (CLAHE)
+
+    Parameters
+    ----------
+    image : np.ndarray
+        The image
+    channels : tuple of int or None, optional (default=`None`)
+        Channels to adjust on image.shape[2]. If None, perform CLAHE in all channels.
+    **kwargs
+        Keyword arguments to pass to `skimage.exposure.equalize_adapthist`
+
+    Returns
+    -------
+    image_cp : np.ndarray
+        Image with exposure-adjusted values
+    """
+    image_cp = image.copy()
+    if image.ndim == 2:
+        image_cp = exposure.equalize_adapthist(image_cp, **kwargs)
+    elif channels is None:
+        for z in range(image_cp.shape[2]):
+            image_cp[:, :, z] = exposure.equalize_adapthist(image_cp[:, :, z], **kwargs)
+    else:
+        for z in channels:
+            image_cp[:, :, z] = exposure.equalize_adapthist(image_cp[:, :, z], **kwargs)
+    return image_cp
 
 
 class img:
@@ -131,6 +161,7 @@ class img:
         self.mask = mask  # set mask attribute, regardless of value given
 
     def __repr__(self) -> str:
+        """Representation of contents of img object"""
         descr = (
             "img object with {} of {} and shape {}px x {}px\n".format(
                 type(self.img),
@@ -148,6 +179,17 @@ class img:
                 self.mask.shape[1],
             )
         return descr
+
+    def copy(self) -> "img":
+        """Full copy of img object"""
+        new = {}
+        for key in ["img", "ch", "mask"]:
+            attr = self.__getattribute__(key)
+            if attr is not None:
+                new[key] = attr.copy()
+            else:
+                new[key] = None
+        return img(img_arr=new["img"], channels=new["ch"], mask=new["mask"])
 
     @classmethod
     def from_tiffs(cls, tiffdir, channels, common_strings=None, mask=None):
@@ -270,7 +312,7 @@ class img:
 
     def clip(self, **kwargs):
         """
-        Clips outlier values
+        Clips outlier values and rescales intensities
 
         Parameters
         ----------
@@ -297,6 +339,21 @@ class img:
         Scales intensities of `self.img`
         """
         self.img = scale_rgb(self.img, **kwargs)
+
+    def equalize_hist(self, **kwargs):
+        """
+        Contrast Limited Adaptive Histogram Equalization (CLAHE)
+
+        Parameters
+        ----------
+        **kwargs
+            Keyword args to pass to `CLAHE()` function
+
+        Returns
+        -------
+        `self.img` is updated with exposure-adjusted values
+        """
+        self.img = CLAHE(self.img, **kwargs)
 
     def log_normalize(self, pseudoval=1, mask=True):
         """

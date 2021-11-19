@@ -946,6 +946,7 @@ if <code>distance_trim==False</code>.</dd>
         self.mask = mask  # set mask attribute, regardless of value given
 
     def __repr__(self) -&gt; str:
+        &#34;&#34;&#34;Representation of contents of img object&#34;&#34;&#34;
         descr = (
             &#34;img object with {} of {} and shape {}px x {}px\n&#34;.format(
                 type(self.img),
@@ -963,6 +964,17 @@ if <code>distance_trim==False</code>.</dd>
                 self.mask.shape[1],
             )
         return descr
+
+    def copy(self) -&gt; &#34;img&#34;:
+        &#34;&#34;&#34;Full copy of img object&#34;&#34;&#34;
+        new = {}
+        for key in [&#34;img&#34;, &#34;ch&#34;, &#34;mask&#34;]:
+            attr = self.__getattribute__(key)
+            if attr is not None:
+                new[key] = attr.copy()
+            else:
+                new[key] = None
+        return img(img_arr=new[&#34;img&#34;], channels=new[&#34;ch&#34;], mask=new[&#34;mask&#34;])
 
     @classmethod
     def from_tiffs(cls, tiffdir, channels, common_strings=None, mask=None):
@@ -1085,7 +1097,7 @@ if <code>distance_trim==False</code>.</dd>
 
     def clip(self, **kwargs):
         &#34;&#34;&#34;
-        Clips outlier values
+        Clips outlier values and rescales intensities
 
         Parameters
         ----------
@@ -1112,6 +1124,21 @@ if <code>distance_trim==False</code>.</dd>
         Scales intensities of `self.img`
         &#34;&#34;&#34;
         self.img = scale_rgb(self.img, **kwargs)
+
+    def equalize_hist(self, **kwargs):
+        &#34;&#34;&#34;
+        Contrast Limited Adaptive Histogram Equalization (CLAHE)
+
+        Parameters
+        ----------
+        **kwargs
+            Keyword args to pass to `CLAHE()` function
+
+        Returns
+        -------
+        `self.img` is updated with exposure-adjusted values
+        &#34;&#34;&#34;
+        self.img = CLAHE(self.img, **kwargs)
 
     def log_normalize(self, pseudoval=1, mask=True):
         &#34;&#34;&#34;
@@ -1446,7 +1473,7 @@ def from_tiffs(cls, tiffdir, channels, common_strings=None, mask=None):
 <span>def <span class="ident">clip</span></span>(<span>self, **kwargs)</span>
 </code></dt>
 <dd>
-<div class="desc"><p>Clips outlier values</p>
+<div class="desc"><p>Clips outlier values and rescales intensities</p>
 <h2 id="parameters">Parameters</h2>
 <dl>
 <dt><strong><code>**kwargs</code></strong></dt>
@@ -1460,7 +1487,7 @@ def from_tiffs(cls, tiffdir, channels, common_strings=None, mask=None):
 </summary>
 <pre><code class="python">def clip(self, **kwargs):
     &#34;&#34;&#34;
-    Clips outlier values
+    Clips outlier values and rescales intensities
 
     Parameters
     ----------
@@ -1472,6 +1499,27 @@ def from_tiffs(cls, tiffdir, channels, common_strings=None, mask=None):
     Clips outlier values from `self.img`
     &#34;&#34;&#34;
     self.img = clip_values(self.img, **kwargs)</code></pre>
+</details>
+</dd>
+<dt id="MILWRM.img.copy"><code class="name flex">
+<span>def <span class="ident">copy</span></span>(<span>self) ‑> <a title="MILWRM.MxIF.img" href="MxIF.html#MILWRM.MxIF.img">img</a></span>
+</code></dt>
+<dd>
+<div class="desc"><p>Full copy of img object</p></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def copy(self) -&gt; &#34;img&#34;:
+    &#34;&#34;&#34;Full copy of img object&#34;&#34;&#34;
+    new = {}
+    for key in [&#34;img&#34;, &#34;ch&#34;, &#34;mask&#34;]:
+        attr = self.__getattribute__(key)
+        if attr is not None:
+            new[key] = attr.copy()
+        else:
+            new[key] = None
+    return img(img_arr=new[&#34;img&#34;], channels=new[&#34;ch&#34;], mask=new[&#34;mask&#34;])</code></pre>
 </details>
 </dd>
 <dt id="MILWRM.img.downsample"><code class="name flex">
@@ -1521,6 +1569,38 @@ each pixel</p>
         )
     # downsample image
     self.img = block_reduce(self.img, block_size=(fact, fact, 1), func=func, cval=0)</code></pre>
+</details>
+</dd>
+<dt id="MILWRM.img.equalize_hist"><code class="name flex">
+<span>def <span class="ident">equalize_hist</span></span>(<span>self, **kwargs)</span>
+</code></dt>
+<dd>
+<div class="desc"><p>Contrast Limited Adaptive Histogram Equalization (CLAHE)</p>
+<h2 id="parameters">Parameters</h2>
+<dl>
+<dt><strong><code>**kwargs</code></strong></dt>
+<dd>Keyword args to pass to <code>CLAHE()</code> function</dd>
+</dl>
+<h2 id="returns">Returns</h2>
+<p><code>self.img</code> is updated with exposure-adjusted values</p></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def equalize_hist(self, **kwargs):
+    &#34;&#34;&#34;
+    Contrast Limited Adaptive Histogram Equalization (CLAHE)
+
+    Parameters
+    ----------
+    **kwargs
+        Keyword args to pass to `CLAHE()` function
+
+    Returns
+    -------
+    `self.img` is updated with exposure-adjusted values
+    &#34;&#34;&#34;
+    self.img = CLAHE(self.img, **kwargs)</code></pre>
 </details>
 </dd>
 <dt id="MILWRM.img.log_normalize"><code class="name flex">
@@ -2529,7 +2609,9 @@ Parameters are also captured as attributes for posterity.</p></div>
 <h4><code><a title="MILWRM.img" href="#MILWRM.img">img</a></code></h4>
 <ul class="two-column">
 <li><code><a title="MILWRM.img.clip" href="#MILWRM.img.clip">clip</a></code></li>
+<li><code><a title="MILWRM.img.copy" href="#MILWRM.img.copy">copy</a></code></li>
 <li><code><a title="MILWRM.img.downsample" href="#MILWRM.img.downsample">downsample</a></code></li>
+<li><code><a title="MILWRM.img.equalize_hist" href="#MILWRM.img.equalize_hist">equalize_hist</a></code></li>
 <li><code><a title="MILWRM.img.from_npz" href="#MILWRM.img.from_npz">from_npz</a></code></li>
 <li><code><a title="MILWRM.img.from_tiffs" href="#MILWRM.img.from_tiffs">from_tiffs</a></code></li>
 <li><code><a title="MILWRM.img.log_normalize" href="#MILWRM.img.log_normalize">log_normalize</a></code></li>

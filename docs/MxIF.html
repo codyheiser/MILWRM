@@ -51,70 +51,100 @@ def checktype(obj):
     return bool(obj) and all(isinstance(elem, str) for elem in obj)
 
 
-def clip_values(img, channels=None):
+def clip_values(image, channels=None):
     &#34;&#34;&#34;
     Clip outlier values from specified channels of an image
 
     Parameters
     ----------
-    img : np.ndarray
+    image : np.ndarray
         The image
     channels : tuple of int or None, optional (default=`None`)
         Channels to clip on img.shape[2]. If None, clip values in all channels.
 
     Returns
     -------
-    img_cp : np.ndarray
+    image_cp : np.ndarray
         Image with clipped values
     &#34;&#34;&#34;
-    img_cp = img.copy()
-    if channels is None or img.ndim == 2:
-        vmin, vmax = np.nanpercentile(img_cp[img_cp != -99999], q=(0.5, 99.5))
+    image_cp = image.copy()
+    if channels is None or image.ndim == 2:
+        vmin, vmax = np.nanpercentile(image_cp[image_cp != -99999], q=(0.5, 99.5))
         plane_clip = exposure.rescale_intensity(
-            img_cp,
+            image_cp,
             in_range=(vmin, vmax),
             out_range=np.float32,
         )
-        img_cp = plane_clip
+        image_cp = plane_clip
     else:
         for z in channels:
-            plane = img_cp[:, :, z].copy()
+            plane = image_cp[:, :, z].copy()
             vmin, vmax = np.nanpercentile(plane, q=(0.5, 99.5))
             plane_clip = exposure.rescale_intensity(
                 plane,
                 in_range=(vmin, vmax),
                 out_range=np.float32,
             )
-            img_cp[:, :, z] = plane_clip
-    return img_cp
+            image_cp[:, :, z] = plane_clip
+    return image_cp
 
 
-def scale_rgb(img, channels=None):
+def scale_rgb(image, channels=None):
     &#34;&#34;&#34;
     Scale to [0.0, 1.0] for RGB image
 
     Parameters
     ----------
-    img : np.ndarray
+    image : np.ndarray
         The image
     channels : tuple of int or None, optional (default=`None`)
         Channels to scale on img.shape[2]. If None, scale values in all channels.
 
     Returns
     -------
-    img_cp : np.ndarray
+    image_cp : np.ndarray
         Image with scaled values
     &#34;&#34;&#34;
-    img_cp = img.copy()
-    if channels is None or img.ndim == 2:
-        img_cp = img_cp - img_cp.min()
-        img_cp = img_cp / img_cp.max()
+    image_cp = image.copy()
+    if channels is None or image.ndim == 2:
+        image_cp = image_cp - image_cp.min()
+        image_cp = image_cp / image_cp.max()
     else:
         for z in channels:
-            plane = img_cp[:, :, z].copy()
+            plane = image_cp[:, :, z].copy()
             plane = plane - plane.min()
-            img_cp[:, :, z] = plane / plane.max()
-    return img_cp
+            image_cp[:, :, z] = plane / plane.max()
+    return image_cp
+
+
+def CLAHE(image, channels=None, **kwargs):
+    &#34;&#34;&#34;
+    Contrast Limited Adaptive Histogram Equalization (CLAHE)
+
+    Parameters
+    ----------
+    image : np.ndarray
+        The image
+    channels : tuple of int or None, optional (default=`None`)
+        Channels to adjust on image.shape[2]. If None, perform CLAHE in all channels.
+    **kwargs
+        Keyword arguments to pass to `skimage.exposure.equalize_adapthist`
+
+    Returns
+    -------
+    image_cp : np.ndarray
+        Image with exposure-adjusted values
+    &#34;&#34;&#34;
+    image_cp = image.copy()
+    if image.ndim == 2:
+        image_cp = exposure.equalize_adapthist(image_cp, **kwargs)
+    elif channels is None:
+        for z in range(image_cp.shape[2]):
+            image_cp[:, :, z] = exposure.equalize_adapthist(image_cp[:, :, z], **kwargs)
+    else:
+        for z in channels:
+            image_cp[:, :, z] = exposure.equalize_adapthist(image_cp[:, :, z], **kwargs)
+    return image_cp
 
 
 class img:
@@ -160,6 +190,7 @@ class img:
         self.mask = mask  # set mask attribute, regardless of value given
 
     def __repr__(self) -&gt; str:
+        &#34;&#34;&#34;Representation of contents of img object&#34;&#34;&#34;
         descr = (
             &#34;img object with {} of {} and shape {}px x {}px\n&#34;.format(
                 type(self.img),
@@ -177,6 +208,17 @@ class img:
                 self.mask.shape[1],
             )
         return descr
+
+    def copy(self) -&gt; &#34;img&#34;:
+        &#34;&#34;&#34;Full copy of img object&#34;&#34;&#34;
+        new = {}
+        for key in [&#34;img&#34;, &#34;ch&#34;, &#34;mask&#34;]:
+            attr = self.__getattribute__(key)
+            if attr is not None:
+                new[key] = attr.copy()
+            else:
+                new[key] = None
+        return img(img_arr=new[&#34;img&#34;], channels=new[&#34;ch&#34;], mask=new[&#34;mask&#34;])
 
     @classmethod
     def from_tiffs(cls, tiffdir, channels, common_strings=None, mask=None):
@@ -299,7 +341,7 @@ class img:
 
     def clip(self, **kwargs):
         &#34;&#34;&#34;
-        Clips outlier values
+        Clips outlier values and rescales intensities
 
         Parameters
         ----------
@@ -326,6 +368,21 @@ class img:
         Scales intensities of `self.img`
         &#34;&#34;&#34;
         self.img = scale_rgb(self.img, **kwargs)
+
+    def equalize_hist(self, **kwargs):
+        &#34;&#34;&#34;
+        Contrast Limited Adaptive Histogram Equalization (CLAHE)
+
+        Parameters
+        ----------
+        **kwargs
+            Keyword args to pass to `CLAHE()` function
+
+        Returns
+        -------
+        `self.img` is updated with exposure-adjusted values
+        &#34;&#34;&#34;
+        self.img = CLAHE(self.img, **kwargs)
 
     def log_normalize(self, pseudoval=1, mask=True):
         &#34;&#34;&#34;
@@ -514,6 +571,59 @@ class img:
 <section>
 <h2 class="section-title" id="header-functions">Functions</h2>
 <dl>
+<dt id="MILWRM.MxIF.CLAHE"><code class="name flex">
+<span>def <span class="ident">CLAHE</span></span>(<span>image, channels=None, **kwargs)</span>
+</code></dt>
+<dd>
+<div class="desc"><p>Contrast Limited Adaptive Histogram Equalization (CLAHE)</p>
+<h2 id="parameters">Parameters</h2>
+<dl>
+<dt><strong><code>image</code></strong> :&ensp;<code>np.ndarray</code></dt>
+<dd>The image</dd>
+<dt><strong><code>channels</code></strong> :&ensp;<code>tuple</code> of <code>int</code> or <code>None</code>, optional <code>(default=</code>None<code>)</code></dt>
+<dd>Channels to adjust on image.shape[2]. If None, perform CLAHE in all channels.</dd>
+<dt><strong><code>**kwargs</code></strong></dt>
+<dd>Keyword arguments to pass to <code>skimage.exposure.equalize_adapthist</code></dd>
+</dl>
+<h2 id="returns">Returns</h2>
+<dl>
+<dt><strong><code>image_cp</code></strong> :&ensp;<code>np.ndarray</code></dt>
+<dd>Image with exposure-adjusted values</dd>
+</dl></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def CLAHE(image, channels=None, **kwargs):
+    &#34;&#34;&#34;
+    Contrast Limited Adaptive Histogram Equalization (CLAHE)
+
+    Parameters
+    ----------
+    image : np.ndarray
+        The image
+    channels : tuple of int or None, optional (default=`None`)
+        Channels to adjust on image.shape[2]. If None, perform CLAHE in all channels.
+    **kwargs
+        Keyword arguments to pass to `skimage.exposure.equalize_adapthist`
+
+    Returns
+    -------
+    image_cp : np.ndarray
+        Image with exposure-adjusted values
+    &#34;&#34;&#34;
+    image_cp = image.copy()
+    if image.ndim == 2:
+        image_cp = exposure.equalize_adapthist(image_cp, **kwargs)
+    elif channels is None:
+        for z in range(image_cp.shape[2]):
+            image_cp[:, :, z] = exposure.equalize_adapthist(image_cp[:, :, z], **kwargs)
+    else:
+        for z in channels:
+            image_cp[:, :, z] = exposure.equalize_adapthist(image_cp[:, :, z], **kwargs)
+    return image_cp</code></pre>
+</details>
+</dd>
 <dt id="MILWRM.MxIF.checktype"><code class="name flex">
 <span>def <span class="ident">checktype</span></span>(<span>obj)</span>
 </code></dt>
@@ -528,111 +638,111 @@ class img:
 </details>
 </dd>
 <dt id="MILWRM.MxIF.clip_values"><code class="name flex">
-<span>def <span class="ident">clip_values</span></span>(<span>img, channels=None)</span>
+<span>def <span class="ident">clip_values</span></span>(<span>image, channels=None)</span>
 </code></dt>
 <dd>
 <div class="desc"><p>Clip outlier values from specified channels of an image</p>
 <h2 id="parameters">Parameters</h2>
 <dl>
-<dt><strong><code>img</code></strong> :&ensp;<code>np.ndarray</code></dt>
+<dt><strong><code>image</code></strong> :&ensp;<code>np.ndarray</code></dt>
 <dd>The image</dd>
 <dt><strong><code>channels</code></strong> :&ensp;<code>tuple</code> of <code>int</code> or <code>None</code>, optional <code>(default=</code>None<code>)</code></dt>
 <dd>Channels to clip on img.shape[2]. If None, clip values in all channels.</dd>
 </dl>
 <h2 id="returns">Returns</h2>
 <dl>
-<dt><strong><code>img_cp</code></strong> :&ensp;<code>np.ndarray</code></dt>
+<dt><strong><code>image_cp</code></strong> :&ensp;<code>np.ndarray</code></dt>
 <dd>Image with clipped values</dd>
 </dl></div>
 <details class="source">
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">def clip_values(img, channels=None):
+<pre><code class="python">def clip_values(image, channels=None):
     &#34;&#34;&#34;
     Clip outlier values from specified channels of an image
 
     Parameters
     ----------
-    img : np.ndarray
+    image : np.ndarray
         The image
     channels : tuple of int or None, optional (default=`None`)
         Channels to clip on img.shape[2]. If None, clip values in all channels.
 
     Returns
     -------
-    img_cp : np.ndarray
+    image_cp : np.ndarray
         Image with clipped values
     &#34;&#34;&#34;
-    img_cp = img.copy()
-    if channels is None or img.ndim == 2:
-        vmin, vmax = np.nanpercentile(img_cp[img_cp != -99999], q=(0.5, 99.5))
+    image_cp = image.copy()
+    if channels is None or image.ndim == 2:
+        vmin, vmax = np.nanpercentile(image_cp[image_cp != -99999], q=(0.5, 99.5))
         plane_clip = exposure.rescale_intensity(
-            img_cp,
+            image_cp,
             in_range=(vmin, vmax),
             out_range=np.float32,
         )
-        img_cp = plane_clip
+        image_cp = plane_clip
     else:
         for z in channels:
-            plane = img_cp[:, :, z].copy()
+            plane = image_cp[:, :, z].copy()
             vmin, vmax = np.nanpercentile(plane, q=(0.5, 99.5))
             plane_clip = exposure.rescale_intensity(
                 plane,
                 in_range=(vmin, vmax),
                 out_range=np.float32,
             )
-            img_cp[:, :, z] = plane_clip
-    return img_cp</code></pre>
+            image_cp[:, :, z] = plane_clip
+    return image_cp</code></pre>
 </details>
 </dd>
 <dt id="MILWRM.MxIF.scale_rgb"><code class="name flex">
-<span>def <span class="ident">scale_rgb</span></span>(<span>img, channels=None)</span>
+<span>def <span class="ident">scale_rgb</span></span>(<span>image, channels=None)</span>
 </code></dt>
 <dd>
 <div class="desc"><p>Scale to [0.0, 1.0] for RGB image</p>
 <h2 id="parameters">Parameters</h2>
 <dl>
-<dt><strong><code>img</code></strong> :&ensp;<code>np.ndarray</code></dt>
+<dt><strong><code>image</code></strong> :&ensp;<code>np.ndarray</code></dt>
 <dd>The image</dd>
 <dt><strong><code>channels</code></strong> :&ensp;<code>tuple</code> of <code>int</code> or <code>None</code>, optional <code>(default=</code>None<code>)</code></dt>
 <dd>Channels to scale on img.shape[2]. If None, scale values in all channels.</dd>
 </dl>
 <h2 id="returns">Returns</h2>
 <dl>
-<dt><strong><code>img_cp</code></strong> :&ensp;<code>np.ndarray</code></dt>
+<dt><strong><code>image_cp</code></strong> :&ensp;<code>np.ndarray</code></dt>
 <dd>Image with scaled values</dd>
 </dl></div>
 <details class="source">
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">def scale_rgb(img, channels=None):
+<pre><code class="python">def scale_rgb(image, channels=None):
     &#34;&#34;&#34;
     Scale to [0.0, 1.0] for RGB image
 
     Parameters
     ----------
-    img : np.ndarray
+    image : np.ndarray
         The image
     channels : tuple of int or None, optional (default=`None`)
         Channels to scale on img.shape[2]. If None, scale values in all channels.
 
     Returns
     -------
-    img_cp : np.ndarray
+    image_cp : np.ndarray
         Image with scaled values
     &#34;&#34;&#34;
-    img_cp = img.copy()
-    if channels is None or img.ndim == 2:
-        img_cp = img_cp - img_cp.min()
-        img_cp = img_cp / img_cp.max()
+    image_cp = image.copy()
+    if channels is None or image.ndim == 2:
+        image_cp = image_cp - image_cp.min()
+        image_cp = image_cp / image_cp.max()
     else:
         for z in channels:
-            plane = img_cp[:, :, z].copy()
+            plane = image_cp[:, :, z].copy()
             plane = plane - plane.min()
-            img_cp[:, :, z] = plane / plane.max()
-    return img_cp</code></pre>
+            image_cp[:, :, z] = plane / plane.max()
+    return image_cp</code></pre>
 </details>
 </dd>
 </dl>
@@ -705,6 +815,7 @@ class img:
         self.mask = mask  # set mask attribute, regardless of value given
 
     def __repr__(self) -&gt; str:
+        &#34;&#34;&#34;Representation of contents of img object&#34;&#34;&#34;
         descr = (
             &#34;img object with {} of {} and shape {}px x {}px\n&#34;.format(
                 type(self.img),
@@ -722,6 +833,17 @@ class img:
                 self.mask.shape[1],
             )
         return descr
+
+    def copy(self) -&gt; &#34;img&#34;:
+        &#34;&#34;&#34;Full copy of img object&#34;&#34;&#34;
+        new = {}
+        for key in [&#34;img&#34;, &#34;ch&#34;, &#34;mask&#34;]:
+            attr = self.__getattribute__(key)
+            if attr is not None:
+                new[key] = attr.copy()
+            else:
+                new[key] = None
+        return img(img_arr=new[&#34;img&#34;], channels=new[&#34;ch&#34;], mask=new[&#34;mask&#34;])
 
     @classmethod
     def from_tiffs(cls, tiffdir, channels, common_strings=None, mask=None):
@@ -844,7 +966,7 @@ class img:
 
     def clip(self, **kwargs):
         &#34;&#34;&#34;
-        Clips outlier values
+        Clips outlier values and rescales intensities
 
         Parameters
         ----------
@@ -871,6 +993,21 @@ class img:
         Scales intensities of `self.img`
         &#34;&#34;&#34;
         self.img = scale_rgb(self.img, **kwargs)
+
+    def equalize_hist(self, **kwargs):
+        &#34;&#34;&#34;
+        Contrast Limited Adaptive Histogram Equalization (CLAHE)
+
+        Parameters
+        ----------
+        **kwargs
+            Keyword args to pass to `CLAHE()` function
+
+        Returns
+        -------
+        `self.img` is updated with exposure-adjusted values
+        &#34;&#34;&#34;
+        self.img = CLAHE(self.img, **kwargs)
 
     def log_normalize(self, pseudoval=1, mask=True):
         &#34;&#34;&#34;
@@ -1205,7 +1342,7 @@ def from_tiffs(cls, tiffdir, channels, common_strings=None, mask=None):
 <span>def <span class="ident">clip</span></span>(<span>self, **kwargs)</span>
 </code></dt>
 <dd>
-<div class="desc"><p>Clips outlier values</p>
+<div class="desc"><p>Clips outlier values and rescales intensities</p>
 <h2 id="parameters">Parameters</h2>
 <dl>
 <dt><strong><code>**kwargs</code></strong></dt>
@@ -1219,7 +1356,7 @@ def from_tiffs(cls, tiffdir, channels, common_strings=None, mask=None):
 </summary>
 <pre><code class="python">def clip(self, **kwargs):
     &#34;&#34;&#34;
-    Clips outlier values
+    Clips outlier values and rescales intensities
 
     Parameters
     ----------
@@ -1231,6 +1368,27 @@ def from_tiffs(cls, tiffdir, channels, common_strings=None, mask=None):
     Clips outlier values from `self.img`
     &#34;&#34;&#34;
     self.img = clip_values(self.img, **kwargs)</code></pre>
+</details>
+</dd>
+<dt id="MILWRM.MxIF.img.copy"><code class="name flex">
+<span>def <span class="ident">copy</span></span>(<span>self) ‑> <a title="MILWRM.MxIF.img" href="#MILWRM.MxIF.img">img</a></span>
+</code></dt>
+<dd>
+<div class="desc"><p>Full copy of img object</p></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def copy(self) -&gt; &#34;img&#34;:
+    &#34;&#34;&#34;Full copy of img object&#34;&#34;&#34;
+    new = {}
+    for key in [&#34;img&#34;, &#34;ch&#34;, &#34;mask&#34;]:
+        attr = self.__getattribute__(key)
+        if attr is not None:
+            new[key] = attr.copy()
+        else:
+            new[key] = None
+    return img(img_arr=new[&#34;img&#34;], channels=new[&#34;ch&#34;], mask=new[&#34;mask&#34;])</code></pre>
 </details>
 </dd>
 <dt id="MILWRM.MxIF.img.downsample"><code class="name flex">
@@ -1280,6 +1438,38 @@ each pixel</p>
         )
     # downsample image
     self.img = block_reduce(self.img, block_size=(fact, fact, 1), func=func, cval=0)</code></pre>
+</details>
+</dd>
+<dt id="MILWRM.MxIF.img.equalize_hist"><code class="name flex">
+<span>def <span class="ident">equalize_hist</span></span>(<span>self, **kwargs)</span>
+</code></dt>
+<dd>
+<div class="desc"><p>Contrast Limited Adaptive Histogram Equalization (CLAHE)</p>
+<h2 id="parameters">Parameters</h2>
+<dl>
+<dt><strong><code>**kwargs</code></strong></dt>
+<dd>Keyword args to pass to <code><a title="MILWRM.MxIF.CLAHE" href="#MILWRM.MxIF.CLAHE">CLAHE()</a></code> function</dd>
+</dl>
+<h2 id="returns">Returns</h2>
+<p><code>self.img</code> is updated with exposure-adjusted values</p></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def equalize_hist(self, **kwargs):
+    &#34;&#34;&#34;
+    Contrast Limited Adaptive Histogram Equalization (CLAHE)
+
+    Parameters
+    ----------
+    **kwargs
+        Keyword args to pass to `CLAHE()` function
+
+    Returns
+    -------
+    `self.img` is updated with exposure-adjusted values
+    &#34;&#34;&#34;
+    self.img = CLAHE(self.img, **kwargs)</code></pre>
 </details>
 </dd>
 <dt id="MILWRM.MxIF.img.log_normalize"><code class="name flex">
@@ -1578,6 +1768,7 @@ channels.</dd>
 </li>
 <li><h3><a href="#header-functions">Functions</a></h3>
 <ul class="">
+<li><code><a title="MILWRM.MxIF.CLAHE" href="#MILWRM.MxIF.CLAHE">CLAHE</a></code></li>
 <li><code><a title="MILWRM.MxIF.checktype" href="#MILWRM.MxIF.checktype">checktype</a></code></li>
 <li><code><a title="MILWRM.MxIF.clip_values" href="#MILWRM.MxIF.clip_values">clip_values</a></code></li>
 <li><code><a title="MILWRM.MxIF.scale_rgb" href="#MILWRM.MxIF.scale_rgb">scale_rgb</a></code></li>
@@ -1589,7 +1780,9 @@ channels.</dd>
 <h4><code><a title="MILWRM.MxIF.img" href="#MILWRM.MxIF.img">img</a></code></h4>
 <ul class="two-column">
 <li><code><a title="MILWRM.MxIF.img.clip" href="#MILWRM.MxIF.img.clip">clip</a></code></li>
+<li><code><a title="MILWRM.MxIF.img.copy" href="#MILWRM.MxIF.img.copy">copy</a></code></li>
 <li><code><a title="MILWRM.MxIF.img.downsample" href="#MILWRM.MxIF.img.downsample">downsample</a></code></li>
+<li><code><a title="MILWRM.MxIF.img.equalize_hist" href="#MILWRM.MxIF.img.equalize_hist">equalize_hist</a></code></li>
 <li><code><a title="MILWRM.MxIF.img.from_npz" href="#MILWRM.MxIF.img.from_npz">from_npz</a></code></li>
 <li><code><a title="MILWRM.MxIF.img.from_tiffs" href="#MILWRM.MxIF.img.from_tiffs">from_tiffs</a></code></li>
 <li><code><a title="MILWRM.MxIF.img.log_normalize" href="#MILWRM.MxIF.img.log_normalize">log_normalize</a></code></li>
