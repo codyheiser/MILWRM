@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1" />
 <meta name="generator" content="pdoc 0.9.2" />
 <title>MILWRM.MILWRM API documentation</title>
-<meta name="description" content="Classes for assigning tissue region IDs to multiplex immunofluorescence (MxIF) or 10X
+<meta name="description" content="Classes for assigning tissue domain IDs to multiplex immunofluorescence (MxIF) or 10X
 Visium spatial transcriptomic (ST) and histological imaging data" />
 <link rel="preload stylesheet" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/10up-sanitize.css/11.0.1/sanitize.min.css" integrity="sha256-PK9q560IAAa6WVRRh76LtCaI8pjTJ2z11v0miyNNjrs=" crossorigin>
 <link rel="preload stylesheet" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/10up-sanitize.css/11.0.1/typography.min.css" integrity="sha256-7l/o7C8jubJiy74VsKTidCy1yBkRtiUGbVkYBylBqUg=" crossorigin>
@@ -23,7 +23,7 @@ Visium spatial transcriptomic (ST) and histological imaging data" />
 <h1 class="title">Module <code>MILWRM.MILWRM</code></h1>
 </header>
 <section id="section-intro">
-<p>Classes for assigning tissue region IDs to multiplex immunofluorescence (MxIF) or 10X
+<p>Classes for assigning tissue domain IDs to multiplex immunofluorescence (MxIF) or 10X
 Visium spatial transcriptomic (ST) and histological imaging data</p>
 <details class="source">
 <summary>
@@ -31,7 +31,7 @@ Visium spatial transcriptomic (ST) and histological imaging data</p>
 </summary>
 <pre><code class="python"># -*- coding: utf-8 -*-
 &#34;&#34;&#34;
-Classes for assigning tissue region IDs to multiplex immunofluorescence (MxIF) or 10X 
+Classes for assigning tissue domain IDs to multiplex immunofluorescence (MxIF) or 10X 
 Visium spatial transcriptomic (ST) and histological imaging data
 &#34;&#34;&#34;
 import matplotlib.gridspec as gridspec
@@ -284,7 +284,7 @@ def add_tissue_ID_single_sample_mxif(image, features, kmeans):
 
 class tissue_labeler:
     &#34;&#34;&#34;
-    Master tissue region labeling class
+    Master tissue domain labeling class
     &#34;&#34;&#34;
 
     def __init__(self):
@@ -349,7 +349,7 @@ class tissue_labeler:
         Parameters
         ----------
         k : int, optional (default=None)
-            Number of tissue regions to define
+            Number of tissue domains to define
         random_state : int, optional (default=18)
             Seed for k-means clustering model.
 
@@ -427,14 +427,18 @@ class tissue_labeler:
         else:
             return fig
 
-    def plot_feature_loadings(self, ncols=None, figsize=(5, 5), save_to=None):
+    def plot_feature_loadings(
+        self, ncols=None, nfeatures=None, figsize=(5, 5), save_to=None
+    ):
         &#34;&#34;&#34;
         Plots contributions of each training feature to k-means cluster centers
 
         Parameters
         ----------
         ncols : int, optional (default=`None`)
-            Number of columns for gridspec. If `None`, uses number of clusters k.
+            Number of columns for gridspec. If `None`, uses number of tissue domains k.
+        nfeatures : int, optional (default=`None`)
+            Number of top-loaded features to show for each tissue domain
         figsize : tuple of float, optional (default=(5,5))
             Size of matplotlib figure
         save_to : str, optional (default=`None`)
@@ -459,9 +463,10 @@ class tissue_labeler:
         titles = [
             &#34;tissue_ID &#34; + str(x) for x in range(self.kmeans.cluster_centers_.shape[0])
         ]
+        if nfeatures is None:
+            nfeatures = len(labels)
         scores = self.kmeans.cluster_centers_.copy()
         n_panels = len(titles)
-        n_points = len(labels)
         if ncols is None:
             ncols = len(titles)
         if n_panels &lt;= ncols:
@@ -481,7 +486,7 @@ class tissue_labeler:
         )
         for iscore, score in enumerate(scores):
             plt.subplot(gs[iscore])
-            indices = np.argsort(score)[::-1][: n_points + 1]
+            indices = np.argsort(score)[::-1][: nfeatures + 1]
             for ig, g in enumerate(indices[::-1]):
                 plt.text(
                     x=score[g],
@@ -521,7 +526,7 @@ class tissue_labeler:
 
 class st_labeler(tissue_labeler):
     &#34;&#34;&#34;
-    Tissue region labeling class for spatial transcriptomics (ST) data
+    Tissue domain labeling class for spatial transcriptomics (ST) data
     &#34;&#34;&#34;
 
     def __init__(self, adatas):
@@ -531,7 +536,7 @@ class st_labeler(tissue_labeler):
         Parameters
         ----------
         adatas : list of anndata.AnnData
-            Single anndata object or list of objects to label consensus tissue regions
+            Single anndata object or list of objects to label consensus tissue domains
 
         Returns
         -------
@@ -600,13 +605,13 @@ class st_labeler(tissue_labeler):
         # collect clustering data from self.adatas in parallel
         print(
             &#34;Collecting and blurring {} features from .obsm[{}]...&#34;.format(
-                len(features),
+                len(self.features),
                 use_rep,
             )
         )
         cluster_data = Parallel(n_jobs=n_jobs, verbose=10)(
             delayed(prep_data_single_sample_st)(
-                adata, adata_i, use_rep, features, blur_pix, histo, fluor_channels
+                adata, adata_i, use_rep, self.features, blur_pix, histo, fluor_channels
             )
             for adata_i, adata in enumerate(self.adatas)
         )
@@ -632,7 +637,7 @@ class st_labeler(tissue_labeler):
         alpha: float
             Manually tuned factor on [0.0, 1.0] that penalizes the number of clusters
         plot_out : boolean, optional (default=True)
-            Determines if silhouette plots should be output
+            Determines if scaled inertia plot should be output
         random_state : int, optional (default=18)
             Seed for k-means clustering model.
         n_jobs : int
@@ -669,7 +674,7 @@ class st_labeler(tissue_labeler):
 
 class mxif_labeler(tissue_labeler):
     &#34;&#34;&#34;
-    Tissue region labeling class for multiplex immunofluorescence (MxIF) data
+    Tissue domain labeling class for multiplex immunofluorescence (MxIF) data
     &#34;&#34;&#34;
 
     def __init__(self, images):
@@ -680,7 +685,7 @@ class mxif_labeler(tissue_labeler):
         ----------
         images : list of MILWRM.MxIF.img
             Single MILWRM.MxIF.img object or list of objects to label consensus
-            tissue regions
+            tissue domains
 
         Returns
         -------
@@ -764,7 +769,7 @@ class mxif_labeler(tissue_labeler):
         alpha: float
             Manually tuned factor on [0.0, 1.0] that penalizes the number of clusters
         plot_out : boolean, optional (default=True)
-            Determines if silhouette plots should be output
+            Determines if scaled inertia plot should be output
         random_state : int, optional (default=18)
             Seed for k-means clustering model
         n_jobs : int
@@ -1194,13 +1199,13 @@ use imaging data for training.</dd>
 <span>(</span><span>images)</span>
 </code></dt>
 <dd>
-<div class="desc"><p>Tissue region labeling class for multiplex immunofluorescence (MxIF) data</p>
+<div class="desc"><p>Tissue domain labeling class for multiplex immunofluorescence (MxIF) data</p>
 <p>Initialize MxIF tissue labeler class</p>
 <h2 id="parameters">Parameters</h2>
 <dl>
 <dt><strong><code>images</code></strong> :&ensp;<code>list</code> of <code><a title="MILWRM.MxIF.img" href="MxIF.html#MILWRM.MxIF.img">img</a></code></dt>
 <dd>Single MILWRM.MxIF.img object or list of objects to label consensus
-tissue regions</dd>
+tissue domains</dd>
 </dl>
 <h2 id="returns">Returns</h2>
 <p>Does not return anything. <code>self.images</code> attribute is updated,
@@ -1211,7 +1216,7 @@ tissue regions</dd>
 </summary>
 <pre><code class="python">class mxif_labeler(tissue_labeler):
     &#34;&#34;&#34;
-    Tissue region labeling class for multiplex immunofluorescence (MxIF) data
+    Tissue domain labeling class for multiplex immunofluorescence (MxIF) data
     &#34;&#34;&#34;
 
     def __init__(self, images):
@@ -1222,7 +1227,7 @@ tissue regions</dd>
         ----------
         images : list of MILWRM.MxIF.img
             Single MILWRM.MxIF.img object or list of objects to label consensus
-            tissue regions
+            tissue domains
 
         Returns
         -------
@@ -1306,7 +1311,7 @@ tissue regions</dd>
         alpha: float
             Manually tuned factor on [0.0, 1.0] that penalizes the number of clusters
         plot_out : boolean, optional (default=True)
-            Determines if silhouette plots should be output
+            Determines if scaled inertia plot should be output
         random_state : int, optional (default=18)
             Seed for k-means clustering model
         n_jobs : int
@@ -1355,7 +1360,7 @@ images.</p>
 <dt><strong><code>alpha</code></strong> :&ensp;<code>float</code></dt>
 <dd>Manually tuned factor on [0.0, 1.0] that penalizes the number of clusters</dd>
 <dt><strong><code>plot_out</code></strong> :&ensp;<code>boolean</code>, optional <code>(default=True)</code></dt>
-<dd>Determines if silhouette plots should be output</dd>
+<dd>Determines if scaled inertia plot should be output</dd>
 <dt><strong><code>random_state</code></strong> :&ensp;<code>int</code>, optional <code>(default=18)</code></dt>
 <dd>Seed for k-means clustering model</dd>
 <dt><strong><code>n_jobs</code></strong> :&ensp;<code>int</code></dt>
@@ -1384,7 +1389,7 @@ model. Parameters are also captured as attributes for posterity.</p></div>
     alpha: float
         Manually tuned factor on [0.0, 1.0] that penalizes the number of clusters
     plot_out : boolean, optional (default=True)
-        Determines if silhouette plots should be output
+        Determines if scaled inertia plot should be output
     random_state : int, optional (default=18)
         Seed for k-means clustering model
     n_jobs : int
@@ -1518,12 +1523,12 @@ training. Parameters are also captured as attributes for posterity.</p></div>
 <span>(</span><span>adatas)</span>
 </code></dt>
 <dd>
-<div class="desc"><p>Tissue region labeling class for spatial transcriptomics (ST) data</p>
+<div class="desc"><p>Tissue domain labeling class for spatial transcriptomics (ST) data</p>
 <p>Initialize ST tissue labeler class</p>
 <h2 id="parameters">Parameters</h2>
 <dl>
 <dt><strong><code>adatas</code></strong> :&ensp;<code>list</code> of <code>anndata.AnnData</code></dt>
-<dd>Single anndata object or list of objects to label consensus tissue regions</dd>
+<dd>Single anndata object or list of objects to label consensus tissue domains</dd>
 </dl>
 <h2 id="returns">Returns</h2>
 <p>Does not return anything. <code>self.adatas</code> attribute is updated,
@@ -1534,7 +1539,7 @@ training. Parameters are also captured as attributes for posterity.</p></div>
 </summary>
 <pre><code class="python">class st_labeler(tissue_labeler):
     &#34;&#34;&#34;
-    Tissue region labeling class for spatial transcriptomics (ST) data
+    Tissue domain labeling class for spatial transcriptomics (ST) data
     &#34;&#34;&#34;
 
     def __init__(self, adatas):
@@ -1544,7 +1549,7 @@ training. Parameters are also captured as attributes for posterity.</p></div>
         Parameters
         ----------
         adatas : list of anndata.AnnData
-            Single anndata object or list of objects to label consensus tissue regions
+            Single anndata object or list of objects to label consensus tissue domains
 
         Returns
         -------
@@ -1613,13 +1618,13 @@ training. Parameters are also captured as attributes for posterity.</p></div>
         # collect clustering data from self.adatas in parallel
         print(
             &#34;Collecting and blurring {} features from .obsm[{}]...&#34;.format(
-                len(features),
+                len(self.features),
                 use_rep,
             )
         )
         cluster_data = Parallel(n_jobs=n_jobs, verbose=10)(
             delayed(prep_data_single_sample_st)(
-                adata, adata_i, use_rep, features, blur_pix, histo, fluor_channels
+                adata, adata_i, use_rep, self.features, blur_pix, histo, fluor_channels
             )
             for adata_i, adata in enumerate(self.adatas)
         )
@@ -1645,7 +1650,7 @@ training. Parameters are also captured as attributes for posterity.</p></div>
         alpha: float
             Manually tuned factor on [0.0, 1.0] that penalizes the number of clusters
         plot_out : boolean, optional (default=True)
-            Determines if silhouette plots should be output
+            Determines if scaled inertia plot should be output
         random_state : int, optional (default=18)
             Seed for k-means clustering model.
         n_jobs : int
@@ -1698,7 +1703,7 @@ training. Parameters are also captured as attributes for posterity.</p></div>
 <dt><strong><code>alpha</code></strong> :&ensp;<code>float</code></dt>
 <dd>Manually tuned factor on [0.0, 1.0] that penalizes the number of clusters</dd>
 <dt><strong><code>plot_out</code></strong> :&ensp;<code>boolean</code>, optional <code>(default=True)</code></dt>
-<dd>Determines if silhouette plots should be output</dd>
+<dd>Determines if scaled inertia plot should be output</dd>
 <dt><strong><code>random_state</code></strong> :&ensp;<code>int</code>, optional <code>(default=18)</code></dt>
 <dd>Seed for k-means clustering model.</dd>
 <dt><strong><code>n_jobs</code></strong> :&ensp;<code>int</code></dt>
@@ -1726,7 +1731,7 @@ Parameters are also captured as attributes for posterity.</p></div>
     alpha: float
         Manually tuned factor on [0.0, 1.0] that penalizes the number of clusters
     plot_out : boolean, optional (default=True)
-        Determines if silhouette plots should be output
+        Determines if scaled inertia plot should be output
     random_state : int, optional (default=18)
         Seed for k-means clustering model.
     n_jobs : int
@@ -1853,13 +1858,13 @@ Parameters are also captured as attributes for posterity.</p></div>
     # collect clustering data from self.adatas in parallel
     print(
         &#34;Collecting and blurring {} features from .obsm[{}]...&#34;.format(
-            len(features),
+            len(self.features),
             use_rep,
         )
     )
     cluster_data = Parallel(n_jobs=n_jobs, verbose=10)(
         delayed(prep_data_single_sample_st)(
-            adata, adata_i, use_rep, features, blur_pix, histo, fluor_channels
+            adata, adata_i, use_rep, self.features, blur_pix, histo, fluor_channels
         )
         for adata_i, adata in enumerate(self.adatas)
     )
@@ -1889,7 +1894,7 @@ Parameters are also captured as attributes for posterity.</p></div>
 <span>class <span class="ident">tissue_labeler</span></span>
 </code></dt>
 <dd>
-<div class="desc"><p>Master tissue region labeling class</p>
+<div class="desc"><p>Master tissue domain labeling class</p>
 <p>Initialize tissue labeler parent class</p></div>
 <details class="source">
 <summary>
@@ -1897,7 +1902,7 @@ Parameters are also captured as attributes for posterity.</p></div>
 </summary>
 <pre><code class="python">class tissue_labeler:
     &#34;&#34;&#34;
-    Master tissue region labeling class
+    Master tissue domain labeling class
     &#34;&#34;&#34;
 
     def __init__(self):
@@ -1962,7 +1967,7 @@ Parameters are also captured as attributes for posterity.</p></div>
         Parameters
         ----------
         k : int, optional (default=None)
-            Number of tissue regions to define
+            Number of tissue domains to define
         random_state : int, optional (default=18)
             Seed for k-means clustering model.
 
@@ -2040,14 +2045,18 @@ Parameters are also captured as attributes for posterity.</p></div>
         else:
             return fig
 
-    def plot_feature_loadings(self, ncols=None, figsize=(5, 5), save_to=None):
+    def plot_feature_loadings(
+        self, ncols=None, nfeatures=None, figsize=(5, 5), save_to=None
+    ):
         &#34;&#34;&#34;
         Plots contributions of each training feature to k-means cluster centers
 
         Parameters
         ----------
         ncols : int, optional (default=`None`)
-            Number of columns for gridspec. If `None`, uses number of clusters k.
+            Number of columns for gridspec. If `None`, uses number of tissue domains k.
+        nfeatures : int, optional (default=`None`)
+            Number of top-loaded features to show for each tissue domain
         figsize : tuple of float, optional (default=(5,5))
             Size of matplotlib figure
         save_to : str, optional (default=`None`)
@@ -2072,9 +2081,10 @@ Parameters are also captured as attributes for posterity.</p></div>
         titles = [
             &#34;tissue_ID &#34; + str(x) for x in range(self.kmeans.cluster_centers_.shape[0])
         ]
+        if nfeatures is None:
+            nfeatures = len(labels)
         scores = self.kmeans.cluster_centers_.copy()
         n_panels = len(titles)
-        n_points = len(labels)
         if ncols is None:
             ncols = len(titles)
         if n_panels &lt;= ncols:
@@ -2094,7 +2104,7 @@ Parameters are also captured as attributes for posterity.</p></div>
         )
         for iscore, score in enumerate(scores):
             plt.subplot(gs[iscore])
-            indices = np.argsort(score)[::-1][: n_points + 1]
+            indices = np.argsort(score)[::-1][: nfeatures + 1]
             for ig, g in enumerate(indices[::-1]):
                 plt.text(
                     x=score[g],
@@ -2219,7 +2229,7 @@ clusters. Parameters are also captured as attributes for posterity.</p></div>
 <h2 id="parameters">Parameters</h2>
 <dl>
 <dt><strong><code>k</code></strong> :&ensp;<code>int</code>, optional <code>(default=None)</code></dt>
-<dd>Number of tissue regions to define</dd>
+<dd>Number of tissue domains to define</dd>
 <dt><strong><code>random_state</code></strong> :&ensp;<code>int</code>, optional <code>(default=18)</code></dt>
 <dd>Seed for k-means clustering model.</dd>
 </dl>
@@ -2238,7 +2248,7 @@ model. Parameters are also captured as attributes for posterity.</p></div>
     Parameters
     ----------
     k : int, optional (default=None)
-        Number of tissue regions to define
+        Number of tissue domains to define
     random_state : int, optional (default=18)
         Seed for k-means clustering model.
 
@@ -2265,14 +2275,16 @@ model. Parameters are also captured as attributes for posterity.</p></div>
 </details>
 </dd>
 <dt id="MILWRM.MILWRM.tissue_labeler.plot_feature_loadings"><code class="name flex">
-<span>def <span class="ident">plot_feature_loadings</span></span>(<span>self, ncols=None, figsize=(5, 5), save_to=None)</span>
+<span>def <span class="ident">plot_feature_loadings</span></span>(<span>self, ncols=None, nfeatures=None, figsize=(5, 5), save_to=None)</span>
 </code></dt>
 <dd>
 <div class="desc"><p>Plots contributions of each training feature to k-means cluster centers</p>
 <h2 id="parameters">Parameters</h2>
 <dl>
 <dt><strong><code>ncols</code></strong> :&ensp;<code>int</code>, optional <code>(default=</code>None<code>)</code></dt>
-<dd>Number of columns for gridspec. If <code>None</code>, uses number of clusters k.</dd>
+<dd>Number of columns for gridspec. If <code>None</code>, uses number of tissue domains k.</dd>
+<dt><strong><code>nfeatures</code></strong> :&ensp;<code>int</code>, optional <code>(default=</code>None<code>)</code></dt>
+<dd>Number of top-loaded features to show for each tissue domain</dd>
 <dt><strong><code>figsize</code></strong> :&ensp;<code>tuple</code> of <code>float</code>, optional <code>(default=(5,5))</code></dt>
 <dd>Size of matplotlib figure</dd>
 <dt><strong><code>save_to</code></strong> :&ensp;<code>str</code>, optional <code>(default=</code>None<code>)</code></dt>
@@ -2284,14 +2296,18 @@ model. Parameters are also captured as attributes for posterity.</p></div>
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">def plot_feature_loadings(self, ncols=None, figsize=(5, 5), save_to=None):
+<pre><code class="python">def plot_feature_loadings(
+    self, ncols=None, nfeatures=None, figsize=(5, 5), save_to=None
+):
     &#34;&#34;&#34;
     Plots contributions of each training feature to k-means cluster centers
 
     Parameters
     ----------
     ncols : int, optional (default=`None`)
-        Number of columns for gridspec. If `None`, uses number of clusters k.
+        Number of columns for gridspec. If `None`, uses number of tissue domains k.
+    nfeatures : int, optional (default=`None`)
+        Number of top-loaded features to show for each tissue domain
     figsize : tuple of float, optional (default=(5,5))
         Size of matplotlib figure
     save_to : str, optional (default=`None`)
@@ -2316,9 +2332,10 @@ model. Parameters are also captured as attributes for posterity.</p></div>
     titles = [
         &#34;tissue_ID &#34; + str(x) for x in range(self.kmeans.cluster_centers_.shape[0])
     ]
+    if nfeatures is None:
+        nfeatures = len(labels)
     scores = self.kmeans.cluster_centers_.copy()
     n_panels = len(titles)
-    n_points = len(labels)
     if ncols is None:
         ncols = len(titles)
     if n_panels &lt;= ncols:
@@ -2338,7 +2355,7 @@ model. Parameters are also captured as attributes for posterity.</p></div>
     )
     for iscore, score in enumerate(scores):
         plt.subplot(gs[iscore])
-        indices = np.argsort(score)[::-1][: n_points + 1]
+        indices = np.argsort(score)[::-1][: nfeatures + 1]
         for ig, g in enumerate(indices[::-1]):
             plt.text(
                 x=score[g],

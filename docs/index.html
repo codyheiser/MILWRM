@@ -64,7 +64,7 @@ del get_versions</code></pre>
 <dl>
 <dt><code class="name"><a title="MILWRM.MILWRM" href="MILWRM.html">MILWRM.MILWRM</a></code></dt>
 <dd>
-<div class="desc"><p>Classes for assigning tissue region IDs to multiplex immunofluorescence (MxIF) or 10X
+<div class="desc"><p>Classes for assigning tissue domain IDs to multiplex immunofluorescence (MxIF) or 10X
 Visium spatial transcriptomic (ST) and histological imaging data</p></div>
 </dd>
 <dt><code class="name"><a title="MILWRM.MxIF" href="MxIF.html">MILWRM.MxIF</a></code></dt>
@@ -1888,13 +1888,13 @@ channels.</dd>
 <span>(</span><span>images)</span>
 </code></dt>
 <dd>
-<div class="desc"><p>Tissue region labeling class for multiplex immunofluorescence (MxIF) data</p>
+<div class="desc"><p>Tissue domain labeling class for multiplex immunofluorescence (MxIF) data</p>
 <p>Initialize MxIF tissue labeler class</p>
 <h2 id="parameters">Parameters</h2>
 <dl>
 <dt><strong><code>images</code></strong> :&ensp;<code>list</code> of <code><a title="MILWRM.MxIF.img" href="MxIF.html#MILWRM.MxIF.img">img</a></code></dt>
 <dd>Single MILWRM.MxIF.img object or list of objects to label consensus
-tissue regions</dd>
+tissue domains</dd>
 </dl>
 <h2 id="returns">Returns</h2>
 <p>Does not return anything. <code>self.images</code> attribute is updated,
@@ -1905,7 +1905,7 @@ tissue regions</dd>
 </summary>
 <pre><code class="python">class mxif_labeler(tissue_labeler):
     &#34;&#34;&#34;
-    Tissue region labeling class for multiplex immunofluorescence (MxIF) data
+    Tissue domain labeling class for multiplex immunofluorescence (MxIF) data
     &#34;&#34;&#34;
 
     def __init__(self, images):
@@ -1916,7 +1916,7 @@ tissue regions</dd>
         ----------
         images : list of MILWRM.MxIF.img
             Single MILWRM.MxIF.img object or list of objects to label consensus
-            tissue regions
+            tissue domains
 
         Returns
         -------
@@ -2000,7 +2000,7 @@ tissue regions</dd>
         alpha: float
             Manually tuned factor on [0.0, 1.0] that penalizes the number of clusters
         plot_out : boolean, optional (default=True)
-            Determines if silhouette plots should be output
+            Determines if scaled inertia plot should be output
         random_state : int, optional (default=18)
             Seed for k-means clustering model
         n_jobs : int
@@ -2049,7 +2049,7 @@ images.</p>
 <dt><strong><code>alpha</code></strong> :&ensp;<code>float</code></dt>
 <dd>Manually tuned factor on [0.0, 1.0] that penalizes the number of clusters</dd>
 <dt><strong><code>plot_out</code></strong> :&ensp;<code>boolean</code>, optional <code>(default=True)</code></dt>
-<dd>Determines if silhouette plots should be output</dd>
+<dd>Determines if scaled inertia plot should be output</dd>
 <dt><strong><code>random_state</code></strong> :&ensp;<code>int</code>, optional <code>(default=18)</code></dt>
 <dd>Seed for k-means clustering model</dd>
 <dt><strong><code>n_jobs</code></strong> :&ensp;<code>int</code></dt>
@@ -2078,7 +2078,7 @@ model. Parameters are also captured as attributes for posterity.</p></div>
     alpha: float
         Manually tuned factor on [0.0, 1.0] that penalizes the number of clusters
     plot_out : boolean, optional (default=True)
-        Determines if silhouette plots should be output
+        Determines if scaled inertia plot should be output
     random_state : int, optional (default=18)
         Seed for k-means clustering model
     n_jobs : int
@@ -2212,12 +2212,12 @@ training. Parameters are also captured as attributes for posterity.</p></div>
 <span>(</span><span>adatas)</span>
 </code></dt>
 <dd>
-<div class="desc"><p>Tissue region labeling class for spatial transcriptomics (ST) data</p>
+<div class="desc"><p>Tissue domain labeling class for spatial transcriptomics (ST) data</p>
 <p>Initialize ST tissue labeler class</p>
 <h2 id="parameters">Parameters</h2>
 <dl>
 <dt><strong><code>adatas</code></strong> :&ensp;<code>list</code> of <code>anndata.AnnData</code></dt>
-<dd>Single anndata object or list of objects to label consensus tissue regions</dd>
+<dd>Single anndata object or list of objects to label consensus tissue domains</dd>
 </dl>
 <h2 id="returns">Returns</h2>
 <p>Does not return anything. <code>self.adatas</code> attribute is updated,
@@ -2228,7 +2228,7 @@ training. Parameters are also captured as attributes for posterity.</p></div>
 </summary>
 <pre><code class="python">class st_labeler(tissue_labeler):
     &#34;&#34;&#34;
-    Tissue region labeling class for spatial transcriptomics (ST) data
+    Tissue domain labeling class for spatial transcriptomics (ST) data
     &#34;&#34;&#34;
 
     def __init__(self, adatas):
@@ -2238,7 +2238,7 @@ training. Parameters are also captured as attributes for posterity.</p></div>
         Parameters
         ----------
         adatas : list of anndata.AnnData
-            Single anndata object or list of objects to label consensus tissue regions
+            Single anndata object or list of objects to label consensus tissue domains
 
         Returns
         -------
@@ -2307,13 +2307,13 @@ training. Parameters are also captured as attributes for posterity.</p></div>
         # collect clustering data from self.adatas in parallel
         print(
             &#34;Collecting and blurring {} features from .obsm[{}]...&#34;.format(
-                len(features),
+                len(self.features),
                 use_rep,
             )
         )
         cluster_data = Parallel(n_jobs=n_jobs, verbose=10)(
             delayed(prep_data_single_sample_st)(
-                adata, adata_i, use_rep, features, blur_pix, histo, fluor_channels
+                adata, adata_i, use_rep, self.features, blur_pix, histo, fluor_channels
             )
             for adata_i, adata in enumerate(self.adatas)
         )
@@ -2339,7 +2339,7 @@ training. Parameters are also captured as attributes for posterity.</p></div>
         alpha: float
             Manually tuned factor on [0.0, 1.0] that penalizes the number of clusters
         plot_out : boolean, optional (default=True)
-            Determines if silhouette plots should be output
+            Determines if scaled inertia plot should be output
         random_state : int, optional (default=18)
             Seed for k-means clustering model.
         n_jobs : int
@@ -2392,7 +2392,7 @@ training. Parameters are also captured as attributes for posterity.</p></div>
 <dt><strong><code>alpha</code></strong> :&ensp;<code>float</code></dt>
 <dd>Manually tuned factor on [0.0, 1.0] that penalizes the number of clusters</dd>
 <dt><strong><code>plot_out</code></strong> :&ensp;<code>boolean</code>, optional <code>(default=True)</code></dt>
-<dd>Determines if silhouette plots should be output</dd>
+<dd>Determines if scaled inertia plot should be output</dd>
 <dt><strong><code>random_state</code></strong> :&ensp;<code>int</code>, optional <code>(default=18)</code></dt>
 <dd>Seed for k-means clustering model.</dd>
 <dt><strong><code>n_jobs</code></strong> :&ensp;<code>int</code></dt>
@@ -2420,7 +2420,7 @@ Parameters are also captured as attributes for posterity.</p></div>
     alpha: float
         Manually tuned factor on [0.0, 1.0] that penalizes the number of clusters
     plot_out : boolean, optional (default=True)
-        Determines if silhouette plots should be output
+        Determines if scaled inertia plot should be output
     random_state : int, optional (default=18)
         Seed for k-means clustering model.
     n_jobs : int
@@ -2547,13 +2547,13 @@ Parameters are also captured as attributes for posterity.</p></div>
     # collect clustering data from self.adatas in parallel
     print(
         &#34;Collecting and blurring {} features from .obsm[{}]...&#34;.format(
-            len(features),
+            len(self.features),
             use_rep,
         )
     )
     cluster_data = Parallel(n_jobs=n_jobs, verbose=10)(
         delayed(prep_data_single_sample_st)(
-            adata, adata_i, use_rep, features, blur_pix, histo, fluor_channels
+            adata, adata_i, use_rep, self.features, blur_pix, histo, fluor_channels
         )
         for adata_i, adata in enumerate(self.adatas)
     )
