@@ -432,7 +432,6 @@ def assemble_pita(
             mapper = adata.obs.iloc[:, features].copy()
         else:
             mapper = adata.obs[features].copy()
-            features = None  # set features to None in case show==True
     else:
         if not features:
             print(
@@ -480,7 +479,7 @@ def assemble_pita(
             histo = adata.uns["spatial"][list(adata.uns["spatial"].keys())[0]][
                 "images"
             ][histo]
-        show_pita(pita=assembled, features=features, histo=histo, **kwargs)
+        show_pita(pita=assembled, features=None, histo=histo, **kwargs)
     print("Done!")
     return assembled
 
