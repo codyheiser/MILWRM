@@ -463,7 +463,6 @@ def assemble_pita(
             mapper = adata.obs.iloc[:, features].copy()
         else:
             mapper = adata.obs[features].copy()
-            features = None  # set features to None in case show==True
     else:
         if not features:
             print(
@@ -511,7 +510,7 @@ def assemble_pita(
             histo = adata.uns[&#34;spatial&#34;][list(adata.uns[&#34;spatial&#34;].keys())[0]][
                 &#34;images&#34;
             ][histo]
-        show_pita(pita=assembled, features=features, histo=histo, **kwargs)
+        show_pita(pita=assembled, features=None, histo=histo, **kwargs)
     print(&#34;Done!&#34;)
     return assembled
 
@@ -850,7 +849,6 @@ specified and <code>plot_out</code>, first feature (index 0) will be plotted.</d
             mapper = adata.obs.iloc[:, features].copy()
         else:
             mapper = adata.obs[features].copy()
-            features = None  # set features to None in case show==True
     else:
         if not features:
             print(
@@ -898,7 +896,7 @@ specified and <code>plot_out</code>, first feature (index 0) will be plotted.</d
             histo = adata.uns[&#34;spatial&#34;][list(adata.uns[&#34;spatial&#34;].keys())[0]][
                 &#34;images&#34;
             ][histo]
-        show_pita(pita=assembled, features=features, histo=histo, **kwargs)
+        show_pita(pita=assembled, features=None, histo=histo, **kwargs)
     print(&#34;Done!&#34;)
     return assembled</code></pre>
 </details>

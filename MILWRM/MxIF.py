@@ -413,6 +413,7 @@ class img:
         channels=None,
         RGB=False,
         cbar=False,
+        mask_out=True,
         ncols=4,
         figsize=(7, 7),
         save_to=None,
@@ -431,6 +432,8 @@ class img:
         cbar : bool
             Show colorbar for scale of image intensities if plotting individual
             channels.
+        mask_out : bool, optional (default=`True`)
+            Mask out non-tissue pixels prior to showing
         ncols : int
             Number of columns for gridspec if plotting individual channels.
         figsize : tuple of float
@@ -447,8 +450,11 @@ class img:
         """
         # if only one feature (2D), plot it quickly
         if self.img.ndim == 2:
+            if self.mask is not None and mask_out:
+                im_tmp = self.img.copy()  # make copy for masking
+                im_tmp[:, :][self.mask == 0] = np.nan  # area outside mask to NaN
             fig = plt.figure(figsize=figsize)
-            plt.imshow(self.img, **kwargs)
+            plt.imshow(im_tmp, **kwargs)
             plt.tick_params(labelbottom=False, labelleft=False)
             sns.despine(bottom=True, left=True)
             if cbar:
@@ -489,6 +495,9 @@ class img:
                     self.img[:, :, channels[2]],
                 ]
             )
+            if self.mask is not None and mask_out:
+                for i in [0, 1, 2]:  # for 3-channel image
+                    im_tmp[:, :, i][self.mask == 0] = np.nan  # area outside mask NaN
             plt.imshow(im_tmp, **kwargs)
             # add legend for channel IDs
             custom_lines = [
@@ -517,7 +526,10 @@ class img:
         i = 0
         for channel in channels:
             ax = plt.subplot(gs[i])
-            im = ax.imshow(self.img[:, :, channel], **kwargs)
+            if self.mask is not None and mask_out:
+                im_tmp = self.img[:, :, channel].copy()  # make copy for masking
+                im_tmp[self.mask == 0] = np.nan  # area outside mask NaN
+            im = ax.imshow(im_tmp, **kwargs)
             ax.tick_params(labelbottom=False, labelleft=False)
             sns.despine(bottom=True, left=True)
             ax.set_title(

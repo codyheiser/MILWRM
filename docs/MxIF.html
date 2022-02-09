@@ -442,6 +442,7 @@ class img:
         channels=None,
         RGB=False,
         cbar=False,
+        mask_out=True,
         ncols=4,
         figsize=(7, 7),
         save_to=None,
@@ -460,6 +461,8 @@ class img:
         cbar : bool
             Show colorbar for scale of image intensities if plotting individual
             channels.
+        mask_out : bool, optional (default=`True`)
+            Mask out non-tissue pixels prior to showing
         ncols : int
             Number of columns for gridspec if plotting individual channels.
         figsize : tuple of float
@@ -476,8 +479,11 @@ class img:
         &#34;&#34;&#34;
         # if only one feature (2D), plot it quickly
         if self.img.ndim == 2:
+            if self.mask is not None and mask_out:
+                im_tmp = self.img.copy()  # make copy for masking
+                im_tmp[:, :][self.mask == 0] = np.nan  # area outside mask to NaN
             fig = plt.figure(figsize=figsize)
-            plt.imshow(self.img, **kwargs)
+            plt.imshow(im_tmp, **kwargs)
             plt.tick_params(labelbottom=False, labelleft=False)
             sns.despine(bottom=True, left=True)
             if cbar:
@@ -518,6 +524,9 @@ class img:
                     self.img[:, :, channels[2]],
                 ]
             )
+            if self.mask is not None and mask_out:
+                for i in [0, 1, 2]:  # for 3-channel image
+                    im_tmp[:, :, i][self.mask == 0] = np.nan  # area outside mask NaN
             plt.imshow(im_tmp, **kwargs)
             # add legend for channel IDs
             custom_lines = [
@@ -546,7 +555,10 @@ class img:
         i = 0
         for channel in channels:
             ax = plt.subplot(gs[i])
-            im = ax.imshow(self.img[:, :, channel], **kwargs)
+            if self.mask is not None and mask_out:
+                im_tmp = self.img[:, :, channel].copy()  # make copy for masking
+                im_tmp[self.mask == 0] = np.nan  # area outside mask NaN
+            im = ax.imshow(im_tmp, **kwargs)
             ax.tick_params(labelbottom=False, labelleft=False)
             sns.despine(bottom=True, left=True)
             ax.set_title(
@@ -1067,6 +1079,7 @@ class img:
         channels=None,
         RGB=False,
         cbar=False,
+        mask_out=True,
         ncols=4,
         figsize=(7, 7),
         save_to=None,
@@ -1085,6 +1098,8 @@ class img:
         cbar : bool
             Show colorbar for scale of image intensities if plotting individual
             channels.
+        mask_out : bool, optional (default=`True`)
+            Mask out non-tissue pixels prior to showing
         ncols : int
             Number of columns for gridspec if plotting individual channels.
         figsize : tuple of float
@@ -1101,8 +1116,11 @@ class img:
         &#34;&#34;&#34;
         # if only one feature (2D), plot it quickly
         if self.img.ndim == 2:
+            if self.mask is not None and mask_out:
+                im_tmp = self.img.copy()  # make copy for masking
+                im_tmp[:, :][self.mask == 0] = np.nan  # area outside mask to NaN
             fig = plt.figure(figsize=figsize)
-            plt.imshow(self.img, **kwargs)
+            plt.imshow(im_tmp, **kwargs)
             plt.tick_params(labelbottom=False, labelleft=False)
             sns.despine(bottom=True, left=True)
             if cbar:
@@ -1143,6 +1161,9 @@ class img:
                     self.img[:, :, channels[2]],
                 ]
             )
+            if self.mask is not None and mask_out:
+                for i in [0, 1, 2]:  # for 3-channel image
+                    im_tmp[:, :, i][self.mask == 0] = np.nan  # area outside mask NaN
             plt.imshow(im_tmp, **kwargs)
             # add legend for channel IDs
             custom_lines = [
@@ -1171,7 +1192,10 @@ class img:
         i = 0
         for channel in channels:
             ax = plt.subplot(gs[i])
-            im = ax.imshow(self.img[:, :, channel], **kwargs)
+            if self.mask is not None and mask_out:
+                im_tmp = self.img[:, :, channel].copy()  # make copy for masking
+                im_tmp[self.mask == 0] = np.nan  # area outside mask NaN
+            im = ax.imshow(im_tmp, **kwargs)
             ax.tick_params(labelbottom=False, labelleft=False)
             sns.despine(bottom=True, left=True)
             ax.set_title(
@@ -1554,7 +1578,7 @@ with zeros</dd>
 </details>
 </dd>
 <dt id="MILWRM.MxIF.img.show"><code class="name flex">
-<span>def <span class="ident">show</span></span>(<span>self, channels=None, RGB=False, cbar=False, ncols=4, figsize=(7, 7), save_to=None, **kwargs)</span>
+<span>def <span class="ident">show</span></span>(<span>self, channels=None, RGB=False, cbar=False, mask_out=True, ncols=4, figsize=(7, 7), save_to=None, **kwargs)</span>
 </code></dt>
 <dd>
 <div class="desc"><p>Plot image</p>
@@ -1568,6 +1592,8 @@ individually.</dd>
 <dt><strong><code>cbar</code></strong> :&ensp;<code>bool</code></dt>
 <dd>Show colorbar for scale of image intensities if plotting individual
 channels.</dd>
+<dt><strong><code>mask_out</code></strong> :&ensp;<code>bool</code>, optional <code>(default=</code>True<code>)</code></dt>
+<dd>Mask out non-tissue pixels prior to showing</dd>
 <dt><strong><code>ncols</code></strong> :&ensp;<code>int</code></dt>
 <dd>Number of columns for gridspec if plotting individual channels.</dd>
 <dt><strong><code>figsize</code></strong> :&ensp;<code>tuple</code> of <code>float</code></dt>
@@ -1592,6 +1618,7 @@ channels.</dd>
     channels=None,
     RGB=False,
     cbar=False,
+    mask_out=True,
     ncols=4,
     figsize=(7, 7),
     save_to=None,
@@ -1610,6 +1637,8 @@ channels.</dd>
     cbar : bool
         Show colorbar for scale of image intensities if plotting individual
         channels.
+    mask_out : bool, optional (default=`True`)
+        Mask out non-tissue pixels prior to showing
     ncols : int
         Number of columns for gridspec if plotting individual channels.
     figsize : tuple of float
@@ -1626,8 +1655,11 @@ channels.</dd>
     &#34;&#34;&#34;
     # if only one feature (2D), plot it quickly
     if self.img.ndim == 2:
+        if self.mask is not None and mask_out:
+            im_tmp = self.img.copy()  # make copy for masking
+            im_tmp[:, :][self.mask == 0] = np.nan  # area outside mask to NaN
         fig = plt.figure(figsize=figsize)
-        plt.imshow(self.img, **kwargs)
+        plt.imshow(im_tmp, **kwargs)
         plt.tick_params(labelbottom=False, labelleft=False)
         sns.despine(bottom=True, left=True)
         if cbar:
@@ -1668,6 +1700,9 @@ channels.</dd>
                 self.img[:, :, channels[2]],
             ]
         )
+        if self.mask is not None and mask_out:
+            for i in [0, 1, 2]:  # for 3-channel image
+                im_tmp[:, :, i][self.mask == 0] = np.nan  # area outside mask NaN
         plt.imshow(im_tmp, **kwargs)
         # add legend for channel IDs
         custom_lines = [
@@ -1696,7 +1731,10 @@ channels.</dd>
     i = 0
     for channel in channels:
         ax = plt.subplot(gs[i])
-        im = ax.imshow(self.img[:, :, channel], **kwargs)
+        if self.mask is not None and mask_out:
+            im_tmp = self.img[:, :, channel].copy()  # make copy for masking
+            im_tmp[self.mask == 0] = np.nan  # area outside mask NaN
+        im = ax.imshow(im_tmp, **kwargs)
         ax.tick_params(labelbottom=False, labelleft=False)
         sns.despine(bottom=True, left=True)
         ax.set_title(
