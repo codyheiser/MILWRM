@@ -140,7 +140,7 @@ class img:
         assert (
             img_arr.ndim > 1
         ), "Image does not have enough dimensions: {} given".format(img_arr.ndim)
-        self.img = img_arr  # save image array to .img attribute
+        self.img = img_arr.astype("float64")  # save image array to .img attribute
         if img_arr.ndim > 2:
             self.n_ch = img_arr.shape[2]  # save number of channels to attribute
         else:
