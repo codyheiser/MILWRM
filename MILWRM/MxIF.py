@@ -450,11 +450,13 @@ class img:
         """
         # if only one feature (2D), plot it quickly
         if self.img.ndim == 2:
+            fig = plt.figure(figsize=figsize)
             if self.mask is not None and mask_out:
                 im_tmp = self.img.copy()  # make copy for masking
                 im_tmp[:, :][self.mask == 0] = np.nan  # area outside mask to NaN
-            fig = plt.figure(figsize=figsize)
-            plt.imshow(im_tmp, **kwargs)
+                plt.imshow(im_tmp, **kwargs)
+            else:
+                plt.imshow(self.img, **kwargs)
             plt.tick_params(labelbottom=False, labelleft=False)
             sns.despine(bottom=True, left=True)
             if cbar:
@@ -529,7 +531,9 @@ class img:
             if self.mask is not None and mask_out:
                 im_tmp = self.img[:, :, channel].copy()  # make copy for masking
                 im_tmp[self.mask == 0] = np.nan  # area outside mask NaN
-            im = ax.imshow(im_tmp, **kwargs)
+                im = ax.imshow(im_tmp, **kwargs)
+            else:
+                im = ax.imshow(self.img[:, :, channel], **kwargs)
             ax.tick_params(labelbottom=False, labelleft=False)
             sns.despine(bottom=True, left=True)
             ax.set_title(
