@@ -193,6 +193,7 @@ def prep_data_single_sample_mxif(image, features, downsample_factor, sigma, frac
     image.downsample(fact=downsample_factor, func=np.mean)
     # normalize and log-transform image
     image.log_normalize(pseudoval=1, mask=True)
+    # TODO: create some z-score norm/scaling function and add it here
     # blur downsampled image
     image.img = gaussian(image.img, sigma=sigma, multichannel=True)
     # get list of int for features
