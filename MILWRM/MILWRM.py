@@ -12,6 +12,7 @@ from math import ceil
 from joblib import Parallel, delayed
 from sklearn.cluster import KMeans
 from sklearn.preprocessing import MinMaxScaler
+from sklearn.preprocessing import StandardScaler
 from skimage.filters import gaussian
 
 from .MxIF import checktype
@@ -619,6 +620,9 @@ class st_labeler(tissue_labeler):
         to `.obs`. `self.kmeans` contains trained `sklearn` clustering model.
         Parameters are also captured as attributes for posterity.
         """
+
+
+
         # find optimal k with parent class
         if k is None:
             print("Determining optimal cluster number k via scaled inertia")
@@ -719,11 +723,17 @@ class mxif_labeler(tissue_labeler):
         cluster_data = [x[1] for x in out]
         # concatenate blurred features into cluster_data df for cluster training
         self.cluster_data = np.row_stack(cluster_data)
-        # perform min-max scaling on final cluster data
-        mms = MinMaxScaler()
+        # perform z-score normalization on final cluster data
+        scaler = StandardScaler()
         unscaled_data = self.cluster_data
-        self.cluster_data = mms.fit_transform(unscaled_data)
+        self.cluster_data = scaler.fit(unscaled_data)
         print("Collected clustering data of shape: {}".format(self.cluster_data.shape))
+        
+        # perform min-max scaling on final cluster data
+        # mms = MinMaxScaler()
+        # unscaled_data = self.cluster_data
+        # self.cluster_data = mms.fit_transform(unscaled_data)
+        # print("Collected clustering data of shape: {}".format(self.cluster_data.shape))
 
     def label_tissue_regions(
         self, k=None, alpha=0.05, plot_out=True, random_state=18, n_jobs=-1
