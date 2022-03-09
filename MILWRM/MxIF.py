@@ -191,9 +191,8 @@ class img:
                 new[key] = None
         return img(img_arr=new["img"], channels=new["ch"], mask=new["mask"])
 
-    def __getitem__(self,channels):
-        """Slice img object with channel name"""
-        
+    def __getitem__(self, channels):
+        """Slice img object with channel name(s)"""
         if isinstance(channels, int):  # force channels into list if single integer
             channels = [channels]
         if isinstance(channels, str):  # force channels into int if single string
@@ -203,8 +202,7 @@ class img:
         if channels is None:  # if no channels are given, use all of them
             channels = [x for x in range(self.n_ch)]
 
-        return self.img[:,:,channels]
-
+        return self.img[:, :, channels]
 
     @classmethod
     def from_tiffs(cls, tiffdir, channels, common_strings=None, mask=None):
@@ -586,21 +584,21 @@ class img:
         Gridspec object (for multiple features). Saves plot to file if `save_to` is not `None`.
         """
         # calculate gridspec dimensions
-        if len(channels)<=ncols:
-             n_rows, n_cols = 1, len(channels)
+        if len(channels) <= ncols:
+            n_rows, n_cols = 1, len(channels)
         else:
             n_rows, n_cols = ceil(len(channels) / ncols), ncols
         fig = plt.figure(figsize=(ncols * n_cols, ncols * n_rows))
-        # arrange axes as subplots    
+        # arrange axes as subplots
         gs = gridspec.GridSpec(n_rows, n_cols, figure=fig)
         # add plots to axes
         i = 0
         for channel in channels:
             ax = plt.subplot(gs[i])
             data = self[channel].copy()
-            ax.hist(data.ravel(), bins = 100,**kwargs)
+            ax.hist(data.ravel(), bins=100, **kwargs)
             ax.set_title(channel, fontweight="bold", fontsize=16)
-            i = i+1   
+            i = i + 1
         fig.tight_layout()
         plt.show()
         if save_to:

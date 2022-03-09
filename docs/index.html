@@ -975,6 +975,19 @@ if <code>distance_trim==False</code>.</dd>
                 new[key] = None
         return img(img_arr=new[&#34;img&#34;], channels=new[&#34;ch&#34;], mask=new[&#34;mask&#34;])
 
+    def __getitem__(self, channels):
+        &#34;&#34;&#34;Slice img object with channel name(s)&#34;&#34;&#34;
+        if isinstance(channels, int):  # force channels into list if single integer
+            channels = [channels]
+        if isinstance(channels, str):  # force channels into int if single string
+            channels = [self.ch.index(channels)]
+        if checktype(channels):  # force channels into list of int if list of strings
+            channels = [self.ch.index(x) for x in channels]
+        if channels is None:  # if no channels are given, use all of them
+            channels = [x for x in range(self.n_ch)]
+
+        return self.img[:, :, channels]
+
     @classmethod
     def from_tiffs(cls, tiffdir, channels, common_strings=None, mask=None):
         &#34;&#34;&#34;
@@ -1332,7 +1345,50 @@ if <code>distance_trim==False</code>.</dd>
         fig.tight_layout()
         if save_to:
             plt.savefig(fname=save_to, transparent=True, bbox_inches=&#34;tight&#34;, dpi=800)
-        return fig</code></pre>
+        return fig
+
+    def plot_image_histogram(self, channels=None, ncols=4, save_to=None, **kwargs):
+
+        &#34;&#34;&#34;
+        Plot image histogram
+
+        Parameters
+        ----------
+        channels : tuple of int or None, optional (default=`None`)
+            List of channels by index or name to show
+        ncols : int
+            Number sof columns for gridspec if plotting individual channels.
+        save_to : str or None
+            Path to image file to save results. If `None`, show figure.
+        **kwargs
+            Arguments to pass to `plt.imshow()` function.
+
+        Returns
+        -------
+        Gridspec object (for multiple features). Saves plot to file if `save_to` is not `None`.
+        &#34;&#34;&#34;
+        # calculate gridspec dimensions
+        if len(channels) &lt;= ncols:
+            n_rows, n_cols = 1, len(channels)
+        else:
+            n_rows, n_cols = ceil(len(channels) / ncols), ncols
+        fig = plt.figure(figsize=(ncols * n_cols, ncols * n_rows))
+        # arrange axes as subplots
+        gs = gridspec.GridSpec(n_rows, n_cols, figure=fig)
+        # add plots to axes
+        i = 0
+        for channel in channels:
+            ax = plt.subplot(gs[i])
+            data = self[channel].copy()
+            ax.hist(data.ravel(), bins=100, **kwargs)
+            ax.set_title(channel, fontweight=&#34;bold&#34;, fontsize=16)
+            i = i + 1
+        fig.tight_layout()
+        plt.show()
+        if save_to:
+            plt.savefig(fname=save_to, transparent=True, bbox_inches=&#34;tight&#34;, dpi=800)
+
+        return gs</code></pre>
 </details>
 <h3>Static methods</h3>
 <dl>
@@ -1665,6 +1721,72 @@ with zeros</dd>
         for i in range(self.img.shape[2]):
             fact = self.img[:, :, i].mean()
             self.img[:, :, i] = np.log10(self.img[:, :, i] / fact + pseudoval)</code></pre>
+</details>
+</dd>
+<dt id="MILWRM.img.plot_image_histogram"><code class="name flex">
+<span>def <span class="ident">plot_image_histogram</span></span>(<span>self, channels=None, ncols=4, save_to=None, **kwargs)</span>
+</code></dt>
+<dd>
+<div class="desc"><p>Plot image histogram</p>
+<h2 id="parameters">Parameters</h2>
+<dl>
+<dt><strong><code>channels</code></strong> :&ensp;<code>tuple</code> of <code>int</code> or <code>None</code>, optional <code>(default=</code>None<code>)</code></dt>
+<dd>List of channels by index or name to show</dd>
+<dt><strong><code>ncols</code></strong> :&ensp;<code>int</code></dt>
+<dd>Number sof columns for gridspec if plotting individual channels.</dd>
+<dt><strong><code>save_to</code></strong> :&ensp;<code>str</code> or <code>None</code></dt>
+<dd>Path to image file to save results. If <code>None</code>, show figure.</dd>
+<dt><strong><code>**kwargs</code></strong></dt>
+<dd>Arguments to pass to <code>plt.imshow()</code> function.</dd>
+</dl>
+<h2 id="returns">Returns</h2>
+<p>Gridspec object (for multiple features). Saves plot to file if <code>save_to</code> is not <code>None</code>.</p></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def plot_image_histogram(self, channels=None, ncols=4, save_to=None, **kwargs):
+
+    &#34;&#34;&#34;
+    Plot image histogram
+
+    Parameters
+    ----------
+    channels : tuple of int or None, optional (default=`None`)
+        List of channels by index or name to show
+    ncols : int
+        Number sof columns for gridspec if plotting individual channels.
+    save_to : str or None
+        Path to image file to save results. If `None`, show figure.
+    **kwargs
+        Arguments to pass to `plt.imshow()` function.
+
+    Returns
+    -------
+    Gridspec object (for multiple features). Saves plot to file if `save_to` is not `None`.
+    &#34;&#34;&#34;
+    # calculate gridspec dimensions
+    if len(channels) &lt;= ncols:
+        n_rows, n_cols = 1, len(channels)
+    else:
+        n_rows, n_cols = ceil(len(channels) / ncols), ncols
+    fig = plt.figure(figsize=(ncols * n_cols, ncols * n_rows))
+    # arrange axes as subplots
+    gs = gridspec.GridSpec(n_rows, n_cols, figure=fig)
+    # add plots to axes
+    i = 0
+    for channel in channels:
+        ax = plt.subplot(gs[i])
+        data = self[channel].copy()
+        ax.hist(data.ravel(), bins=100, **kwargs)
+        ax.set_title(channel, fontweight=&#34;bold&#34;, fontsize=16)
+        i = i + 1
+    fig.tight_layout()
+    plt.show()
+    if save_to:
+        plt.savefig(fname=save_to, transparent=True, bbox_inches=&#34;tight&#34;, dpi=800)
+
+    return gs</code></pre>
 </details>
 </dd>
 <dt id="MILWRM.img.scale"><code class="name flex">
@@ -2052,8 +2174,10 @@ tissue domains</dd>
             self.find_optimal_k(
                 alpha=alpha, plot_out=plot_out, random_state=random_state, n_jobs=n_jobs
             )
+        else:
+            self.k = k  # if k is specified set attribute
         # call k-means model from parent class
-        self.find_tissue_regions(random_state=random_state)
+        self.find_tissue_regions(k=self.k, random_state=random_state)
         # loop through image objects and create tissue label images
         print(&#34;Creating tissue_ID images for image objects...&#34;)
         self.tissue_IDs = Parallel(n_jobs=n_jobs, verbose=10)(
@@ -2130,8 +2254,10 @@ model. Parameters are also captured as attributes for posterity.</p></div>
         self.find_optimal_k(
             alpha=alpha, plot_out=plot_out, random_state=random_state, n_jobs=n_jobs
         )
+    else:
+        self.k = k  # if k is specified set attribute
     # call k-means model from parent class
-    self.find_tissue_regions(random_state=random_state)
+    self.find_tissue_regions(k=self.k, random_state=random_state)
     # loop through image objects and create tissue label images
     print(&#34;Creating tissue_ID images for image objects...&#34;)
     self.tissue_IDs = Parallel(n_jobs=n_jobs, verbose=10)(
@@ -2390,8 +2516,10 @@ training. Parameters are also captured as attributes for posterity.</p></div>
             self.find_optimal_k(
                 plot_out=plot_out, alpha=alpha, random_state=random_state, n_jobs=n_jobs
             )
+        else:
+            self.k = k  # if k is specified set attribute
         # call k-means model from parent class
-        self.find_tissue_regions(k=k, random_state=random_state)
+        self.find_tissue_regions(k=self.k, random_state=random_state)
         # loop through anndata object and add tissue labels to adata.obs dataframe
         start = 0
         print(&#34;Adding tissue_ID label to anndata objects&#34;)
@@ -2471,8 +2599,10 @@ Parameters are also captured as attributes for posterity.</p></div>
         self.find_optimal_k(
             plot_out=plot_out, alpha=alpha, random_state=random_state, n_jobs=n_jobs
         )
+    else:
+        self.k = k  # if k is specified set attribute
     # call k-means model from parent class
-    self.find_tissue_regions(k=k, random_state=random_state)
+    self.find_tissue_regions(k=self.k, random_state=random_state)
     # loop through anndata object and add tissue labels to adata.obs dataframe
     start = 0
     print(&#34;Adding tissue_ID label to anndata objects&#34;)
@@ -2640,7 +2770,7 @@ Parameters are also captured as attributes for posterity.</p></div>
 <ul>
 <li>
 <h4><code><a title="MILWRM.img" href="#MILWRM.img">img</a></code></h4>
-<ul class="two-column">
+<ul class="">
 <li><code><a title="MILWRM.img.clip" href="#MILWRM.img.clip">clip</a></code></li>
 <li><code><a title="MILWRM.img.copy" href="#MILWRM.img.copy">copy</a></code></li>
 <li><code><a title="MILWRM.img.downsample" href="#MILWRM.img.downsample">downsample</a></code></li>
@@ -2648,6 +2778,7 @@ Parameters are also captured as attributes for posterity.</p></div>
 <li><code><a title="MILWRM.img.from_npz" href="#MILWRM.img.from_npz">from_npz</a></code></li>
 <li><code><a title="MILWRM.img.from_tiffs" href="#MILWRM.img.from_tiffs">from_tiffs</a></code></li>
 <li><code><a title="MILWRM.img.log_normalize" href="#MILWRM.img.log_normalize">log_normalize</a></code></li>
+<li><code><a title="MILWRM.img.plot_image_histogram" href="#MILWRM.img.plot_image_histogram">plot_image_histogram</a></code></li>
 <li><code><a title="MILWRM.img.scale" href="#MILWRM.img.scale">scale</a></code></li>
 <li><code><a title="MILWRM.img.show" href="#MILWRM.img.show">show</a></code></li>
 <li><code><a title="MILWRM.img.to_npz" href="#MILWRM.img.to_npz">to_npz</a></code></li>
