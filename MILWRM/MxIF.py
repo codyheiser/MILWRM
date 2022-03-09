@@ -191,6 +191,21 @@ class img:
                 new[key] = None
         return img(img_arr=new["img"], channels=new["ch"], mask=new["mask"])
 
+    def __getitem__(self,channels):
+        """Slice img object with channel name"""
+        
+        if isinstance(channels, int):  # force channels into list if single integer
+            channels = [channels]
+        if isinstance(channels, str):  # force channels into int if single string
+            channels = [self.ch.index(channels)]
+        if checktype(channels):  # force channels into list of int if list of strings
+            channels = [self.ch.index(x) for x in channels]
+        if channels is None:  # if no channels are given, use all of them
+            channels = [x for x in range(self.n_ch)]
+
+        return self.img[:,:,channels]
+
+
     @classmethod
     def from_tiffs(cls, tiffdir, channels, common_strings=None, mask=None):
         """
@@ -549,3 +564,46 @@ class img:
         if save_to:
             plt.savefig(fname=save_to, transparent=True, bbox_inches="tight", dpi=800)
         return fig
+
+    def plot_image_histogram(self, channels=None, ncols=4, save_to=None, **kwargs):
+
+        """
+        Plot image histogram
+
+        Parameters
+        ----------
+        channels : tuple of int or None, optional (default=`None`)
+            List of channels by index or name to show
+        ncols : int
+            Number sof columns for gridspec if plotting individual channels.
+        save_to : str or None
+            Path to image file to save results. If `None`, show figure.
+        **kwargs
+            Arguments to pass to `plt.imshow()` function.
+
+        Returns
+        -------
+        Gridspec object (for multiple features). Saves plot to file if `save_to` is not `None`.
+        """
+        # calculate gridspec dimensions
+        if len(channels)<=ncols:
+             n_rows, n_cols = 1, len(channels)
+        else:
+            n_rows, n_cols = ceil(len(channels) / ncols), ncols
+        fig = plt.figure(figsize=(ncols * n_cols, ncols * n_rows))
+        # arrange axes as subplots    
+        gs = gridspec.GridSpec(n_rows, n_cols, figure=fig)
+        # add plots to axes
+        i = 0
+        for channel in channels:
+            ax = plt.subplot(gs[i])
+            data = self[channel].copy()
+            ax.hist(data.ravel(), bins = 100,**kwargs)
+            ax.set_title(channel, fontweight="bold", fontsize=16)
+            i = i+1   
+        fig.tight_layout()
+        plt.show()
+        if save_to:
+            plt.savefig(fname=save_to, transparent=True, bbox_inches="tight", dpi=800)
+
+        return gs

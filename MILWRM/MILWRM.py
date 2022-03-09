@@ -12,6 +12,7 @@ from math import ceil
 from joblib import Parallel, delayed
 from sklearn.cluster import KMeans
 from sklearn.preprocessing import MinMaxScaler
+from sklearn.preprocessing import StandardScaler
 from skimage.filters import gaussian
 
 from .MxIF import checktype
@@ -164,7 +165,7 @@ def prep_data_single_sample_st(
     return tmp2.loc[:, cols]
 
 
-def prep_data_single_sample_mxif(image, features, downsample_factor, sigma, fract):
+def prep_data_single_sample_mxif(image, features, downsample_factor, sigma, fract, save_file = None):
     """
     Prepare dataframe for tissue-level clustering from a single MxIF sample
 
@@ -181,6 +182,8 @@ def prep_data_single_sample_mxif(image, features, downsample_factor, sigma, frac
     fract : float, optional (default=0.2)
         Fraction of cluster data from each image to randomly select for model
         building
+    save_file : str or None
+            Path to image file to save results. If `None`, show figure.
 
     Returns
     -------
@@ -193,6 +196,7 @@ def prep_data_single_sample_mxif(image, features, downsample_factor, sigma, frac
     image.downsample(fact=downsample_factor, func=np.mean)
     # normalize and log-transform image
     image.log_normalize(pseudoval=1, mask=True)
+    # TODO: create some z-score norm/scaling function and add it here
     # blur downsampled image
     image.img = gaussian(image.img, sigma=sigma, multichannel=True)
     # get list of int for features
@@ -212,6 +216,7 @@ def prep_data_single_sample_mxif(image, features, downsample_factor, sigma, frac
     # select cluster data
     i = np.random.choice(tmp.shape[0], int(tmp.shape[0] * fract))
     tmp = tmp[np.ix_(i, features)]
+    
     return image, tmp
 
 
@@ -243,10 +248,11 @@ def add_tissue_ID_single_sample_mxif(image, features, kmeans):
         features = [x for x in range(image.n_ch)]
     # subset to features used in prep_cluster_data
     tmp = image.img[:, :, features]
-    tID = np.zeros(tmp.shape[:2])
-    for x in range(tmp.shape[0]):
-        for y in range(tmp.shape[1]):
-            tID[x, y] = kmeans.predict(tmp[x, y, :].reshape(1, -1))
+    # reshape image to a 2D array to predict
+    w, h, d = tuple(tmp.shape)
+    image_array = tmp.reshape((w*h,d))
+    tID = kmeans.predict(image_array).reshape(w, h)
+    tID = tID.astype(float)  # TODO: Figure out dtypes
     tID[image.mask == 0] = np.nan  # set masked-out pixels to NaN
     return tID
 
@@ -435,6 +441,12 @@ class tissue_labeler:
         if nfeatures is None:
             nfeatures = len(labels)
         scores = self.kmeans.cluster_centers_.copy()
+
+        mean = self.kmeans.cluster_centers_.mean(axis=0)
+        sd = self.kmeans.cluster_centers_.std(axis=0)
+
+        z_scores = (scores -  mean)/sd
+
         n_panels = len(titles)
         if ncols is None:
             ncols = len(titles)
@@ -453,7 +465,7 @@ class tissue_labeler:
             right=1 - (n_cols - 1) * left - 0.01 / n_cols,
             top=1 - (n_rows - 1) * bottom - 0.1 / n_rows,
         )
-        for iscore, score in enumerate(scores):
+        for iscore, score in enumerate(z_scores):
             plt.subplot(gs[iscore])
             indices = np.argsort(score)[::-1][: nfeatures + 1]
             for ig, g in enumerate(indices[::-1]):
@@ -624,8 +636,10 @@ class st_labeler(tissue_labeler):
             self.find_optimal_k(
                 plot_out=plot_out, alpha=alpha, random_state=random_state, n_jobs=n_jobs
             )
+        else:
+            self.k = k  # if k is specified set attribute
         # call k-means model from parent class
-        self.find_tissue_regions(k=k, random_state=random_state)
+        self.find_tissue_regions(k=self.k, random_state=random_state)
         # loop through anndata object and add tissue labels to adata.obs dataframe
         start = 0
         print("Adding tissue_ID label to anndata objects")
@@ -718,6 +732,13 @@ class mxif_labeler(tissue_labeler):
         cluster_data = [x[1] for x in out]
         # concatenate blurred features into cluster_data df for cluster training
         self.cluster_data = np.row_stack(cluster_data)
+        
+        # # perform z-score normalization on final cluster data
+        # scaler = StandardScaler()
+        # unscaled_data = self.cluster_data
+        # self.cluster_data = scaler.fit_transform(unscaled_data)
+        # print("Collected clustering data of shape: {}".format(self.cluster_data.shape))
+        
         # perform min-max scaling on final cluster data
         mms = MinMaxScaler()
         unscaled_data = self.cluster_data
@@ -757,8 +778,10 @@ class mxif_labeler(tissue_labeler):
             self.find_optimal_k(
                 alpha=alpha, plot_out=plot_out, random_state=random_state, n_jobs=n_jobs
             )
+        else:
+            self.k = k  # if k is specified set attribute
         # call k-means model from parent class
-        self.find_tissue_regions(random_state=random_state)
+        self.find_tissue_regions(k=self.k,random_state=random_state)
         # loop through image objects and create tissue label images
         print("Creating tissue_ID images for image objects...")
         self.tissue_IDs = Parallel(n_jobs=n_jobs, verbose=10)(
