@@ -992,7 +992,7 @@ class mxif_labeler(tissue_labeler):
         gs = gridspec.GridSpec(n_rows, n_cols, figure=fig)
         # plot tissue_ID first with colorbar
         ax = plt.subplot(gs[0])
-        im = ax.imshow(tIDs, cmap=cmap, **kwargs)
+        im = ax.imshow(self.tissue_IDs[image_index], cmap=cmap, **kwargs)
         ax.set_title(
             label="tissue_ID",
             loc="left",
@@ -1011,10 +1011,10 @@ class mxif_labeler(tissue_labeler):
             im_tmp = self.images[image_index].img[:, :, channel].copy()
             if self.images[image_index].mask is not None and mask_out:
                 # area outside mask NaN
-                self.tissue_IDs[self.images[image_index].mask == 0] = np.nan
+                self.tissue_IDs[image_index][self.images[image_index].mask == 0] = np.nan
                 im = ax.imshow(self.tissue_IDs, cmap=cmap, alpha=im_tmp, **kwargs)
             else:
-                ax.imshow(self.tissue_IDs, alpha=im_tmp, **kwargs)
+                ax.imshow(self.tissue_IDs[image_index], alpha=im_tmp, **kwargs)
             ax.tick_params(labelbottom=False, labelleft=False)
             sns.despine(bottom=True, left=True)
             ax.set_title(
