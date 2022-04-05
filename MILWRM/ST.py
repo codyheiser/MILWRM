@@ -539,7 +539,7 @@ def show_pita(
         plt.colorbar(shrink=0.8)
         plt.tight_layout()
         if save_to:
-            plt.savefig(fname=save_to, transparent=True, bbox_inches="tight", dpi=800)
+            plt.savefig(fname=save_to, transparent=True, bbox_inches="tight", dpi=300)
         return fig
     if (pita.ndim == 2) and histo is not None:
         n_rows, n_cols = 1, 2  # two images here, histo and RGB
@@ -564,7 +564,7 @@ def show_pita(
         cbar = plt.colorbar(im, shrink=0.8)
         fig.tight_layout()
         if save_to:
-            plt.savefig(fname=save_to, transparent=True, bbox_inches="tight", dpi=800)
+            plt.savefig(fname=save_to, transparent=True, bbox_inches="tight", dpi=300)
         return fig
     if RGB:
         # if third dim has 3 features, treat as RGB and plot it quickly
@@ -632,7 +632,7 @@ def show_pita(
             plt.tight_layout()
             if save_to:
                 plt.savefig(
-                    fname=save_to, transparent=True, bbox_inches="tight", dpi=800
+                    fname=save_to, transparent=True, bbox_inches="tight", dpi=300
                 )
             return fig
     # if pita has multiple features, plot them in gridspec
@@ -707,5 +707,5 @@ def show_pita(
         i = i + 1
     fig.tight_layout()
     if save_to:
-        plt.savefig(fname=save_to, transparent=True, bbox_inches="tight", dpi=800)
+        plt.savefig(fname=save_to, transparent=True, bbox_inches="tight", dpi=300)
     return fig

@@ -526,7 +526,7 @@ class img:
             plt.tight_layout()
             if save_to:
                 plt.savefig(
-                    fname=save_to, transparent=True, bbox_inches="tight", dpi=800
+                    fname=save_to, transparent=True, bbox_inches="tight", dpi=300
                 )
             return fig
         # calculate gridspec dimensions
@@ -560,7 +560,7 @@ class img:
             i = i + 1
         fig.tight_layout()
         if save_to:
-            plt.savefig(fname=save_to, transparent=True, bbox_inches="tight", dpi=800)
+            plt.savefig(fname=save_to, transparent=True, bbox_inches="tight", dpi=300)
         return fig
 
     def plot_image_histogram(self, channels=None, ncols=4, save_to=None, **kwargs):
@@ -602,6 +602,6 @@ class img:
         fig.tight_layout()
         plt.show()
         if save_to:
-            plt.savefig(fname=save_to, transparent=True, bbox_inches="tight", dpi=800)
+            plt.savefig(fname=save_to, transparent=True, bbox_inches="tight", dpi=300)
 
         return gs
