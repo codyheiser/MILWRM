@@ -657,6 +657,147 @@ class st_labeler(tissue_labeler):
             )
             start += self.adatas[i].n_obs
 
+    def show_feature_overlay(
+        self,
+        adata_index,
+        pita,
+        features=None,
+        histo=None,
+        cmap="plasma",
+        label="feature",
+        ncols=4,
+        figsize=(7, 7),
+        save_to=None,
+        **kwargs,
+    ):
+        """
+        Plot tissue_ID with individual pita features as alpha values to distinguish 
+        expression in identified tissue domains
+
+        Parameters
+        ----------
+        adata_index : int
+            Index of adata from `self.adatas` to plot overlays for (e.g. 0 for first 
+            adata object)
+        pita : np.array
+            Image of desired expression in pixel space from `.assemble_pita()`
+        features : list of int, optional (default=`None`)
+            List of features by index to show in plot. If `None`, use all features.
+        histo : np.array or `None`, optional (default=`None`)
+            Histology image to show along with pita in gridspec. If `None`, ignore.
+        cmap : str, optional (default="plasma")
+            Matplotlib colormap to use for plotting tissue IDs
+        label : str
+            What to title each panel of the gridspec (i.e. "PC" or "usage") or each
+            channel in RGB image. Can also pass list of names e.g. ["NeuN","GFAP",
+            "DAPI"] corresponding to channels.
+        ncols : int
+            Number of columns for gridspec
+        figsize : tuple of float
+            Size in inches of output figure
+        save_to : str or None
+            Path to image file to save results. if `None`, show figure.
+        **kwargs
+            Arguments to pass to `plt.imshow()` function
+
+        Returns
+        -------
+        Matplotlib object (if plotting one feature or RGB) or gridspec object (for
+        multiple features). Saves plot to file if `save_to` is not `None`.
+        """
+        assert pita.ndim > 1, "Pita does not have enough dimensions: {} given".format(
+            pita.ndim
+        )
+        assert pita.ndim < 4, "Pita has too many dimensions: {} given".format(pita.ndim)
+        # create tissue_ID pita for plotting
+        tIDs = assemble_pita(self.adatas[adata_index], features="tissue_ID", use_rep="obs", plot_out=False)
+        # if pita has multiple features, plot them in gridspec
+        if isinstance(features, int):  # force features into list if single integer
+            features = [features]
+        # if no features are given, use all of them
+        if features is None:
+            features = [x + 1 for x in range(pita.shape[2])]
+        else:
+            assert (
+                pita.ndim > 2
+            ), "Not enough features in pita: shape {}, expecting 3rd dim with length {}".format(
+                pita.shape, len(features)
+            )
+            assert (
+                len(features) <= pita.shape[2]
+            ), "Too many features given: pita has {}, expected {}".format(
+                pita.shape[2], len(features)
+            )
+        if isinstance(label, str):
+            # if label is single string, name channels numerically
+            labels = ["{}_{}".format(label, x) for x in features]
+        else:
+            assert len(label) == len(
+                features
+            ), "Please provide the same number of labels as features; {} labels given, {} features given.".format(
+                len(label), len(features)
+            )
+            labels = label
+        # calculate gridspec dimensions
+        if histo is not None:
+            labels = ["Histology"] + labels  # append histo to front of labels
+            if len(features) + 2 <= ncols:
+                n_rows, n_cols = 1, len(features) + 2
+            else:
+                n_rows, n_cols = ceil((len(features) + 2) / ncols), ncols
+        else:
+            if len(features) + 1 <= ncols:
+                n_rows, n_cols = 1, len(features) + 1
+            else:
+                n_rows, n_cols = ceil(len(features) + 1 / ncols), ncols
+        fig = plt.figure(figsize=(ncols * n_cols, ncols * n_rows))
+        # arrange axes as subplots
+        gs = gridspec.GridSpec(n_rows, n_cols, figure=fig)
+        # add plots to axes
+        i = 0
+        if histo is not None:
+            # add histology plot to first axes
+            ax = plt.subplot(gs[i])
+            im = ax.imshow(histo, **kwargs)
+            ax.tick_params(labelbottom=False, labelleft=False)
+            sns.despine(bottom=True, left=True)
+            ax.set_title(
+                label=labels[i],
+                loc="left",
+                fontweight="bold",
+                fontsize=16,
+            )
+            i = i + 1
+        # plot tissue_ID first with colorbar
+        ax = plt.subplot(gs[i])
+        im = ax.imshow(tIDs, cmap=cmap, **kwargs)
+        ax.tick_params(labelbottom=False, labelleft=False)
+        sns.despine(bottom=True, left=True)
+        ax.set_title(
+            label="tissue_ID",
+            loc="left",
+            fontweight="bold",
+            fontsize=16,
+        )
+        # colorbar scale for tissue_IDs
+        cbar = plt.colorbar(im, shrink=0.8)
+        for feature in features:
+            ax = plt.subplot(gs[i])
+            im = ax.imshow(tIDs, alpha=pita[:, :, feature - 1], cmap=cmap, **kwargs)
+            ax.tick_params(labelbottom=False, labelleft=False)
+            sns.despine(bottom=True, left=True)
+            ax.set_title(
+                label=labels[i],
+                loc="left",
+                fontweight="bold",
+                fontsize=16,
+            )
+            i = i + 1
+        fig.tight_layout()
+        if save_to:
+            plt.savefig(fname=save_to, transparent=True, bbox_inches="tight", dpi=300)
+        return fig
+
 
 class mxif_labeler(tissue_labeler):
     """
@@ -786,3 +927,104 @@ class mxif_labeler(tissue_labeler):
             )
             for image in self.images
         )
+
+    def show_marker_overlay(
+        self,
+        image_index,
+        channels=None,
+        cmap="plasma",
+        mask_out=True,
+        ncols=4,
+        figsize=(7, 7),
+        save_to=None,
+        **kwargs,
+    ):
+        """
+        Plot tissue_ID with individual markers as alpha values to distinguish 
+        expression in identified tissue domains
+
+        Parameters
+        ----------
+        image_index : int
+            Index of image from `self.images` to plot overlays for (e.g. 0 for first 
+            image)
+        channels : tuple of int or None, optional (default=`None`)
+            List of channels by index or name to show
+        cmap : str, optional (default="plasma")
+            Matplotlib colormap to use for plotting tissue IDs
+        mask_out : bool, optional (default=`True`)
+            Mask out non-tissue pixels prior to showing
+        ncols : int
+            Number of columns for gridspec if plotting individual channels.
+        figsize : tuple of float
+            Size in inches of output figure.
+        save_to : str or None
+            Path to image file to save results. If `None`, show figure.
+        **kwargs
+            Arguments to pass to `plt.imshow()` function.
+
+        Returns
+        -------
+        Matplotlib object (if plotting one feature or RGB) or gridspec object (for 
+        multiple features). Saves plot to file if `save_to` is not `None`.
+        """
+        # if image has multiple channels, plot them in gridspec
+        if isinstance(channels, int):  # force channels into list if single integer
+            channels = [channels]
+        if isinstance(channels, str):  # force channels into int if single string
+            channels = [self.images[image_index].ch.index(channels)]
+        if checktype(channels):  # force channels into list of int if list of strings
+            channels = [self.images[image_index].ch.index(x) for x in channels]
+        if channels is None:  # if no channels are given, use all of them
+            channels = [x for x in range(self.images[image_index].n_ch)]
+        assert (
+            len(channels) <= self.images[image_index].n_ch
+        ), "Too many channels given: image has {}, expected {}".format(
+            self.images[image_index].n_ch, len(channels)
+        )
+        # calculate gridspec dimensions
+        if len(channels) + 1 <= ncols:
+            n_rows, n_cols = 1, len(channels) + 1
+        else:
+            n_rows, n_cols = ceil(len(channels) + 1 / ncols), ncols
+        fig = plt.figure(figsize=(ncols * n_cols, ncols * n_rows))
+        # arrange axes as subplots
+        gs = gridspec.GridSpec(n_rows, n_cols, figure=fig)
+        # plot tissue_ID first with colorbar
+        ax = plt.subplot(gs[0])
+        im = ax.imshow(tIDs, cmap=cmap, **kwargs)
+        ax.set_title(
+            label="tissue_ID",
+            loc="left",
+            fontweight="bold",
+            fontsize=16,
+        )
+        ax.tick_params(labelbottom=False, labelleft=False)
+        sns.despine(bottom=True, left=True)
+        # colorbar scale for tissue_IDs
+        _ = plt.colorbar(im, shrink=0.8)
+        # add plots to axes
+        i = 1
+        for channel in channels:
+            ax = plt.subplot(gs[i])
+            # make copy for alpha
+            im_tmp = self.images[image_index].img[:, :, channel].copy()
+            if self.images[image_index].mask is not None and mask_out:
+                # area outside mask NaN
+                self.tissue_IDs[self.images[image_index].mask == 0] = np.nan
+                im = ax.imshow(self.tissue_IDs, cmap=cmap, alpha=im_tmp, **kwargs)
+            else:
+                ax.imshow(self.tissue_IDs, alpha=im_tmp, **kwargs)
+            ax.tick_params(labelbottom=False, labelleft=False)
+            sns.despine(bottom=True, left=True)
+            ax.set_title(
+                label=self.images[image_index].ch[channel],
+                loc="left",
+                fontweight="bold",
+                fontsize=16,
+            )
+            i = i + 1
+        fig.tight_layout()
+        if save_to:
+            plt.savefig(fname=save_to, transparent=True, bbox_inches="tight", dpi=300)
+        return fig
