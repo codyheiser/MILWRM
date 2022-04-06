@@ -7,6 +7,9 @@ import matplotlib.gridspec as gridspec
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+import seaborn as sns
+
+sns.set_style("white")
 
 from math import ceil
 from joblib import Parallel, delayed
@@ -15,6 +18,7 @@ from sklearn.preprocessing import MinMaxScaler
 from skimage.filters import gaussian
 
 from .MxIF import checktype
+from .ST import assemble_pita
 
 
 def kMeansRes(scaled_data, k, alpha_k=0.02, random_state=18):
@@ -666,18 +670,17 @@ class st_labeler(tissue_labeler):
         cmap="plasma",
         label="feature",
         ncols=4,
-        figsize=(7, 7),
         save_to=None,
         **kwargs,
     ):
         """
-        Plot tissue_ID with individual pita features as alpha values to distinguish 
+        Plot tissue_ID with individual pita features as alpha values to distinguish
         expression in identified tissue domains
 
         Parameters
         ----------
         adata_index : int
-            Index of adata from `self.adatas` to plot overlays for (e.g. 0 for first 
+            Index of adata from `self.adatas` to plot overlays for (e.g. 0 for first
             adata object)
         pita : np.array
             Image of desired expression in pixel space from `.assemble_pita()`
@@ -693,8 +696,6 @@ class st_labeler(tissue_labeler):
             "DAPI"] corresponding to channels.
         ncols : int
             Number of columns for gridspec
-        figsize : tuple of float
-            Size in inches of output figure
         save_to : str or None
             Path to image file to save results. if `None`, show figure.
         **kwargs
@@ -710,12 +711,17 @@ class st_labeler(tissue_labeler):
         )
         assert pita.ndim < 4, "Pita has too many dimensions: {} given".format(pita.ndim)
         # create tissue_ID pita for plotting
-        tIDs = assemble_pita(self.adatas[adata_index], features="tissue_ID", use_rep="obs", plot_out=False)
+        tIDs = assemble_pita(
+            self.adatas[adata_index],
+            features="tissue_ID",
+            use_rep="obs",
+            plot_out=False,
+        )
         # if pita has multiple features, plot them in gridspec
         if isinstance(features, int):  # force features into list if single integer
             features = [features]
         # if no features are given, use all of them
-        if features is None:
+        elif features is None:
             features = [x + 1 for x in range(pita.shape[2])]
         else:
             assert (
@@ -728,6 +734,19 @@ class st_labeler(tissue_labeler):
             ), "Too many features given: pita has {}, expected {}".format(
                 pita.shape[2], len(features)
             )
+        # min-max scale each feature in pita to convert to interpretable alpha values
+        mms = MinMaxScaler()
+        if pita.ndim == 3:
+            pita_tmp = mms.fit_transform(
+                pita.reshape((pita.shape[0] * pita.shape[1], pita.shape[2]))
+            )
+        elif pita.ndim == 2:
+            pita_tmp = mms.fit_transform(
+                pita.reshape((pita.shape[0] * pita.shape[1], 1))
+            )
+        # reshape back to original
+        pita = pita_tmp.reshape(pita.shape)
+        # figure out labels for gridspec plots
         if isinstance(label, str):
             # if label is single string, name channels numerically
             labels = ["{}_{}".format(label, x) for x in features]
@@ -740,16 +759,35 @@ class st_labeler(tissue_labeler):
             labels = label
         # calculate gridspec dimensions
         if histo is not None:
-            labels = ["Histology"] + labels  # append histo to front of labels
+            # determine where the histo image is in anndata
+            assert (
+                histo
+                in self.adatas[adata_index]
+                .uns["spatial"][
+                    list(self.adatas[adata_index].uns["spatial"].keys())[0]
+                ]["images"]
+                .keys()
+            ), "Must provide one of {} for histo".format(
+                self.adatas[adata_index]
+                .uns["spatial"][
+                    list(self.adatas[adata_index].uns["spatial"].keys())[0]
+                ]["images"]
+                .keys()
+            )
+            histo = self.adatas[adata_index].uns["spatial"][
+                list(self.adatas[adata_index].uns["spatial"].keys())[0]
+            ]["images"][histo]
             if len(features) + 2 <= ncols:
                 n_rows, n_cols = 1, len(features) + 2
             else:
                 n_rows, n_cols = ceil((len(features) + 2) / ncols), ncols
+            labels = ["Histology", "tissue_ID"] + labels  # append to front of labels
         else:
             if len(features) + 1 <= ncols:
                 n_rows, n_cols = 1, len(features) + 1
             else:
                 n_rows, n_cols = ceil(len(features) + 1 / ncols), ncols
+            labels = ["tissue_ID"] + labels  # append to front of labels
         fig = plt.figure(figsize=(ncols * n_cols, ncols * n_rows))
         # arrange axes as subplots
         gs = gridspec.GridSpec(n_rows, n_cols, figure=fig)
@@ -774,13 +812,14 @@ class st_labeler(tissue_labeler):
         ax.tick_params(labelbottom=False, labelleft=False)
         sns.despine(bottom=True, left=True)
         ax.set_title(
-            label="tissue_ID",
+            label=labels[i],
             loc="left",
             fontweight="bold",
             fontsize=16,
         )
         # colorbar scale for tissue_IDs
-        cbar = plt.colorbar(im, shrink=0.8)
+        _ = plt.colorbar(im, shrink=0.7)
+        i = i + 1
         for feature in features:
             ax = plt.subplot(gs[i])
             im = ax.imshow(tIDs, alpha=pita[:, :, feature - 1], cmap=cmap, **kwargs)
@@ -940,13 +979,13 @@ class mxif_labeler(tissue_labeler):
         **kwargs,
     ):
         """
-        Plot tissue_ID with individual markers as alpha values to distinguish 
+        Plot tissue_ID with individual markers as alpha values to distinguish
         expression in identified tissue domains
 
         Parameters
         ----------
         image_index : int
-            Index of image from `self.images` to plot overlays for (e.g. 0 for first 
+            Index of image from `self.images` to plot overlays for (e.g. 0 for first
             image)
         channels : tuple of int or None, optional (default=`None`)
             List of channels by index or name to show
@@ -965,7 +1004,7 @@ class mxif_labeler(tissue_labeler):
 
         Returns
         -------
-        Matplotlib object (if plotting one feature or RGB) or gridspec object (for 
+        Matplotlib object (if plotting one feature or RGB) or gridspec object (for
         multiple features). Saves plot to file if `save_to` is not `None`.
         """
         # if image has multiple channels, plot them in gridspec
@@ -1002,7 +1041,7 @@ class mxif_labeler(tissue_labeler):
         ax.tick_params(labelbottom=False, labelleft=False)
         sns.despine(bottom=True, left=True)
         # colorbar scale for tissue_IDs
-        _ = plt.colorbar(im, shrink=0.8)
+        _ = plt.colorbar(im, shrink=0.7)
         # add plots to axes
         i = 1
         for channel in channels:
@@ -1011,8 +1050,12 @@ class mxif_labeler(tissue_labeler):
             im_tmp = self.images[image_index].img[:, :, channel].copy()
             if self.images[image_index].mask is not None and mask_out:
                 # area outside mask NaN
-                self.tissue_IDs[image_index][self.images[image_index].mask == 0] = np.nan
-                im = ax.imshow(self.tissue_IDs, cmap=cmap, alpha=im_tmp, **kwargs)
+                self.tissue_IDs[image_index][
+                    self.images[image_index].mask == 0
+                ] = np.nan
+                im = ax.imshow(
+                    self.tissue_IDs[image_index], cmap=cmap, alpha=im_tmp, **kwargs
+                )
             else:
                 ax.imshow(self.tissue_IDs[image_index], alpha=im_tmp, **kwargs)
             ax.tick_params(labelbottom=False, labelleft=False)
