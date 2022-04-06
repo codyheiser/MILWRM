@@ -368,7 +368,7 @@ class img:
         """
         self.img = CLAHE(self.img, **kwargs)
 
-    def log_normalize(self, pseudoval=1, mask=True):
+    def log_normalize(self, fract, features,  pseudoval=1, mean = None, mask=True):
         """
         Log-normalizes values for each marker with `log10(arr/arr.mean() + pseudoval)`
 
@@ -385,16 +385,47 @@ class img:
         -------
         Log-normalizes values in each channel of `self.img`
         """
-        if mask:
-            assert self.mask is not None, "No tissue mask available"
-            for i in range(self.img.shape[2]):
-                fact = self.img[:, :, i][self.mask != 0].mean()
-                self.img[:, :, i] = np.log10(self.img[:, :, i] / fact + pseudoval)
+        if isinstance(features, int):  # force features into list if single integer
+            features = [features]
+        if isinstance(features, str):  # force features into int if single string
+            features = [self.ch.index(features)]
+        if checktype(features):  # force features into list of int if list of strings
+            features = [self.ch.index(x) for x in features]
+        if features is None:  # if no features are given, use all of them
+            features = [x for x in range(self.n_ch)]
+        if mean.all() != None:
+            if mask:
+                assert self.mask is not None, "No tissue mask available"
+                for i in range(self.img.shape[2]):
+                    fact = mean[i]
+                    self.img[:, :, i] = np.log10(self.img[:, :, i] / fact + pseudoval)
+
+            else:
+                print("WARNING: Performing normalization without a tissue mask.")
+                for i in range(self.img.shape[2]):
+                    fact = mean[i]
+                    self.img[:, :, i] = np.log10(self.img[:, :, i] / fact + pseudoval)
         else:
-            print("WARNING: Performing normalization without a tissue mask.")
-            for i in range(self.img.shape[2]):
-                fact = self.img[:, :, i].mean()
-                self.img[:, :, i] = np.log10(self.img[:, :, i] / fact + pseudoval)
+            if mask:
+                assert self.mask is not None, "No tissue mask available"
+                for i in range(self.img.shape[2]):
+                    fact = self.img[:, :, i].mean()
+                    self.img[:, :, i] = np.log10(self.img[:, :, i] / fact + pseudoval)
+
+            else:
+                print("WARNING: Performing normalization without a tissue mask.")
+                for i in range(self.img.shape[2]):
+                    fact = self.img[:, :, i].mean()
+                    self.img[:, :, i] = np.log10(self.img[:, :, i] / fact + pseudoval)
+        # get cluster data for image_i
+        tmp = []
+        for i in range(self.img.shape[2]):
+            tmp.append(self.img[:, :, i][self.mask != 0])
+        tmp = np.column_stack(tmp)
+        # select cluster data
+        i = np.random.choice(tmp.shape[0], int(tmp.shape[0] * fract))
+        tmp = tmp[np.ix_(i, features)]
+        return tmp
 
     def downsample(self, fact, func=np.mean):
         """
