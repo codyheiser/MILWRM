@@ -536,10 +536,16 @@ def show_pita(
         plt.imshow(pita, **kwargs)
         plt.tick_params(labelbottom=False, labelleft=False)
         sns.despine(bottom=True, left=True)
-        plt.colorbar(shrink=0.8)
+        ax.set_title(
+            label=label,
+            loc="left",
+            fontweight="bold",
+            fontsize=16,
+        )
+        _ = plt.colorbar(shrink=0.7)
         plt.tight_layout()
         if save_to:
-            plt.savefig(fname=save_to, transparent=True, bbox_inches="tight", dpi=800)
+            plt.savefig(fname=save_to, transparent=True, bbox_inches="tight", dpi=300)
         return fig
     if (pita.ndim == 2) and histo is not None:
         n_rows, n_cols = 1, 2  # two images here, histo and RGB
@@ -561,10 +567,16 @@ def show_pita(
         im = ax.imshow(pita, **kwargs)
         ax.tick_params(labelbottom=False, labelleft=False)
         sns.despine(bottom=True, left=True)
-        cbar = plt.colorbar(im, shrink=0.8)
+        ax.set_title(
+            label=label,
+            loc="left",
+            fontweight="bold",
+            fontsize=16,
+        )
+        _ = plt.colorbar(im, shrink=0.7)
         fig.tight_layout()
         if save_to:
-            plt.savefig(fname=save_to, transparent=True, bbox_inches="tight", dpi=800)
+            plt.savefig(fname=save_to, transparent=True, bbox_inches="tight", dpi=300)
         return fig
     if RGB:
         # if third dim has 3 features, treat as RGB and plot it quickly
@@ -632,7 +644,7 @@ def show_pita(
             plt.tight_layout()
             if save_to:
                 plt.savefig(
-                    fname=save_to, transparent=True, bbox_inches="tight", dpi=800
+                    fname=save_to, transparent=True, bbox_inches="tight", dpi=300
                 )
             return fig
     # if pita has multiple features, plot them in gridspec
@@ -703,9 +715,9 @@ def show_pita(
             fontweight="bold",
             fontsize=16,
         )
-        cbar = plt.colorbar(im, shrink=0.8)
+        cbar = plt.colorbar(im, shrink=0.7)
         i = i + 1
     fig.tight_layout()
     if save_to:
-        plt.savefig(fname=save_to, transparent=True, bbox_inches="tight", dpi=800)
+        plt.savefig(fname=save_to, transparent=True, bbox_inches="tight", dpi=300)
     return fig
