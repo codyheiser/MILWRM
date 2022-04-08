@@ -674,10 +674,8 @@ class st_labeler(tissue_labeler):
             self.find_optimal_k(
                 plot_out=plot_out, alpha=alpha, random_state=random_state, n_jobs=n_jobs
             )
-        else:
-            self.k = k  # if k is specified set attribute
         # call k-means model from parent class
-        self.find_tissue_regions(k=self.k, random_state=random_state)
+        self.find_tissue_regions(k=k, random_state=random_state)
         # loop through anndata object and add tissue labels to adata.obs dataframe
         start = 0
         print(&#34;Adding tissue_ID label to anndata objects&#34;)
@@ -747,6 +745,7 @@ class st_labeler(tissue_labeler):
             features=&#34;tissue_ID&#34;,
             use_rep=&#34;obs&#34;,
             plot_out=False,
+            verbose=False,
         )
         # if pita has multiple features, plot them in gridspec
         if isinstance(features, int):  # force features into list if single integer
@@ -985,10 +984,8 @@ class mxif_labeler(tissue_labeler):
             self.find_optimal_k(
                 alpha=alpha, plot_out=plot_out, random_state=random_state, n_jobs=n_jobs
             )
-        else:
-            self.k = k  # if k is specified set attribute
         # call k-means model from parent class
-        self.find_tissue_regions(k=self.k, random_state=random_state)
+        self.find_tissue_regions(k=k, random_state=random_state)
         # loop through image objects and create tissue label images
         print(&#34;Creating tissue_ID images for image objects...&#34;)
         self.tissue_IDs = Parallel(n_jobs=n_jobs, verbose=10)(
@@ -1005,7 +1002,6 @@ class mxif_labeler(tissue_labeler):
         cmap=&#34;plasma&#34;,
         mask_out=True,
         ncols=4,
-        figsize=(7, 7),
         save_to=None,
         **kwargs,
     ):
@@ -1026,8 +1022,6 @@ class mxif_labeler(tissue_labeler):
             Mask out non-tissue pixels prior to showing
         ncols : int
             Number of columns for gridspec if plotting individual channels.
-        figsize : tuple of float
-            Size in inches of output figure.
         save_to : str or None
             Path to image file to save results. If `None`, show figure.
         **kwargs
@@ -1643,10 +1637,8 @@ tissue domains</dd>
             self.find_optimal_k(
                 alpha=alpha, plot_out=plot_out, random_state=random_state, n_jobs=n_jobs
             )
-        else:
-            self.k = k  # if k is specified set attribute
         # call k-means model from parent class
-        self.find_tissue_regions(k=self.k, random_state=random_state)
+        self.find_tissue_regions(k=k, random_state=random_state)
         # loop through image objects and create tissue label images
         print(&#34;Creating tissue_ID images for image objects...&#34;)
         self.tissue_IDs = Parallel(n_jobs=n_jobs, verbose=10)(
@@ -1663,7 +1655,6 @@ tissue domains</dd>
         cmap=&#34;plasma&#34;,
         mask_out=True,
         ncols=4,
-        figsize=(7, 7),
         save_to=None,
         **kwargs,
     ):
@@ -1684,8 +1675,6 @@ tissue domains</dd>
             Mask out non-tissue pixels prior to showing
         ncols : int
             Number of columns for gridspec if plotting individual channels.
-        figsize : tuple of float
-            Size in inches of output figure.
         save_to : str or None
             Path to image file to save results. If `None`, show figure.
         **kwargs
@@ -1828,10 +1817,8 @@ model. Parameters are also captured as attributes for posterity.</p></div>
         self.find_optimal_k(
             alpha=alpha, plot_out=plot_out, random_state=random_state, n_jobs=n_jobs
         )
-    else:
-        self.k = k  # if k is specified set attribute
     # call k-means model from parent class
-    self.find_tissue_regions(k=self.k, random_state=random_state)
+    self.find_tissue_regions(k=k, random_state=random_state)
     # loop through image objects and create tissue label images
     print(&#34;Creating tissue_ID images for image objects...&#34;)
     self.tissue_IDs = Parallel(n_jobs=n_jobs, verbose=10)(
@@ -1928,7 +1915,7 @@ training. Parameters are also captured as attributes for posterity.</p></div>
 </details>
 </dd>
 <dt id="MILWRM.MILWRM.mxif_labeler.show_marker_overlay"><code class="name flex">
-<span>def <span class="ident">show_marker_overlay</span></span>(<span>self, image_index, channels=None, cmap='plasma', mask_out=True, ncols=4, figsize=(7, 7), save_to=None, **kwargs)</span>
+<span>def <span class="ident">show_marker_overlay</span></span>(<span>self, image_index, channels=None, cmap='plasma', mask_out=True, ncols=4, save_to=None, **kwargs)</span>
 </code></dt>
 <dd>
 <div class="desc"><p>Plot tissue_ID with individual markers as alpha values to distinguish
@@ -1946,8 +1933,6 @@ image)</dd>
 <dd>Mask out non-tissue pixels prior to showing</dd>
 <dt><strong><code>ncols</code></strong> :&ensp;<code>int</code></dt>
 <dd>Number of columns for gridspec if plotting individual channels.</dd>
-<dt><strong><code>figsize</code></strong> :&ensp;<code>tuple</code> of <code>float</code></dt>
-<dd>Size in inches of output figure.</dd>
 <dt><strong><code>save_to</code></strong> :&ensp;<code>str</code> or <code>None</code></dt>
 <dd>Path to image file to save results. If <code>None</code>, show figure.</dd>
 <dt><strong><code>**kwargs</code></strong></dt>
@@ -1970,7 +1955,6 @@ image)</dd>
     cmap=&#34;plasma&#34;,
     mask_out=True,
     ncols=4,
-    figsize=(7, 7),
     save_to=None,
     **kwargs,
 ):
@@ -1991,8 +1975,6 @@ image)</dd>
         Mask out non-tissue pixels prior to showing
     ncols : int
         Number of columns for gridspec if plotting individual channels.
-    figsize : tuple of float
-        Size in inches of output figure.
     save_to : str or None
         Path to image file to save results. If `None`, show figure.
     **kwargs
@@ -2232,10 +2214,8 @@ image)</dd>
             self.find_optimal_k(
                 plot_out=plot_out, alpha=alpha, random_state=random_state, n_jobs=n_jobs
             )
-        else:
-            self.k = k  # if k is specified set attribute
         # call k-means model from parent class
-        self.find_tissue_regions(k=self.k, random_state=random_state)
+        self.find_tissue_regions(k=k, random_state=random_state)
         # loop through anndata object and add tissue labels to adata.obs dataframe
         start = 0
         print(&#34;Adding tissue_ID label to anndata objects&#34;)
@@ -2305,6 +2285,7 @@ image)</dd>
             features=&#34;tissue_ID&#34;,
             use_rep=&#34;obs&#34;,
             plot_out=False,
+            verbose=False,
         )
         # if pita has multiple features, plot them in gridspec
         if isinstance(features, int):  # force features into list if single integer
@@ -2491,10 +2472,8 @@ Parameters are also captured as attributes for posterity.</p></div>
         self.find_optimal_k(
             plot_out=plot_out, alpha=alpha, random_state=random_state, n_jobs=n_jobs
         )
-    else:
-        self.k = k  # if k is specified set attribute
     # call k-means model from parent class
-    self.find_tissue_regions(k=self.k, random_state=random_state)
+    self.find_tissue_regions(k=k, random_state=random_state)
     # loop through anndata object and add tissue labels to adata.obs dataframe
     start = 0
     print(&#34;Adding tissue_ID label to anndata objects&#34;)
@@ -2716,6 +2695,7 @@ channel in RGB image. Can also pass list of names e.g. ["NeuN","GFAP",
         features=&#34;tissue_ID&#34;,
         use_rep=&#34;obs&#34;,
         plot_out=False,
+        verbose=False,
     )
     # if pita has multiple features, plot them in gridspec
     if isinstance(features, int):  # force features into list if single integer

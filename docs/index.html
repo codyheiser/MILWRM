@@ -84,7 +84,7 @@ histological imaging data</p></div>
 <h2 class="section-title" id="header-functions">Functions</h2>
 <dl>
 <dt id="MILWRM.assemble_pita"><code class="name flex">
-<span>def <span class="ident">assemble_pita</span></span>(<span>adata, features=None, use_rep=None, layer=None, plot_out=True, histo=None, **kwargs)</span>
+<span>def <span class="ident">assemble_pita</span></span>(<span>adata, features=None, use_rep=None, layer=None, plot_out=True, histo=None, verbose=True, **kwargs)</span>
 </code></dt>
 <dd>
 <div class="desc"><p>Cast feature into pixel space to construct gene expression image ("pita")</p>
@@ -105,6 +105,8 @@ specified and <code>plot_out</code>, first feature (index 0) will be plotted.</d
 <dt><strong><code>histo</code></strong> :&ensp;<code>str</code> or <code>None</code>, optional <code>(default=</code>None<code>)</code></dt>
 <dd>Histology image to show along with pita in gridspec (i.e. "hires",
 "hires_trim", "lowres"). If <code>None</code> or if <code>plot_out</code>==<code>False</code>, ignore.</dd>
+<dt><strong><code>verbose</code></strong> :&ensp;<code>bool</code>, optional <code>(default=</code>True<code>)</code></dt>
+<dd>Print updates to console</dd>
 <dt><strong><code>**kwargs</code></strong></dt>
 <dd>Arguments to pass to <code><a title="MILWRM.show_pita" href="#MILWRM.show_pita">show_pita()</a></code> function</dd>
 </dl>
@@ -118,7 +120,14 @@ specified and <code>plot_out</code>, first feature (index 0) will be plotted.</d
 <span>Expand source code</span>
 </summary>
 <pre><code class="python">def assemble_pita(
-    adata, features=None, use_rep=None, layer=None, plot_out=True, histo=None, **kwargs
+    adata,
+    features=None,
+    use_rep=None,
+    layer=None,
+    plot_out=True,
+    histo=None,
+    verbose=True,
+    **kwargs,
 ):
     &#34;&#34;&#34;
     Cast feature into pixel space to construct gene expression image (&#34;pita&#34;)
@@ -140,6 +149,8 @@ specified and <code>plot_out</code>, first feature (index 0) will be plotted.</d
     histo : str or `None`, optional (default=`None`)
         Histology image to show along with pita in gridspec (i.e. &#34;hires&#34;,
         &#34;hires_trim&#34;, &#34;lowres&#34;). If `None` or if `plot_out`==`False`, ignore.
+    verbose : bool, optional (default=`True`)
+        Print updates to console
     **kwargs
         Arguments to pass to `show_pita()` function
 
@@ -161,51 +172,65 @@ specified and <code>plot_out</code>, first feature (index 0) will be plotted.</d
         if not features:
             features = adata.var_names  # [adata.var.highly_variable == 1].tolist()
         if layer is None:
-            print(&#34;Assembling pita with {} features from adata.X&#34;.format(len(features)))
+            if verbose:
+                print(
+                    &#34;Assembling pita with {} features from adata.X&#34;.format(
+                        len(features)
+                    )
+                )
             mapper = pd.DataFrame(
                 adata.X[:, [adata.var_names.get_loc(x) for x in features]],
                 index=adata.obs_names,
             )
         else:
-            print(
-                &#34;Assembling pita with {} features from adata.layers[&#39;{}&#39;]&#34;.format(
-                    len(features), layer
+            if verbose:
+                print(
+                    &#34;Assembling pita with {} features from adata.layers[&#39;{}&#39;]&#34;.format(
+                        len(features), layer
+                    )
                 )
-            )
             mapper = pd.DataFrame(
                 adata.layers[layer][:, [adata.var_names.get_loc(x) for x in features]],
                 index=adata.obs_names,
             )
     elif use_rep in [&#34;.obs&#34;, &#34;obs&#34;]:
         assert features is not None, &#34;Must provide feature(s) from adata.obs&#34;
-        print(&#34;Assembling pita with {} features from adata.obs&#34;.format(len(features)))
+        if verbose:
+            print(
+                &#34;Assembling pita with {} features from adata.obs&#34;.format(len(features))
+            )
         if all(isinstance(x, int) for x in features):
             mapper = adata.obs.iloc[:, features].copy()
         else:
             mapper = adata.obs[features].copy()
     else:
         if not features:
-            print(
-                &#34;Assembling pita with {} features from adata.obsm[&#39;{}&#39;]&#34;.format(
-                    adata.obsm[use_rep].shape[1], use_rep
+            if verbose:
+                print(
+                    &#34;Assembling pita with {} features from adata.obsm[&#39;{}&#39;]&#34;.format(
+                        adata.obsm[use_rep].shape[1], use_rep
+                    )
                 )
-            )
             mapper = pd.DataFrame(adata.obsm[use_rep], index=adata.obs_names)
         else:
             assert all(
                 isinstance(x, int) for x in features
             ), &#34;Features must be integer indices if using rep from adata.obsm&#34;
-            print(
-                &#34;Assembling pita with {} features from adata.obsm[&#39;{}&#39;]&#34;.format(
-                    len(features), use_rep
+            if verbose:
+                print(
+                    &#34;Assembling pita with {} features from adata.obsm[&#39;{}&#39;]&#34;.format(
+                        len(features), use_rep
+                    )
                 )
-            )
             mapper = pd.DataFrame(
                 adata.obsm[use_rep][:, features], index=adata.obs_names
             )
 
     # cast barcodes into pixel dimensions for reindexing
-    print(&#34;Casting barcodes to pixel dimensions and saving to adata.uns[&#39;pixel_map&#39;]&#34;)
+    if verbose:
+        print(
+            &#34;Casting barcodes to pixel dimensions and saving to adata.uns[&#39;pixel_map&#39;]&#34;
+        )
     pixel_map = (
         adata.uns[&#34;pixel_map_df&#34;].pivot(index=&#34;y&#34;, columns=&#34;x&#34;, values=&#34;barcode&#34;).values
     )
@@ -231,7 +256,8 @@ specified and <code>plot_out</code>, first feature (index 0) will be plotted.</d
                 &#34;images&#34;
             ][histo]
         show_pita(pita=assembled, features=None, histo=histo, **kwargs)
-    print(&#34;Done!&#34;)
+    if verbose:
+        print(&#34;Done!&#34;)
     return assembled</code></pre>
 </details>
 </dd>
@@ -2186,10 +2212,8 @@ tissue domains</dd>
             self.find_optimal_k(
                 alpha=alpha, plot_out=plot_out, random_state=random_state, n_jobs=n_jobs
             )
-        else:
-            self.k = k  # if k is specified set attribute
         # call k-means model from parent class
-        self.find_tissue_regions(k=self.k, random_state=random_state)
+        self.find_tissue_regions(k=k, random_state=random_state)
         # loop through image objects and create tissue label images
         print(&#34;Creating tissue_ID images for image objects...&#34;)
         self.tissue_IDs = Parallel(n_jobs=n_jobs, verbose=10)(
@@ -2206,7 +2230,6 @@ tissue domains</dd>
         cmap=&#34;plasma&#34;,
         mask_out=True,
         ncols=4,
-        figsize=(7, 7),
         save_to=None,
         **kwargs,
     ):
@@ -2227,8 +2250,6 @@ tissue domains</dd>
             Mask out non-tissue pixels prior to showing
         ncols : int
             Number of columns for gridspec if plotting individual channels.
-        figsize : tuple of float
-            Size in inches of output figure.
         save_to : str or None
             Path to image file to save results. If `None`, show figure.
         **kwargs
@@ -2371,10 +2392,8 @@ model. Parameters are also captured as attributes for posterity.</p></div>
         self.find_optimal_k(
             alpha=alpha, plot_out=plot_out, random_state=random_state, n_jobs=n_jobs
         )
-    else:
-        self.k = k  # if k is specified set attribute
     # call k-means model from parent class
-    self.find_tissue_regions(k=self.k, random_state=random_state)
+    self.find_tissue_regions(k=k, random_state=random_state)
     # loop through image objects and create tissue label images
     print(&#34;Creating tissue_ID images for image objects...&#34;)
     self.tissue_IDs = Parallel(n_jobs=n_jobs, verbose=10)(
@@ -2471,7 +2490,7 @@ training. Parameters are also captured as attributes for posterity.</p></div>
 </details>
 </dd>
 <dt id="MILWRM.mxif_labeler.show_marker_overlay"><code class="name flex">
-<span>def <span class="ident">show_marker_overlay</span></span>(<span>self, image_index, channels=None, cmap='plasma', mask_out=True, ncols=4, figsize=(7, 7), save_to=None, **kwargs)</span>
+<span>def <span class="ident">show_marker_overlay</span></span>(<span>self, image_index, channels=None, cmap='plasma', mask_out=True, ncols=4, save_to=None, **kwargs)</span>
 </code></dt>
 <dd>
 <div class="desc"><p>Plot tissue_ID with individual markers as alpha values to distinguish
@@ -2489,8 +2508,6 @@ image)</dd>
 <dd>Mask out non-tissue pixels prior to showing</dd>
 <dt><strong><code>ncols</code></strong> :&ensp;<code>int</code></dt>
 <dd>Number of columns for gridspec if plotting individual channels.</dd>
-<dt><strong><code>figsize</code></strong> :&ensp;<code>tuple</code> of <code>float</code></dt>
-<dd>Size in inches of output figure.</dd>
 <dt><strong><code>save_to</code></strong> :&ensp;<code>str</code> or <code>None</code></dt>
 <dd>Path to image file to save results. If <code>None</code>, show figure.</dd>
 <dt><strong><code>**kwargs</code></strong></dt>
@@ -2513,7 +2530,6 @@ image)</dd>
     cmap=&#34;plasma&#34;,
     mask_out=True,
     ncols=4,
-    figsize=(7, 7),
     save_to=None,
     **kwargs,
 ):
@@ -2534,8 +2550,6 @@ image)</dd>
         Mask out non-tissue pixels prior to showing
     ncols : int
         Number of columns for gridspec if plotting individual channels.
-    figsize : tuple of float
-        Size in inches of output figure.
     save_to : str or None
         Path to image file to save results. If `None`, show figure.
     **kwargs
@@ -2775,10 +2789,8 @@ image)</dd>
             self.find_optimal_k(
                 plot_out=plot_out, alpha=alpha, random_state=random_state, n_jobs=n_jobs
             )
-        else:
-            self.k = k  # if k is specified set attribute
         # call k-means model from parent class
-        self.find_tissue_regions(k=self.k, random_state=random_state)
+        self.find_tissue_regions(k=k, random_state=random_state)
         # loop through anndata object and add tissue labels to adata.obs dataframe
         start = 0
         print(&#34;Adding tissue_ID label to anndata objects&#34;)
@@ -2848,6 +2860,7 @@ image)</dd>
             features=&#34;tissue_ID&#34;,
             use_rep=&#34;obs&#34;,
             plot_out=False,
+            verbose=False,
         )
         # if pita has multiple features, plot them in gridspec
         if isinstance(features, int):  # force features into list if single integer
@@ -3034,10 +3047,8 @@ Parameters are also captured as attributes for posterity.</p></div>
         self.find_optimal_k(
             plot_out=plot_out, alpha=alpha, random_state=random_state, n_jobs=n_jobs
         )
-    else:
-        self.k = k  # if k is specified set attribute
     # call k-means model from parent class
-    self.find_tissue_regions(k=self.k, random_state=random_state)
+    self.find_tissue_regions(k=k, random_state=random_state)
     # loop through anndata object and add tissue labels to adata.obs dataframe
     start = 0
     print(&#34;Adding tissue_ID label to anndata objects&#34;)
@@ -3259,6 +3270,7 @@ channel in RGB image. Can also pass list of names e.g. ["NeuN","GFAP",
         features=&#34;tissue_ID&#34;,
         use_rep=&#34;obs&#34;,
         plot_out=False,
+        verbose=False,
     )
     # if pita has multiple features, plot them in gridspec
     if isinstance(features, int):  # force features into list if single integer
