@@ -367,7 +367,14 @@ def trim_image(
 
 
 def assemble_pita(
-    adata, features=None, use_rep=None, layer=None, plot_out=True, histo=None, **kwargs
+    adata,
+    features=None,
+    use_rep=None,
+    layer=None,
+    plot_out=True,
+    histo=None,
+    verbose=True,
+    **kwargs,
 ):
     """
     Cast feature into pixel space to construct gene expression image ("pita")
@@ -389,6 +396,8 @@ def assemble_pita(
     histo : str or `None`, optional (default=`None`)
         Histology image to show along with pita in gridspec (i.e. "hires",
         "hires_trim", "lowres"). If `None` or if `plot_out`==`False`, ignore.
+    verbose : bool, optional (default=`True`)
+        Print updates to console
     **kwargs
         Arguments to pass to `show_pita()` function
 
@@ -410,51 +419,65 @@ def assemble_pita(
         if not features:
             features = adata.var_names  # [adata.var.highly_variable == 1].tolist()
         if layer is None:
-            print("Assembling pita with {} features from adata.X".format(len(features)))
+            if verbose:
+                print(
+                    "Assembling pita with {} features from adata.X".format(
+                        len(features)
+                    )
+                )
             mapper = pd.DataFrame(
                 adata.X[:, [adata.var_names.get_loc(x) for x in features]],
                 index=adata.obs_names,
             )
         else:
-            print(
-                "Assembling pita with {} features from adata.layers['{}']".format(
-                    len(features), layer
+            if verbose:
+                print(
+                    "Assembling pita with {} features from adata.layers['{}']".format(
+                        len(features), layer
+                    )
                 )
-            )
             mapper = pd.DataFrame(
                 adata.layers[layer][:, [adata.var_names.get_loc(x) for x in features]],
                 index=adata.obs_names,
             )
     elif use_rep in [".obs", "obs"]:
         assert features is not None, "Must provide feature(s) from adata.obs"
-        print("Assembling pita with {} features from adata.obs".format(len(features)))
+        if verbose:
+            print(
+                "Assembling pita with {} features from adata.obs".format(len(features))
+            )
         if all(isinstance(x, int) for x in features):
             mapper = adata.obs.iloc[:, features].copy()
         else:
             mapper = adata.obs[features].copy()
     else:
         if not features:
-            print(
-                "Assembling pita with {} features from adata.obsm['{}']".format(
-                    adata.obsm[use_rep].shape[1], use_rep
+            if verbose:
+                print(
+                    "Assembling pita with {} features from adata.obsm['{}']".format(
+                        adata.obsm[use_rep].shape[1], use_rep
+                    )
                 )
-            )
             mapper = pd.DataFrame(adata.obsm[use_rep], index=adata.obs_names)
         else:
             assert all(
                 isinstance(x, int) for x in features
             ), "Features must be integer indices if using rep from adata.obsm"
-            print(
-                "Assembling pita with {} features from adata.obsm['{}']".format(
-                    len(features), use_rep
+            if verbose:
+                print(
+                    "Assembling pita with {} features from adata.obsm['{}']".format(
+                        len(features), use_rep
+                    )
                 )
-            )
             mapper = pd.DataFrame(
                 adata.obsm[use_rep][:, features], index=adata.obs_names
             )
 
     # cast barcodes into pixel dimensions for reindexing
-    print("Casting barcodes to pixel dimensions and saving to adata.uns['pixel_map']")
+    if verbose:
+        print(
+            "Casting barcodes to pixel dimensions and saving to adata.uns['pixel_map']"
+        )
     pixel_map = (
         adata.uns["pixel_map_df"].pivot(index="y", columns="x", values="barcode").values
     )
@@ -480,7 +503,8 @@ def assemble_pita(
                 "images"
             ][histo]
         show_pita(pita=assembled, features=None, histo=histo, **kwargs)
-    print("Done!")
+    if verbose:
+        print("Done!")
     return assembled
 
 

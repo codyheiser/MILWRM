@@ -643,10 +643,8 @@ class st_labeler(tissue_labeler):
             self.find_optimal_k(
                 plot_out=plot_out, alpha=alpha, random_state=random_state, n_jobs=n_jobs
             )
-        else:
-            self.k = k  # if k is specified set attribute
         # call k-means model from parent class
-        self.find_tissue_regions(k=self.k, random_state=random_state)
+        self.find_tissue_regions(k=k, random_state=random_state)
         # loop through anndata object and add tissue labels to adata.obs dataframe
         start = 0
         print("Adding tissue_ID label to anndata objects")
@@ -716,6 +714,7 @@ class st_labeler(tissue_labeler):
             features="tissue_ID",
             use_rep="obs",
             plot_out=False,
+            verbose=False,
         )
         # if pita has multiple features, plot them in gridspec
         if isinstance(features, int):  # force features into list if single integer
@@ -954,10 +953,8 @@ class mxif_labeler(tissue_labeler):
             self.find_optimal_k(
                 alpha=alpha, plot_out=plot_out, random_state=random_state, n_jobs=n_jobs
             )
-        else:
-            self.k = k  # if k is specified set attribute
         # call k-means model from parent class
-        self.find_tissue_regions(k=self.k, random_state=random_state)
+        self.find_tissue_regions(k=k, random_state=random_state)
         # loop through image objects and create tissue label images
         print("Creating tissue_ID images for image objects...")
         self.tissue_IDs = Parallel(n_jobs=n_jobs, verbose=10)(
@@ -974,7 +971,6 @@ class mxif_labeler(tissue_labeler):
         cmap="plasma",
         mask_out=True,
         ncols=4,
-        figsize=(7, 7),
         save_to=None,
         **kwargs,
     ):
@@ -995,8 +991,6 @@ class mxif_labeler(tissue_labeler):
             Mask out non-tissue pixels prior to showing
         ncols : int
             Number of columns for gridspec if plotting individual channels.
-        figsize : tuple of float
-            Size in inches of output figure.
         save_to : str or None
             Path to image file to save results. If `None`, show figure.
         **kwargs
