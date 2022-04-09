@@ -165,6 +165,7 @@ def map_pixels(adata, filter_label="in_tissue", img_key="hires", library_id=None
             index_unique=None,
         )
         a_frame.uns = adata.uns
+        a_frame.var = adata.var
         a_frame.obs.drop(columns="batch", inplace=True)
     else:
         a_frame = adata.copy()
