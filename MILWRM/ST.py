@@ -129,14 +129,14 @@ def map_pixels(adata, filter_label="in_tissue", img_key="hires", library_id=None
         del left.var
         del left.uns
         left.obs[filter_label] = 0
-        left.obs_names = [str(x) for x in range(left.n_obs)]
+        left.obs_names = ["left" + str(x) for x in range(left.n_obs)]
         # right part of frame, translated
         right = adata[adata.obs.array_col.isin([2, 3]), :].copy()
         right.obsm["spatial"][..., 0] += delta_x.astype(int)
         del right.var
         del right.uns
         right.obs[filter_label] = 0
-        right.obs_names = [str(x) for x in range(right.n_obs)]
+        right.obs_names = ["right" + str(x) for x in range(right.n_obs)]
         # add sides to orig
         a_sides = adata.concatenate(
             [left, right],
@@ -146,7 +146,7 @@ def map_pixels(adata, filter_label="in_tissue", img_key="hires", library_id=None
         # bottom part of frame, translated
         bottom = a_sides[a_sides.obs.array_row == 1, :].copy()
         bottom.obsm["spatial"][..., 1] += delta_y.astype(int)
-        bottom.obs_names = [str(x) for x in range(bottom.n_obs)]
+        bottom.obs_names = ["bottom" + str(x) for x in range(bottom.n_obs)]
         del bottom.var
         del bottom.uns
         bottom.obs[filter_label] = 0
@@ -158,7 +158,7 @@ def map_pixels(adata, filter_label="in_tissue", img_key="hires", library_id=None
         del top.var
         del top.uns
         top.obs[filter_label] = 0
-        top.obs_names = [str(x) for x in range(top.n_obs)]
+        top.obs_names = ["top" + str(x) for x in range(top.n_obs)]
         # complete frame
         a_frame = a_sides.concatenate(
             [top, bottom],
