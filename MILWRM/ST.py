@@ -105,40 +105,92 @@ def map_pixels(adata, filter_label="in_tissue", img_key="hires", library_id=None
         "scalefactors"
     ][f"tissue_{img_key}_scalef"]
 
+    if filter_label is not None:
+        # create frame of mock pixels to make edges look better
+        # x and y deltas for moving rows and columns into a blank frame
+        delta_x = (
+            adata[adata.obs.array_col == 0, :].obsm["spatial"]
+            - adata[adata.obs.array_col == 1, :].obsm["spatial"]
+        )
+        delta_x = np.mean(list(delta_x[:, 1])) * 2
+        delta_y = (
+            adata[adata.obs.array_row == 0, :].obsm["spatial"]
+            - adata[adata.obs.array_row == 1, :].obsm["spatial"]
+        )
+        delta_y = np.mean(list(delta_y[:, 1])) * 2
+        # left part of frame, translated
+        left = adata[
+            adata.obs.array_col.isin(
+                [adata.obs.array_col.max() - 2, adata.obs.array_col.max() - 3]
+            ),
+            :,
+        ].copy()
+        left.obsm["spatial"][..., 0] -= delta_x.astype(int)
+        del left.var
+        del left.uns
+        left.obs[filter_label] = 0
+        # right part of frame, translated
+        right = adata[adata.obs.array_col.isin([2, 3]), :].copy()
+        right.obsm["spatial"][..., 0] += delta_x.astype(int)
+        del right.var
+        del right.uns
+        right.obs[filter_label] = 0
+        # add sides to orig
+        a_sides = adata.concatenate([left, right])
+        # bottom part of frame, translated
+        bottom = a_sides[a_sides.obs.array_row == 1, :].copy()
+        bottom.obsm["spatial"][..., 1] += delta_y.astype(int)
+        del bottom.var
+        del bottom.uns
+        bottom.obs[filter_label] = 0
+        # top part of frame, translated
+        top = a_sides[
+            a_sides.obs.array_row == a_sides.obs.array_row.max() - 1, :
+        ].copy()
+        top.obsm["spatial"][..., 1] -= delta_y.astype(int)
+        del top.var
+        del top.uns
+        top.obs[filter_label] = 0
+        # complete frame
+        a_frame = a_sides.concatenate([top, bottom])
+        a_frame.uns = adata.uns
+    else:
+        a_frame = adata.copy()
+
     # determine pixel bounds from spot coords, adding center-to-face distance
-    adata.uns["pixel_map_params"]["xmin_px"] = int(
+    a_frame.uns["pixel_map_params"]["xmin_px"] = int(
         np.floor(
-            adata.uns["pixel_map_params"]["scalef"]
+            a_frame.uns["pixel_map_params"]["scalef"]
             * (
-                adata.obsm["spatial"][:, 0].min()
-                - adata.uns["pixel_map_params"]["radius"]
+                a_frame.obsm["spatial"][:, 0].min()
+                - a_frame.uns["pixel_map_params"]["radius"]
             )
         )
     )
-    adata.uns["pixel_map_params"]["xmax_px"] = int(
+    a_frame.uns["pixel_map_params"]["xmax_px"] = int(
         np.ceil(
-            adata.uns["pixel_map_params"]["scalef"]
+            a_frame.uns["pixel_map_params"]["scalef"]
             * (
-                adata.obsm["spatial"][:, 0].max()
-                + adata.uns["pixel_map_params"]["radius"]
+                a_frame.obsm["spatial"][:, 0].max()
+                + a_frame.uns["pixel_map_params"]["radius"]
             )
         )
     )
-    adata.uns["pixel_map_params"]["ymin_px"] = int(
+    a_frame.uns["pixel_map_params"]["ymin_px"] = int(
         np.floor(
-            adata.uns["pixel_map_params"]["scalef"]
+            a_frame.uns["pixel_map_params"]["scalef"]
             * (
-                adata.obsm["spatial"][:, 1].min()
-                - adata.uns["pixel_map_params"]["radius"]
+                a_frame.obsm["spatial"][:, 1].min()
+                - a_frame.uns["pixel_map_params"]["radius"]
             )
         )
     )
-    adata.uns["pixel_map_params"]["ymax_px"] = int(
+    a_frame.uns["pixel_map_params"]["ymax_px"] = int(
         np.ceil(
-            adata.uns["pixel_map_params"]["scalef"]
+            a_frame.uns["pixel_map_params"]["scalef"]
             * (
-                adata.obsm["spatial"][:, 1].max()
-                + adata.uns["pixel_map_params"]["radius"]
+                a_frame.obsm["spatial"][:, 1].max()
+                + a_frame.uns["pixel_map_params"]["radius"]
             )
         )
     )
@@ -146,32 +198,32 @@ def map_pixels(adata, filter_label="in_tissue", img_key="hires", library_id=None
     print("Creating pixel grid and mapping to nearest barcode coordinates")
     # define grid for pixel space
     grid_y, grid_x = np.mgrid[
-        adata.uns["pixel_map_params"]["ymin_px"] : adata.uns["pixel_map_params"][
+        a_frame.uns["pixel_map_params"]["ymin_px"] : a_frame.uns["pixel_map_params"][
             "ymax_px"
         ],
-        adata.uns["pixel_map_params"]["xmin_px"] : adata.uns["pixel_map_params"][
+        a_frame.uns["pixel_map_params"]["xmin_px"] : a_frame.uns["pixel_map_params"][
             "xmax_px"
         ],
     ]
     # map barcodes to pixel coordinates
     pixel_coords = np.column_stack((grid_x.ravel(order="C"), grid_y.ravel(order="C")))
     barcode_list = griddata(
-        np.multiply(adata.obsm["spatial"], adata.uns["pixel_map_params"]["scalef"]),
-        adata.obs_names,
+        np.multiply(a_frame.obsm["spatial"], a_frame.uns["pixel_map_params"]["scalef"]),
+        a_frame.obs_names,
         (pixel_coords[:, 0], pixel_coords[:, 1]),
         method="nearest",
     )
     # save grid_x and grid_y to adata.uns
-    adata.uns["grid_x"], adata.uns["grid_y"] = grid_x, grid_y
+    a_frame.uns["grid_x"], a_frame.uns["grid_y"] = grid_x, grid_y
 
     # put results into DataFrame for filtering and reindexing
     print("Saving barcode mapping to adata.uns['pixel_map_df'] and adding metadata")
-    adata.uns["pixel_map_df"] = pd.DataFrame(pixel_coords, columns=["x", "y"])
+    a_frame.uns["pixel_map_df"] = pd.DataFrame(pixel_coords, columns=["x", "y"])
     # add barcodes to long-form dataframe
-    adata.uns["pixel_map_df"]["barcode"] = barcode_list
+    a_frame.uns["pixel_map_df"]["barcode"] = barcode_list
     # merge master df with self.adata.obs for metadata
-    adata.uns["pixel_map_df"] = adata.uns["pixel_map_df"].merge(
-        adata.obs, how="outer", left_on="barcode", right_index=True
+    a_frame.uns["pixel_map_df"] = a_frame.uns["pixel_map_df"].merge(
+        a_frame.obs, how="outer", left_on="barcode", right_index=True
     )
     # filter using label from adata.obs if desired (i.e. "in_tissue")
     if filter_label is not None:
@@ -181,16 +233,16 @@ def map_pixels(adata, filter_label="in_tissue", img_key="hires", library_id=None
             )
         )
         # set empty pixels (no Visium spot) to "none"
-        adata.uns["pixel_map_df"].loc[
-            adata.uns["pixel_map_df"][filter_label] == 0,
+        a_frame.uns["pixel_map_df"].loc[
+            a_frame.uns["pixel_map_df"][filter_label] == 0,
             "barcode",
         ] = "none"
         # subset the entire anndata object using filter_label
-        adata = adata[adata.obs[filter_label] == 1, :].copy()
-        print("New size: {} spots x {} genes".format(adata.n_obs, adata.n_vars))
+        a_frame = a_frame[a_frame.obs[filter_label] == 1, :].copy()
+        print("New size: {} spots x {} genes".format(a_frame.n_obs, a_frame.n_vars))
 
     print("Done!")
-    return adata
+    return a_frame
 
 
 def trim_image(
