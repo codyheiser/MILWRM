@@ -17,7 +17,6 @@ from skimage.io import imread
 from skimage.measure import block_reduce
 from matplotlib.lines import Line2D
 
-
 def checktype(obj):
     return bool(obj) and all(isinstance(elem, str) for elem in obj)
 
@@ -127,7 +126,7 @@ class img:
         ----------
         img_arr : np.ndarray
             The image as a numpy array
-        channels : tuple of str or None, optional (default=`None`)
+        channels : list of str or None, optional (default=`None`)
             List of channel names corresponding to img.shape[2]. i.e. `("DAPI","GFAP",
             "NeuH")`. If `None`, channels are named "ch_0", "ch_1", etc.
         mask : np.ndarray
@@ -149,6 +148,8 @@ class img:
             # if channel names not specified, name them numerically
             self.ch = ["ch_{}".format(x) for x in range(self.n_ch)]
         else:
+            if not isinstance(channels, list):
+               raise Exception("Channels must be given in a list") 
             assert (
                 len(channels) == self.n_ch
             ), "Number of channels must match img_arr.shape[2]"
@@ -199,6 +200,7 @@ class img:
             channels = [self.ch.index(channels)]
         if checktype(channels):  # force channels into list of int if list of strings
             channels = [self.ch.index(x) for x in channels]
+
         if channels is None:  # if no channels are given, use all of them
             channels = [x for x in range(self.n_ch)]
 
@@ -213,7 +215,7 @@ class img:
         ----------
         tiffdir : str
             Path to directory containing `.tif` files for a multiplexed image
-        channels : tuple of str
+        channels : list of str
             List of channels present in `.tif` file names (case-sensitive)
             corresponding to img.shape[2] e.g. `("ACTG1","BCATENIN","DAPI",...)`
         common_strings : str, list of str, or `None`, optional (default=None)
@@ -393,7 +395,7 @@ class img:
             features = [self.ch.index(x) for x in features]
         if features is None:  # if no features are given, use all of them
             features = [x for x in range(self.n_ch)]
-        if mean.all() != None:
+        if mean.all():
             if mask:
                 assert self.mask is not None, "No tissue mask available"
                 for i in range(self.img.shape[2]):
@@ -406,6 +408,7 @@ class img:
                     fact = mean[i]
                     self.img[:, :, i] = np.log10(self.img[:, :, i] / fact + pseudoval)
         else:
+            print("mean calculated to perform log normalization")
             if mask:
                 assert self.mask is not None, "No tissue mask available"
                 for i in range(self.img.shape[2]):
