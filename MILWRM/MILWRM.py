@@ -7,6 +7,7 @@ import matplotlib.gridspec as gridspec
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+import itertools
 import seaborn as sns
 
 sns.set_style("white")
@@ -16,10 +17,64 @@ from joblib import Parallel, delayed
 from sklearn.cluster import KMeans
 from sklearn.preprocessing import MinMaxScaler
 from skimage.filters import gaussian
+from skimage.transform import resize
 
-from .MxIF import checktype
+from .MxIF import checktype, img
 from .ST import assemble_pita
 
+def create_tissue_mask_mxif(images, markers = None):
+    '''
+    Creates a whole tissue mask for the given tissue image
+
+    Parameters
+    ----------
+    images : list or img 
+        images for which the tissue mask will be created for 
+    markers : list
+        markers required to create MxIF labeller object
+
+    Returns
+    -------
+    mask is added to self.mask
+    '''
+    if isinstance(images, img):  # force img objects into a list if a single object is given
+        images = [images]
+    if markers is None:  # using all markers if list of markers is not given
+        markers = images[0].ch
+    # TODO : check if the images have masks already or not 
+    for image in images:
+        # create a copy of the image
+        image_cp = image.copy()
+        # creating a temprory mask
+        w,h,d = image_cp.img.shape
+        tmp_mask = np.ones((w,h)) 
+        # setting the mask within the image object
+        image_cp.mask = tmp_mask
+        # creating the mask_tl tissue labeler
+        mask_tl = mxif_labeler(images = [image_cp])
+        # preprocessing before running MILWRM
+        mask_tl.prep_cluster_data(features=markers,downsample_factor=16,sigma=2,fract=0.1)
+        # running MILWRM with two clusters
+        mask_tl.label_tissue_regions(k=2,alpha = 0.05)
+        # estimating centroids
+        scores = mask_tl.kmeans.cluster_centers_.copy()
+        mean = mask_tl.kmeans.cluster_centers_.mean(axis=0)
+        sd = mask_tl.kmeans.cluster_centers_.std(axis=0)
+        # z-score cluster centroid values for more reliable loadings
+        z_scores = (scores - mean) / sd
+        # making sure the background is set as 0
+        if z_scores[0].mean() > 0:
+            print(z_scores[0], "the background is set as tissue ID 1")
+            where_0 = np.where(mask_tl.tissue_IDs[0]==0.0)
+            mask_tl.tissue_IDs[0][where_0] = 0.5
+            where_1 = np.where(mask_tl.tissue_IDs[0]==1.0)
+            mask_tl.tissue_IDs[0][where_1] = 0.0
+            where_05 = np.where(mask_tl.tissue_IDs[0]==0.5)
+            mask_tl.tissue_IDs[0][where_05] = 1.0
+        # rescaling the mask 
+        mask_final = resize(mask_tl.tissue_IDs[0], (w,h))
+        # setting the final mask
+        image.mask = mask_final
 
 def kMeansRes(scaled_data, k, alpha_k=0.02, random_state=18):
     """
@@ -173,7 +228,7 @@ def prep_data_single_sample_mxif(
     features,
     downsample_factor,
     sigma,
-    fract,
+    batch,
 ):
     """
     Prepare dataframe for tissue-level clustering from a single MxIF sample
@@ -201,9 +256,6 @@ def prep_data_single_sample_mxif(
     """
     # downsample image
     image.downsample(fact=downsample_factor, func=np.mean)
-    # normalize and log-transform image
-    image.log_normalize(pseudoval=1, mask=True)
-    # TODO: create some z-score norm/scaling function and add it here
     # blur downsampled image
     image.img = gaussian(image.img, sigma=sigma, multichannel=True)
     # get list of int for features
@@ -215,19 +267,15 @@ def prep_data_single_sample_mxif(
         features = [image.ch.index(x) for x in features]
     if features is None:  # if no features are given, use all of them
         features = [x for x in range(image.n_ch)]
-    # get cluster data for image_i
-    tmp = []
-    for i in range(image.img.shape[2]):
-        tmp.append(image.img[:, :, i][image.mask != 0])
-    tmp = np.column_stack(tmp)
-    # select cluster data
-    i = np.random.choice(tmp.shape[0], int(tmp.shape[0] * fract))
-    tmp = tmp[np.ix_(i, features)]
-
-    return image, tmp
+    # calculating mean and number of pixels
+    w,h,d = tuple(image.img.shape)
+    ar = np.reshape(image.img, (w * h, d))
+    mean = ar.mean(axis=0)
+    num_pixels = w * h
+    return batch , mean, num_pixels,
 
 
-def add_tissue_ID_single_sample_mxif(image, features, kmeans):
+def add_tissue_ID_single_sample_mxif(image, features, kmeans, mean, std):
     """
     Label pixels in a single MxIF sample with kmeans results
 
@@ -255,6 +303,8 @@ def add_tissue_ID_single_sample_mxif(image, features, kmeans):
         features = [x for x in range(image.n_ch)]
     # subset to features used in prep_cluster_data
     tmp = image.img[:, :, features]
+    # # z-normalize tmp
+    tmp = (tmp - mean)/std
     # reshape image to a 2D array to predict
     w, h, d = tuple(tmp.shape)
     image_array = tmp.reshape((w * h, d))
@@ -472,7 +522,7 @@ class tissue_labeler:
             right=1 - (n_cols - 1) * left - 0.01 / n_cols,
             top=1 - (n_rows - 1) * bottom - 0.1 / n_rows,
         )
-        for iscore, score in enumerate(z_scores):
+        for iscore, score in enumerate(scores):
             plt.subplot(gs[iscore])
             indices = np.argsort(score)[::-1][: nfeatures + 1]
             for ig, g in enumerate(indices[::-1]):
@@ -842,7 +892,7 @@ class mxif_labeler(tissue_labeler):
     Tissue domain labeling class for multiplex immunofluorescence (MxIF) data
     """
 
-    def __init__(self, images):
+    def __init__(self, images, mode = "batch"):
         """
         Initialize MxIF tissue labeler class
 
@@ -854,14 +904,41 @@ class mxif_labeler(tissue_labeler):
 
         Returns
         -------
+
         Does not return anything. `self.images` attribute is updated,
         `self.cluster_data` attribute is initiated as `None`.
         """
         tissue_labeler.__init__(self)  # initialize parent class
-        if not isinstance(images, list):  # force single image object to list
-            images = [images]
-        print("Initiating MxIF labeler with {} images".format(len(images)))
-        self.images = images
+        if isinstance(images, dict):  # validate the user defined dictionary
+            if all(isinstance(n, str) for n in images.keys()) and all(isinstance(v, list) for v in images.values()):
+                self.images = images
+                self.batches = images.keys()
+                print(f"Initiating MxIF labeler with a user-defined dictionary containing {sum(list(map(len, self.images.values())))} images and {len(self.batches)} batches")
+            else:
+                raise Exception("Image dictionary keys have to be string type and image dictionary values have to be in a list")
+        elif isinstance(images, list):  # if images are in a list check mode
+            if mode is "batch":  # if mode is batch each image is a separate batch
+                image_dict = {}
+                for i,image in enumerate(images):
+                    image_dict[str(i)] = [image]
+                self.images = image_dict
+                self.batches = image_dict.keys()
+                print(f"Initiating MxIF labeler with {len(self.images)} images treating each image as a separate batch object")
+            elif mode is "standard": # if mode is standard all images are from one batch
+                image_dict = {}
+                image_dict["0"] = images
+                self.images = image_dict
+                self.batches = image_dict.keys()
+                print(f"Initiating MxIF labeler with {len(self.images)} images assuming all images are from the same batch")
+            else:  # if mode is given as something else raise exception
+                raise Exception("Mode can only be either batch or standard")
+        else:
+            raise Exception("Input images need to be in a list or a dictionary with batches")
+
+    def __getitem__(self, image_index):
+        """select for images based upon the index for the images"""
+        images = [v for v in itertools.chain.from_iterable(self.images.values())]
+        return images[image_index]
 
     def prep_cluster_data(
         self, features, downsample_factor=8, sigma=2, fract=0.2, n_jobs=-1
@@ -896,28 +973,50 @@ class mxif_labeler(tissue_labeler):
         self.model_features = features
         self.downsample_factor = downsample_factor
         self.sigma = sigma
-        # downsampling, blurring, subsampling, and compiling cluster_data in parallel
+        # extracting batch names in a list 
+        batch_names = list(itertools.chain.from_iterable([[k] * len(v) for k, v in self.images.items()]))
+        # downsampling, scaling and smoothening the images in parallel
         print(
-            "Downsampling, log-normalizing, and blurring {} features from {} images...".format(
+            "Downsampling, and blurring {} features from {} images...".format(
                 len(features),
-                len(self.images),
+                len(batch_names),
             )
         )
-        out = Parallel(n_jobs=n_jobs, verbose=10)(
+        out = Parallel(n_jobs=n_jobs, verbose=10, prefer= "threads")(
             delayed(prep_data_single_sample_mxif)(
-                image, features, downsample_factor, sigma, fract
+                image, features, downsample_factor, sigma, batch
             )
-            for image in self.images
+            for image,batch in zip(itertools.chain.from_iterable(self.images.values()),batch_names)
         )
         # unpack results from parallel process
-        self.images = [x[0] for x in out]
-        cluster_data = [x[1] for x in out]
+        df = pd.DataFrame(out, columns = ['Batch', 'Image mean', 'pixel counts'] )
+        # calculate mean for each batch of images
+        df['mean estimator'] = df['Image mean']*df['pixel counts']
+        mean_batches = {}
+        for key in self.images.keys():
+            means = df[df['Batch']== key]['mean estimator'].sum()
+            pixels = df[df['Batch']==key]['pixel counts'].sum()
+            mean_batches[key] = means/pixels
+        # creating a list of the mean for each batch
+        tmp_means = [[x]*len(v) for x,v in zip(mean_batches.values(),self.images.values())]
+        means = list(itertools.chain(*tmp_means))
+        # performing log normalization on images in parallel
+        subsample_data = []
+        subsample_data.append(Parallel(n_jobs=n_jobs, verbose=10, prefer ='threads')(
+            delayed(image.log_normalize)(fract,features,pseudoval=1, mean = mean, mask=True
+            )
+            for image,mean in zip(itertools.chain.from_iterable(self.images.values()),
+            means)
+            ))
+        tmp_subsample_data = list(itertools.chain(*subsample_data))
         # concatenate blurred features into cluster_data df for cluster training
-        self.cluster_data = np.row_stack(cluster_data)
-        # perform min-max scaling on final cluster data
-        mms = MinMaxScaler()
-        unscaled_data = self.cluster_data
-        self.cluster_data = mms.fit_transform(unscaled_data)
+        cluster_data = np.row_stack(tmp_subsample_data)
+        self.cluster_data = cluster_data
+        unscaled_data = cluster_data
+        # perform z-normalization on cluster data
+        self.mean_z_norm = unscaled_data.mean(axis=0)
+        self.std_z_norm = unscaled_data.std(axis=0)
+        self.cluster_data = (unscaled_data - self.mean_z_norm)/self.std_z_norm
         print("Collected clustering data of shape: {}".format(self.cluster_data.shape))
 
     def label_tissue_regions(
@@ -959,16 +1058,17 @@ class mxif_labeler(tissue_labeler):
         print("Creating tissue_ID images for image objects...")
         self.tissue_IDs = Parallel(n_jobs=n_jobs, verbose=10)(
             delayed(add_tissue_ID_single_sample_mxif)(
-                image, self.model_features, self.kmeans
+                image, self.model_features, self.kmeans , self.mean_z_norm, self.std_z_norm
             )
-            for image in self.images
+            for image in itertools.chain.from_iterable(self.images.values())
         )
+
 
     def show_marker_overlay(
         self,
         image_index,
         channels=None,
-        cmap="plasma",
+        cmap ="Set1",
         mask_out=True,
         ncols=4,
         save_to=None,
@@ -1005,16 +1105,20 @@ class mxif_labeler(tissue_labeler):
         if isinstance(channels, int):  # force channels into list if single integer
             channels = [channels]
         if isinstance(channels, str):  # force channels into int if single string
-            channels = [self.images[image_index].ch.index(channels)]
+            channels = [self[image_index].ch.index(channels)]
         if checktype(channels):  # force channels into list of int if list of strings
-            channels = [self.images[image_index].ch.index(x) for x in channels]
+            channels = [self[image_index].ch.index(x) for x in channels]
         if channels is None:  # if no channels are given, use all of them
-            channels = [x for x in range(self.images[image_index].n_ch)]
+            channels = [x for x in range(self[image_index].n_ch)]
         assert (
-            len(channels) <= self.images[image_index].n_ch
+            len(channels) <= self[image_index].n_ch
         ), "Too many channels given: image has {}, expected {}".format(
-            self.images[image_index].n_ch, len(channels)
+            self[image_index].n_ch, len(channels)
         )
+        # creating a copy of the image
+        image_cp = self[image_index].copy()
+        #re-scaling to set pixel value range between 0 to 1
+        image_cp.scale()
         # calculate gridspec dimensions
         if len(channels) + 1 <= ncols:
             n_rows, n_cols = 1, len(channels) + 1
@@ -1041,11 +1145,11 @@ class mxif_labeler(tissue_labeler):
         for channel in channels:
             ax = plt.subplot(gs[i])
             # make copy for alpha
-            im_tmp = self.images[image_index].img[:, :, channel].copy()
-            if self.images[image_index].mask is not None and mask_out:
+            im_tmp = image_cp.img[:, :, channel].copy()
+            if self[image_index].mask is not None and mask_out:
                 # area outside mask NaN
                 self.tissue_IDs[image_index][
-                    self.images[image_index].mask == 0
+                    self[image_index].mask == 0
                 ] = np.nan
                 im = ax.imshow(
                     self.tissue_IDs[image_index], cmap=cmap, alpha=im_tmp, **kwargs
@@ -1055,7 +1159,7 @@ class mxif_labeler(tissue_labeler):
             ax.tick_params(labelbottom=False, labelleft=False)
             sns.despine(bottom=True, left=True)
             ax.set_title(
-                label=self.images[image_index].ch[channel],
+                label=self[image_index].ch[channel],
                 loc="left",
                 fontweight="bold",
                 fontsize=16,
