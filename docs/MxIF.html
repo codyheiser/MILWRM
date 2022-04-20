@@ -156,7 +156,7 @@ class img:
         ----------
         img_arr : np.ndarray
             The image as a numpy array
-        channels : tuple of str or None, optional (default=`None`)
+        channels : list of str or None, optional (default=`None`)
             List of channel names corresponding to img.shape[2]. i.e. `(&#34;DAPI&#34;,&#34;GFAP&#34;,
             &#34;NeuH&#34;)`. If `None`, channels are named &#34;ch_0&#34;, &#34;ch_1&#34;, etc.
         mask : np.ndarray
@@ -178,6 +178,8 @@ class img:
             # if channel names not specified, name them numerically
             self.ch = [&#34;ch_{}&#34;.format(x) for x in range(self.n_ch)]
         else:
+            if not isinstance(channels, list):
+                raise Exception(&#34;Channels must be given in a list&#34;)
             assert (
                 len(channels) == self.n_ch
             ), &#34;Number of channels must match img_arr.shape[2]&#34;
@@ -228,6 +230,7 @@ class img:
             channels = [self.ch.index(channels)]
         if checktype(channels):  # force channels into list of int if list of strings
             channels = [self.ch.index(x) for x in channels]
+
         if channels is None:  # if no channels are given, use all of them
             channels = [x for x in range(self.n_ch)]
 
@@ -242,7 +245,7 @@ class img:
         ----------
         tiffdir : str
             Path to directory containing `.tif` files for a multiplexed image
-        channels : tuple of str
+        channels : list of str
             List of channels present in `.tif` file names (case-sensitive)
             corresponding to img.shape[2] e.g. `(&#34;ACTG1&#34;,&#34;BCATENIN&#34;,&#34;DAPI&#34;,...)`
         common_strings : str, list of str, or `None`, optional (default=None)
@@ -397,7 +400,7 @@ class img:
         &#34;&#34;&#34;
         self.img = CLAHE(self.img, **kwargs)
 
-    def log_normalize(self, pseudoval=1, mask=True):
+    def log_normalize(self, fract, features, pseudoval=1, mean=None, mask=True):
         &#34;&#34;&#34;
         Log-normalizes values for each marker with `log10(arr/arr.mean() + pseudoval)`
 
@@ -414,16 +417,48 @@ class img:
         -------
         Log-normalizes values in each channel of `self.img`
         &#34;&#34;&#34;
-        if mask:
-            assert self.mask is not None, &#34;No tissue mask available&#34;
-            for i in range(self.img.shape[2]):
-                fact = self.img[:, :, i][self.mask != 0].mean()
-                self.img[:, :, i] = np.log10(self.img[:, :, i] / fact + pseudoval)
+        if isinstance(features, int):  # force features into list if single integer
+            features = [features]
+        if isinstance(features, str):  # force features into int if single string
+            features = [self.ch.index(features)]
+        if checktype(features):  # force features into list of int if list of strings
+            features = [self.ch.index(x) for x in features]
+        if features is None:  # if no features are given, use all of them
+            features = [x for x in range(self.n_ch)]
+        if mean.all():
+            if mask:
+                assert self.mask is not None, &#34;No tissue mask available&#34;
+                for i in range(self.img.shape[2]):
+                    fact = mean[i]
+                    self.img[:, :, i] = np.log10(self.img[:, :, i] / fact + pseudoval)
+
+            else:
+                print(&#34;WARNING: Performing normalization without a tissue mask.&#34;)
+                for i in range(self.img.shape[2]):
+                    fact = mean[i]
+                    self.img[:, :, i] = np.log10(self.img[:, :, i] / fact + pseudoval)
         else:
-            print(&#34;WARNING: Performing normalization without a tissue mask.&#34;)
-            for i in range(self.img.shape[2]):
-                fact = self.img[:, :, i].mean()
-                self.img[:, :, i] = np.log10(self.img[:, :, i] / fact + pseudoval)
+            print(&#34;mean calculated to perform log normalization&#34;)
+            if mask:
+                assert self.mask is not None, &#34;No tissue mask available&#34;
+                for i in range(self.img.shape[2]):
+                    fact = self.img[:, :, i].mean()
+                    self.img[:, :, i] = np.log10(self.img[:, :, i] / fact + pseudoval)
+
+            else:
+                print(&#34;WARNING: Performing normalization without a tissue mask.&#34;)
+                for i in range(self.img.shape[2]):
+                    fact = self.img[:, :, i].mean()
+                    self.img[:, :, i] = np.log10(self.img[:, :, i] / fact + pseudoval)
+        # get cluster data for image_i
+        tmp = []
+        for i in range(self.img.shape[2]):
+            tmp.append(self.img[:, :, i][self.mask != 0])
+        tmp = np.column_stack(tmp)
+        # select cluster data
+        i = np.random.choice(tmp.shape[0], int(tmp.shape[0] * fract))
+        tmp = tmp[np.ix_(i, features)]
+        return tmp
 
     def downsample(self, fact, func=np.mean):
         &#34;&#34;&#34;
@@ -610,7 +645,8 @@ class img:
 
         Returns
         -------
-        Gridspec object (for multiple features). Saves plot to file if `save_to` is not `None`.
+        Gridspec object (for multiple features). Saves plot to file if `save_to` is
+        not `None`.
         &#34;&#34;&#34;
         # calculate gridspec dimensions
         if len(channels) &lt;= ncols:
@@ -632,7 +668,6 @@ class img:
         plt.show()
         if save_to:
             plt.savefig(fname=save_to, transparent=True, bbox_inches=&#34;tight&#34;, dpi=300)
-
         return gs</code></pre>
 </details>
 </section>
@@ -832,7 +867,7 @@ class img:
 <dl>
 <dt><strong><code>img_arr</code></strong> :&ensp;<code>np.ndarray</code></dt>
 <dd>The image as a numpy array</dd>
-<dt><strong><code>channels</code></strong> :&ensp;<code>tuple</code> of <code>str</code> or <code>None</code>, optional <code>(default=</code>None<code>)</code></dt>
+<dt><strong><code>channels</code></strong> :&ensp;<code>list</code> of <code>str</code> or <code>None</code>, optional <code>(default=</code>None<code>)</code></dt>
 <dd>List of channel names corresponding to img.shape[2]. i.e. <code>("DAPI","GFAP",
 "NeuH")&lt;code&gt;. If &lt;/code&gt;None</code>, channels are named "ch_0", "ch_1", etc.</dd>
 <dt><strong><code>mask</code></strong> :&ensp;<code>np.ndarray</code></dt>
@@ -853,7 +888,7 @@ class img:
         ----------
         img_arr : np.ndarray
             The image as a numpy array
-        channels : tuple of str or None, optional (default=`None`)
+        channels : list of str or None, optional (default=`None`)
             List of channel names corresponding to img.shape[2]. i.e. `(&#34;DAPI&#34;,&#34;GFAP&#34;,
             &#34;NeuH&#34;)`. If `None`, channels are named &#34;ch_0&#34;, &#34;ch_1&#34;, etc.
         mask : np.ndarray
@@ -875,6 +910,8 @@ class img:
             # if channel names not specified, name them numerically
             self.ch = [&#34;ch_{}&#34;.format(x) for x in range(self.n_ch)]
         else:
+            if not isinstance(channels, list):
+                raise Exception(&#34;Channels must be given in a list&#34;)
             assert (
                 len(channels) == self.n_ch
             ), &#34;Number of channels must match img_arr.shape[2]&#34;
@@ -925,6 +962,7 @@ class img:
             channels = [self.ch.index(channels)]
         if checktype(channels):  # force channels into list of int if list of strings
             channels = [self.ch.index(x) for x in channels]
+
         if channels is None:  # if no channels are given, use all of them
             channels = [x for x in range(self.n_ch)]
 
@@ -939,7 +977,7 @@ class img:
         ----------
         tiffdir : str
             Path to directory containing `.tif` files for a multiplexed image
-        channels : tuple of str
+        channels : list of str
             List of channels present in `.tif` file names (case-sensitive)
             corresponding to img.shape[2] e.g. `(&#34;ACTG1&#34;,&#34;BCATENIN&#34;,&#34;DAPI&#34;,...)`
         common_strings : str, list of str, or `None`, optional (default=None)
@@ -1094,7 +1132,7 @@ class img:
         &#34;&#34;&#34;
         self.img = CLAHE(self.img, **kwargs)
 
-    def log_normalize(self, pseudoval=1, mask=True):
+    def log_normalize(self, fract, features, pseudoval=1, mean=None, mask=True):
         &#34;&#34;&#34;
         Log-normalizes values for each marker with `log10(arr/arr.mean() + pseudoval)`
 
@@ -1111,16 +1149,48 @@ class img:
         -------
         Log-normalizes values in each channel of `self.img`
         &#34;&#34;&#34;
-        if mask:
-            assert self.mask is not None, &#34;No tissue mask available&#34;
-            for i in range(self.img.shape[2]):
-                fact = self.img[:, :, i][self.mask != 0].mean()
-                self.img[:, :, i] = np.log10(self.img[:, :, i] / fact + pseudoval)
+        if isinstance(features, int):  # force features into list if single integer
+            features = [features]
+        if isinstance(features, str):  # force features into int if single string
+            features = [self.ch.index(features)]
+        if checktype(features):  # force features into list of int if list of strings
+            features = [self.ch.index(x) for x in features]
+        if features is None:  # if no features are given, use all of them
+            features = [x for x in range(self.n_ch)]
+        if mean.all():
+            if mask:
+                assert self.mask is not None, &#34;No tissue mask available&#34;
+                for i in range(self.img.shape[2]):
+                    fact = mean[i]
+                    self.img[:, :, i] = np.log10(self.img[:, :, i] / fact + pseudoval)
+
+            else:
+                print(&#34;WARNING: Performing normalization without a tissue mask.&#34;)
+                for i in range(self.img.shape[2]):
+                    fact = mean[i]
+                    self.img[:, :, i] = np.log10(self.img[:, :, i] / fact + pseudoval)
         else:
-            print(&#34;WARNING: Performing normalization without a tissue mask.&#34;)
-            for i in range(self.img.shape[2]):
-                fact = self.img[:, :, i].mean()
-                self.img[:, :, i] = np.log10(self.img[:, :, i] / fact + pseudoval)
+            print(&#34;mean calculated to perform log normalization&#34;)
+            if mask:
+                assert self.mask is not None, &#34;No tissue mask available&#34;
+                for i in range(self.img.shape[2]):
+                    fact = self.img[:, :, i].mean()
+                    self.img[:, :, i] = np.log10(self.img[:, :, i] / fact + pseudoval)
+
+            else:
+                print(&#34;WARNING: Performing normalization without a tissue mask.&#34;)
+                for i in range(self.img.shape[2]):
+                    fact = self.img[:, :, i].mean()
+                    self.img[:, :, i] = np.log10(self.img[:, :, i] / fact + pseudoval)
+        # get cluster data for image_i
+        tmp = []
+        for i in range(self.img.shape[2]):
+            tmp.append(self.img[:, :, i][self.mask != 0])
+        tmp = np.column_stack(tmp)
+        # select cluster data
+        i = np.random.choice(tmp.shape[0], int(tmp.shape[0] * fract))
+        tmp = tmp[np.ix_(i, features)]
+        return tmp
 
     def downsample(self, fact, func=np.mean):
         &#34;&#34;&#34;
@@ -1307,7 +1377,8 @@ class img:
 
         Returns
         -------
-        Gridspec object (for multiple features). Saves plot to file if `save_to` is not `None`.
+        Gridspec object (for multiple features). Saves plot to file if `save_to` is
+        not `None`.
         &#34;&#34;&#34;
         # calculate gridspec dimensions
         if len(channels) &lt;= ncols:
@@ -1329,7 +1400,6 @@ class img:
         plt.show()
         if save_to:
             plt.savefig(fname=save_to, transparent=True, bbox_inches=&#34;tight&#34;, dpi=300)
-
         return gs</code></pre>
 </details>
 <h3>Static methods</h3>
@@ -1386,7 +1456,7 @@ def from_npz(cls, file):
 <dl>
 <dt><strong><code>tiffdir</code></strong> :&ensp;<code>str</code></dt>
 <dd>Path to directory containing <code>.tif</code> files for a multiplexed image</dd>
-<dt><strong><code>channels</code></strong> :&ensp;<code>tuple</code> of <code>str</code></dt>
+<dt><strong><code>channels</code></strong> :&ensp;<code>list</code> of <code>str</code></dt>
 <dd>List of channels present in <code>.tif</code> file names (case-sensitive)
 corresponding to img.shape[2] e.g. <code>("ACTG1","BCATENIN","DAPI",...)</code></dd>
 <dt><strong><code>common_strings</code></strong> :&ensp;<code>str, list</code> of <code>str,</code> or <code>None</code>, optional <code>(default=None)</code></dt>
@@ -1413,7 +1483,7 @@ def from_tiffs(cls, tiffdir, channels, common_strings=None, mask=None):
     ----------
     tiffdir : str
         Path to directory containing `.tif` files for a multiplexed image
-    channels : tuple of str
+    channels : list of str
         List of channels present in `.tif` file names (case-sensitive)
         corresponding to img.shape[2] e.g. `(&#34;ACTG1&#34;,&#34;BCATENIN&#34;,&#34;DAPI&#34;,...)`
     common_strings : str, list of str, or `None`, optional (default=None)
@@ -1617,7 +1687,7 @@ each pixel</p>
 </details>
 </dd>
 <dt id="MILWRM.MxIF.img.log_normalize"><code class="name flex">
-<span>def <span class="ident">log_normalize</span></span>(<span>self, pseudoval=1, mask=True)</span>
+<span>def <span class="ident">log_normalize</span></span>(<span>self, fract, features, pseudoval=1, mean=None, mask=True)</span>
 </code></dt>
 <dd>
 <div class="desc"><p>Log-normalizes values for each marker with <code>log10(arr/arr.mean() + pseudoval)</code></p>
@@ -1636,7 +1706,7 @@ with zeros</dd>
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">def log_normalize(self, pseudoval=1, mask=True):
+<pre><code class="python">def log_normalize(self, fract, features, pseudoval=1, mean=None, mask=True):
     &#34;&#34;&#34;
     Log-normalizes values for each marker with `log10(arr/arr.mean() + pseudoval)`
 
@@ -1653,16 +1723,48 @@ with zeros</dd>
     -------
     Log-normalizes values in each channel of `self.img`
     &#34;&#34;&#34;
-    if mask:
-        assert self.mask is not None, &#34;No tissue mask available&#34;
-        for i in range(self.img.shape[2]):
-            fact = self.img[:, :, i][self.mask != 0].mean()
-            self.img[:, :, i] = np.log10(self.img[:, :, i] / fact + pseudoval)
+    if isinstance(features, int):  # force features into list if single integer
+        features = [features]
+    if isinstance(features, str):  # force features into int if single string
+        features = [self.ch.index(features)]
+    if checktype(features):  # force features into list of int if list of strings
+        features = [self.ch.index(x) for x in features]
+    if features is None:  # if no features are given, use all of them
+        features = [x for x in range(self.n_ch)]
+    if mean.all():
+        if mask:
+            assert self.mask is not None, &#34;No tissue mask available&#34;
+            for i in range(self.img.shape[2]):
+                fact = mean[i]
+                self.img[:, :, i] = np.log10(self.img[:, :, i] / fact + pseudoval)
+
+        else:
+            print(&#34;WARNING: Performing normalization without a tissue mask.&#34;)
+            for i in range(self.img.shape[2]):
+                fact = mean[i]
+                self.img[:, :, i] = np.log10(self.img[:, :, i] / fact + pseudoval)
     else:
-        print(&#34;WARNING: Performing normalization without a tissue mask.&#34;)
-        for i in range(self.img.shape[2]):
-            fact = self.img[:, :, i].mean()
-            self.img[:, :, i] = np.log10(self.img[:, :, i] / fact + pseudoval)</code></pre>
+        print(&#34;mean calculated to perform log normalization&#34;)
+        if mask:
+            assert self.mask is not None, &#34;No tissue mask available&#34;
+            for i in range(self.img.shape[2]):
+                fact = self.img[:, :, i].mean()
+                self.img[:, :, i] = np.log10(self.img[:, :, i] / fact + pseudoval)
+
+        else:
+            print(&#34;WARNING: Performing normalization without a tissue mask.&#34;)
+            for i in range(self.img.shape[2]):
+                fact = self.img[:, :, i].mean()
+                self.img[:, :, i] = np.log10(self.img[:, :, i] / fact + pseudoval)
+    # get cluster data for image_i
+    tmp = []
+    for i in range(self.img.shape[2]):
+        tmp.append(self.img[:, :, i][self.mask != 0])
+    tmp = np.column_stack(tmp)
+    # select cluster data
+    i = np.random.choice(tmp.shape[0], int(tmp.shape[0] * fract))
+    tmp = tmp[np.ix_(i, features)]
+    return tmp</code></pre>
 </details>
 </dd>
 <dt id="MILWRM.MxIF.img.plot_image_histogram"><code class="name flex">
@@ -1682,7 +1784,8 @@ with zeros</dd>
 <dd>Arguments to pass to <code>plt.imshow()</code> function.</dd>
 </dl>
 <h2 id="returns">Returns</h2>
-<p>Gridspec object (for multiple features). Saves plot to file if <code>save_to</code> is not <code>None</code>.</p></div>
+<p>Gridspec object (for multiple features). Saves plot to file if <code>save_to</code> is
+not <code>None</code>.</p></div>
 <details class="source">
 <summary>
 <span>Expand source code</span>
@@ -1705,7 +1808,8 @@ with zeros</dd>
 
     Returns
     -------
-    Gridspec object (for multiple features). Saves plot to file if `save_to` is not `None`.
+    Gridspec object (for multiple features). Saves plot to file if `save_to` is
+    not `None`.
     &#34;&#34;&#34;
     # calculate gridspec dimensions
     if len(channels) &lt;= ncols:
@@ -1727,7 +1831,6 @@ with zeros</dd>
     plt.show()
     if save_to:
         plt.savefig(fname=save_to, transparent=True, bbox_inches=&#34;tight&#34;, dpi=300)
-
     return gs</code></pre>
 </details>
 </dd>

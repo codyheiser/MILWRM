@@ -621,7 +621,7 @@ def show_pita(
     assert pita.ndim < 4, "Pita has too many dimensions: {} given".format(pita.ndim)
     # if only one feature (2D), plot it quickly
     if (pita.ndim == 2) and histo is None:
-        fig  = plt.figure(figsize=figsize)
+        fig = plt.figure(figsize=figsize)
         plt.imshow(pita, **kwargs)
         plt.tick_params(labelbottom=False, labelleft=False)
         sns.despine(bottom=True, left=True)
