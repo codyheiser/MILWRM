@@ -538,6 +538,20 @@ def assemble_pita(
                 adata.obsm[use_rep][:, features], index=adata.obs_names
             )
 
+    # check for categorical columns to force into discrete plots
+    discrete_cols = {}
+    for col in mapper.columns:
+        if pd.api.types.is_categorical_dtype(mapper[col]):
+            mapper[col] = mapper[col].replace(
+                {v: k for k, v in dict(enumerate(mapper[col].cat.categories)).items()}
+            )
+            discrete_cols[mapper.columns.get_loc(col)] = (
+                mapper[col].cat.as_ordered().max()
+            )
+    # if no categorical columns, pass None to discrete_cols
+    if bool(discrete_cols) is False:
+        discrete_cols = None
+
     # cast barcodes into pixel dimensions for reindexing
     if verbose:
         print(
@@ -567,20 +581,194 @@ def assemble_pita(
             histo = adata.uns["spatial"][list(adata.uns["spatial"].keys())[0]][
                 "images"
             ][histo]
-        show_pita(pita=assembled, features=None, histo=histo, **kwargs)
+        show_pita(
+            pita=assembled,
+            features=None,
+            discrete_features=discrete_cols,
+            histo=histo,
+            **kwargs,
+        )
     if verbose:
         print("Done!")
     return assembled
 
 
+def plot_single_image(
+    image,
+    ax,
+    label="",
+    cmap="plasma",
+    **kwargs,
+):
+    """
+    Plot a pixel image
+
+    Parameters
+    ----------
+    image : np.array
+        Image to plot
+    ax : matplotlib.axes.Axes
+        Matplotlib axes to plot `image` to
+    label : str, optional (default="")
+        What to title the image plot
+    cmap : str, optional (default="plasma")
+        Matplotlib colormap to use
+    **kwargs
+        Arguments to pass to `plt.imshow()` function
+
+    Returns
+    -------
+    Matplotlib axes containing plot of image with associated colorbar
+    """
+    assert image.ndim > 1, "Image does not have enough dimensions: {} given".format(
+        image.ndim
+    )
+    assert image.ndim < 3, "Image has too many dimensions: {} given".format(image.ndim)
+    # call imshow with discrete colormap for categorical plot
+    im = plt.imshow(image, cmap=plt.cm.get_cmap(cmap), **kwargs)
+    # clean up axes
+    plt.tick_params(labelbottom=False, labelleft=False)
+    sns.despine(bottom=True, left=True)
+    # title above plot
+    plt.title(
+        label=label,
+        loc="left",
+        fontweight="bold",
+        fontsize=16,
+    )
+    _ = plt.colorbar(shrink=0.7, ticks=None)
+
+
+def plot_single_image_discrete(
+    image,
+    ax,
+    max_val,
+    label="",
+    cmap="plasma",
+    **kwargs,
+):
+    """
+    Plot a discrete (categorical) pixel image containing integer values (i.e. MILWRM
+    domains)
+
+    Parameters
+    ----------
+    image : np.array
+        Image to plot containing zero-indexed, integer values per pixel
+    ax : matplotlib.axes.Axes
+        Matplotlib axes to plot `image` to
+    max_val : int
+        Maximum integer value for categories (i.e. 4 for categories [0,1,2,3,4]).
+        Categories are expected to be zero-indexed integers.
+    label : str, optional (default="")
+        What to title the image plot
+    cmap : str, optional (default="plasma")
+        Matplotlib colormap to use
+    **kwargs
+        Arguments to pass to `plt.imshow()` function
+
+    Returns
+    -------
+    Matplotlib axes containing discrete plot of image with associated colorbar
+    """
+    assert image.ndim > 1, "Image does not have enough dimensions: {} given".format(
+        image.ndim
+    )
+    assert image.ndim < 3, "Image has too many dimensions: {} given".format(image.ndim)
+    # get number of discrete values in image for categorical plot
+    n_values = len(np.unique(image[~np.isnan(image)]))
+    # call imshow with discrete colormap for categorical plot
+    im = plt.imshow(image, cmap=plt.cm.get_cmap(cmap, int(max_val) + 1), **kwargs)
+    # clean up axes
+    plt.tick_params(labelbottom=False, labelleft=False)
+    sns.despine(bottom=True, left=True)
+    # title above plot
+    plt.title(
+        label=label,
+        loc="left",
+        fontweight="bold",
+        fontsize=16,
+    )
+    _ = plt.colorbar(
+        shrink=0.7, ticks=range(int(max_val) + 1) if n_values <= 10 else None
+    )
+    # if number of discrete values is small, make colorbar discrete
+    if n_values <= 10:
+        vmin, vmax = im.get_clim()
+        im.set_clim(vmin=vmin - 0.5, vmax=vmax + 0.5)
+
+
+def plot_single_image_rgb(
+    image,
+    ax,
+    channels=None,
+    label="",
+    **kwargs,
+):
+    """
+    Plot an RGB pixel image
+
+    Parameters
+    ----------
+    image : np.array
+        3-dimensional image to plot of shape (n, m, 3)
+    ax : matplotlib.axes.Axes
+        Matplotlib axes to plot `image` to
+    channels : list of str or None, optional (default=`None`)
+        List of channel names in order of (R,G,B) for legend. If `None`, no legend.
+    label : str, optional (default="")
+        What to title the image plot
+    **kwargs
+        Arguments to pass to `plt.imshow()` function
+
+    Returns
+    -------
+    Matplotlib axes containing plot of image with associated RGB legend
+    """
+    assert (image.ndim == 3) & (
+        image.shape[2] == 3
+    ), "Need 3 dimensions and 3 given features for an RGB image; shape = {}".format(
+        image.shape
+    )
+    # call imshow
+    im = plt.imshow(image, **kwargs)
+    if channels is not None:
+        # add legend for channel IDs
+        custom_lines = [
+            Line2D([0], [0], color=(1, 0, 0), lw=5),
+            Line2D([0], [0], color=(0, 1, 0), lw=5),
+            Line2D([0], [0], color=(0, 0, 1), lw=5),
+        ]
+        # custom RGB legend
+        plt.legend(
+            custom_lines,
+            channels,
+            fontsize="medium",
+            bbox_to_anchor=(1, 1),
+            loc="upper left",
+        )
+    # clean up axes
+    plt.tick_params(labelbottom=False, labelleft=False)
+    sns.despine(bottom=True, left=True)
+    # title above plot
+    plt.title(
+        label=label,
+        loc="left",
+        fontweight="bold",
+        fontsize=16,
+    )
+
+
 def show_pita(
     pita,
     features=None,
+    discrete_features=None,
     RGB=False,
     histo=None,
     label="feature",
     ncols=4,
     figsize=(7, 7),
+    cmap="plasma",
     save_to=None,
     **kwargs,
 ):
@@ -593,19 +781,26 @@ def show_pita(
         Image of desired expression in pixel space from `.assemble_pita()`
     features : list of int, optional (default=`None`)
         List of features by index to show in plot. If `None`, use all features.
+    discrete_features : dict, optional (default=`None`)
+        Dictionary of feature indices (keys) containing discrete (categorical) values
+        (i.e. MILWRM domain). Values are `max_value` to pass to
+        `plot_single_image_discrete` for each discrete feature. If `None`, treat all
+        features as continuous.
     RGB : bool, optional (default=`False`)
         Treat 3-dimensional array as RGB image
     histo : np.array or `None`, optional (default=`None`)
         Histology image to show along with pita in gridspec. If `None`, ignore.
-    label : str
+    label : str, optional (default="feature")
         What to title each panel of the gridspec (i.e. "PC" or "usage") or each
         channel in RGB image. Can also pass list of names e.g. ["NeuN","GFAP",
         "DAPI"] corresponding to channels.
-    ncols : int
+    ncols : int, optional (default=4)
         Number of columns for gridspec
-    figsize : tuple of float
+    figsize : tuple of float, optional (default=(7, 7))
         Size in inches of output figure
-    save_to : str or None
+    cmap : str, optional (default="plasma")
+        Matplotlib colormap to use
+    save_to : str or None, optional (default=`None`)
         Path to image file to save results. if `None`, show figure.
     **kwargs
         Arguments to pass to `plt.imshow()` function
@@ -619,50 +814,73 @@ def show_pita(
         pita.ndim
     )
     assert pita.ndim < 4, "Pita has too many dimensions: {} given".format(pita.ndim)
+    # check for specified discrete features
+    if discrete_features is None:
+        discrete_features = []
+    else:
+        # coerce single integer index to list
+        if isinstance(discrete_features, int):
+            discrete_features = [discrete_features]
     # if only one feature (2D), plot it quickly
     if (pita.ndim == 2) and histo is None:
-        fig = plt.figure(figsize=figsize)
-        plt.imshow(pita, **kwargs)
-        plt.tick_params(labelbottom=False, labelleft=False)
-        sns.despine(bottom=True, left=True)
-        plt.title(
-            label=label,
-            loc="left",
-            fontweight="bold",
-            fontsize=16,
-        )
-        _ = plt.colorbar(shrink=0.7)
+        fig, ax = plt.subplots(1, 1, figsize=figsize)
+        if discrete_features is not None:
+            plot_single_image_discrete(
+                image=pita,
+                ax=ax,
+                # use first value in dict as max
+                max_val=list(discrete_features.values())[0],
+                label=label[0] if isinstance(label, list) else label,
+                cmap=cmap,
+                **kwargs,
+            )
+        else:
+            plot_single_image(
+                image=pita,
+                ax=ax,
+                label=label[0] if isinstance(label, list) else label,
+                cmap=cmap,
+                **kwargs,
+            )
         plt.tight_layout()
         if save_to:
             plt.savefig(fname=save_to, transparent=True, bbox_inches="tight", dpi=300)
         return fig
     if (pita.ndim == 2) and histo is not None:
+        # if number of discrete values is small, make colorbar discrete
+        n_values = len(np.unique(pita[~np.isnan(pita)]))
         n_rows, n_cols = 1, 2  # two images here, histo and RGB
         fig = plt.figure(figsize=(ncols * n_cols, ncols * n_rows))
         # arrange axes as subplots
         gs = gridspec.GridSpec(n_rows, n_cols, figure=fig)
         # add plots to axes
         ax = plt.subplot(gs[0])
-        im = ax.imshow(histo, **kwargs)
-        ax.tick_params(labelbottom=False, labelleft=False)
-        sns.despine(bottom=True, left=True)
-        ax.set_title(
+        plot_single_image_rgb(
+            image=histo,
+            ax=ax,
+            channels=None,
             label="Histology",
-            loc="left",
-            fontweight="bold",
-            fontsize=16,
+            **kwargs,
         )
         ax = plt.subplot(gs[1])
-        im = ax.imshow(pita, **kwargs)
-        ax.tick_params(labelbottom=False, labelleft=False)
-        sns.despine(bottom=True, left=True)
-        ax.set_title(
-            label=label,
-            loc="left",
-            fontweight="bold",
-            fontsize=16,
-        )
-        _ = plt.colorbar(im, shrink=0.7)
+        if discrete_features is not None:
+            plot_single_image_discrete(
+                image=pita,
+                ax=ax,
+                # use first value in dict as max
+                max_val=list(discrete_features.values())[0],
+                label=label[0] if isinstance(label, list) else label,
+                cmap=cmap,
+                **kwargs,
+            )
+        else:
+            plot_single_image(
+                image=pita,
+                ax=ax,
+                label=label[0] if isinstance(label, list) else label,
+                cmap=cmap,
+                **kwargs,
+            )
         fig.tight_layout()
         if save_to:
             plt.savefig(fname=save_to, transparent=True, bbox_inches="tight", dpi=300)
@@ -692,26 +910,21 @@ def show_pita(
             gs = gridspec.GridSpec(n_rows, n_cols, figure=fig)
             # add plots to axes
             ax = plt.subplot(gs[0])
-            im = ax.imshow(histo, **kwargs)
-            ax.tick_params(labelbottom=False, labelleft=False)
-            sns.despine(bottom=True, left=True)
-            ax.set_title(
+            plot_single_image_rgb(
+                image=histo,
+                ax=ax,
+                channels=None,
                 label="Histology",
-                loc="left",
-                fontweight="bold",
-                fontsize=16,
+                **kwargs,
             )
             ax = plt.subplot(gs[1])
-            im = ax.imshow(pita, **kwargs)
-            # add legend for channel IDs
-            custom_lines = [
-                Line2D([0], [0], color=(1, 0, 0), lw=5),
-                Line2D([0], [0], color=(0, 1, 0), lw=5),
-                Line2D([0], [0], color=(0, 0, 1), lw=5),
-            ]
-            plt.legend(custom_lines, channels, fontsize="medium")
-            ax.tick_params(labelbottom=False, labelleft=False)
-            sns.despine(bottom=True, left=True)
+            plot_single_image_rgb(
+                image=pita,
+                ax=ax,
+                channels=channels,
+                label="",
+                **kwargs,
+            )
             fig.tight_layout()
             if save_to:
                 plt.savefig(
@@ -719,18 +932,14 @@ def show_pita(
                 )
             return fig
         else:
-            fig = plt.figure(figsize=figsize)
-            plt.imshow(pita, **kwargs)
-            # add legend for channel IDs
-            custom_lines = [
-                Line2D([0], [0], color=(1, 0, 0), lw=5),
-                Line2D([0], [0], color=(0, 1, 0), lw=5),
-                Line2D([0], [0], color=(0, 0, 1), lw=5),
-            ]
-            plt.legend(custom_lines, channels, fontsize="medium")
-            plt.tick_params(labelbottom=False, labelleft=False)
-            sns.despine(bottom=True, left=True)
-            plt.tight_layout()
+            fig, ax = plt.subplots(1, 1, figsize=figsize)
+            plot_single_image_rgb(
+                image=pita,
+                ax=ax,
+                channels=channels,
+                label="",
+                **kwargs,
+            )
             if save_to:
                 plt.savefig(
                     fname=save_to, transparent=True, bbox_inches="tight", dpi=300
@@ -741,7 +950,7 @@ def show_pita(
         features = [features]
     # if no features are given, use all of them
     if features is None:
-        features = [x + 1 for x in range(pita.shape[2])]
+        features = [x for x in range(pita.shape[2])]
     else:
         assert (
             pita.ndim > 2
@@ -795,16 +1004,33 @@ def show_pita(
         i = i + 1
     for feature in features:
         ax = plt.subplot(gs[i])
-        im = ax.imshow(pita[:, :, feature - 1], **kwargs)
-        ax.tick_params(labelbottom=False, labelleft=False)
-        sns.despine(bottom=True, left=True)
-        ax.set_title(
-            label=labels[i],
-            loc="left",
-            fontweight="bold",
-            fontsize=16,
-        )
-        cbar = plt.colorbar(im, shrink=0.7)
+        if discrete_features is not None:
+            if feature in discrete_features.keys():
+                plot_single_image_discrete(
+                    image=pita[:, :, feature],
+                    ax=ax,
+                    # use corresponding value in dict as max
+                    max_val=discrete_features[feature],
+                    label=labels[i],
+                    cmap=cmap,
+                    **kwargs,
+                )
+            else:
+                plot_single_image(
+                    image=pita[:, :, feature],
+                    ax=ax,
+                    label=labels[i],
+                    cmap=cmap,
+                    **kwargs,
+                )
+        else:
+            plot_single_image(
+                image=pita[:, :, feature],
+                ax=ax,
+                label=labels[i],
+                cmap=cmap,
+                **kwargs,
+            )
         i = i + 1
     fig.tight_layout()
     if save_to:

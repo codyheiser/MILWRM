@@ -501,7 +501,7 @@ class tissue_labeler:
             return fig
 
     def plot_feature_loadings(
-        self, ncols=None, nfeatures=None, figsize=(5, 5), save_to=None
+        self, ncols=None, nfeatures=None, titles=None, figsize=(5, 5), save_to=None
     ):
         &#34;&#34;&#34;
         Plots contributions of each training feature to k-means cluster centers
@@ -512,6 +512,9 @@ class tissue_labeler:
             Number of columns for gridspec. If `None`, uses number of tissue domains k.
         nfeatures : int, optional (default=`None`)
             Number of top-loaded features to show for each tissue domain
+        titles : list of str, optional (default=`None`)
+            Titles of plots corresponding to each MILWRM domain. If `None`, titles
+            will be numbers 0 through k.
         figsize : tuple of float, optional (default=(5,5))
             Size of matplotlib figure
         save_to : str, optional (default=`None`)
@@ -533,17 +536,14 @@ class tissue_labeler:
                 labels = labels + [&#34;ch_&#34; + str(x) for x in self.flour_channels]
         elif &#34;mxif_labeler&#34; in str(self.__class__):
             labels = self.model_features
-        titles = [
-            &#34;tissue_ID &#34; + str(x) for x in range(self.kmeans.cluster_centers_.shape[0])
-        ]
+        if titles is None:
+            titles = [
+                &#34;tissue_ID &#34; + str(x)
+                for x in range(self.kmeans.cluster_centers_.shape[0])
+            ]
         if nfeatures is None:
             nfeatures = len(labels)
         scores = self.kmeans.cluster_centers_.copy()
-
-        mean = self.kmeans.cluster_centers_.mean(axis=0)
-        sd = self.kmeans.cluster_centers_.std(axis=0)
-        # z-score cluster centroid values for more reliable loadings
-        z_scores = (scores - mean) / sd
 
         n_panels = len(titles)
         if ncols is None:
@@ -572,7 +572,6 @@ class tissue_labeler:
                     y=ig,
                     s=labels[g],
                     color=&#34;black&#34;,
-                    # rotation=&#34;vertical&#34;,
                     verticalalignment=&#34;center&#34;,
                     horizontalalignment=&#34;right&#34;,
                     fontsize=&#34;medium&#34;,
@@ -3340,7 +3339,7 @@ channel in RGB image. Can also pass list of names e.g. ["NeuN","GFAP",
             return fig
 
     def plot_feature_loadings(
-        self, ncols=None, nfeatures=None, figsize=(5, 5), save_to=None
+        self, ncols=None, nfeatures=None, titles=None, figsize=(5, 5), save_to=None
     ):
         &#34;&#34;&#34;
         Plots contributions of each training feature to k-means cluster centers
@@ -3351,6 +3350,9 @@ channel in RGB image. Can also pass list of names e.g. ["NeuN","GFAP",
             Number of columns for gridspec. If `None`, uses number of tissue domains k.
         nfeatures : int, optional (default=`None`)
             Number of top-loaded features to show for each tissue domain
+        titles : list of str, optional (default=`None`)
+            Titles of plots corresponding to each MILWRM domain. If `None`, titles
+            will be numbers 0 through k.
         figsize : tuple of float, optional (default=(5,5))
             Size of matplotlib figure
         save_to : str, optional (default=`None`)
@@ -3372,17 +3374,14 @@ channel in RGB image. Can also pass list of names e.g. ["NeuN","GFAP",
                 labels = labels + [&#34;ch_&#34; + str(x) for x in self.flour_channels]
         elif &#34;mxif_labeler&#34; in str(self.__class__):
             labels = self.model_features
-        titles = [
-            &#34;tissue_ID &#34; + str(x) for x in range(self.kmeans.cluster_centers_.shape[0])
-        ]
+        if titles is None:
+            titles = [
+                &#34;tissue_ID &#34; + str(x)
+                for x in range(self.kmeans.cluster_centers_.shape[0])
+            ]
         if nfeatures is None:
             nfeatures = len(labels)
         scores = self.kmeans.cluster_centers_.copy()
-
-        mean = self.kmeans.cluster_centers_.mean(axis=0)
-        sd = self.kmeans.cluster_centers_.std(axis=0)
-        # z-score cluster centroid values for more reliable loadings
-        z_scores = (scores - mean) / sd
 
         n_panels = len(titles)
         if ncols is None:
@@ -3411,7 +3410,6 @@ channel in RGB image. Can also pass list of names e.g. ["NeuN","GFAP",
                     y=ig,
                     s=labels[g],
                     color=&#34;black&#34;,
-                    # rotation=&#34;vertical&#34;,
                     verticalalignment=&#34;center&#34;,
                     horizontalalignment=&#34;right&#34;,
                     fontsize=&#34;medium&#34;,
@@ -3575,7 +3573,7 @@ model. Parameters are also captured as attributes for posterity.</p></div>
 </details>
 </dd>
 <dt id="MILWRM.MILWRM.tissue_labeler.plot_feature_loadings"><code class="name flex">
-<span>def <span class="ident">plot_feature_loadings</span></span>(<span>self, ncols=None, nfeatures=None, figsize=(5, 5), save_to=None)</span>
+<span>def <span class="ident">plot_feature_loadings</span></span>(<span>self, ncols=None, nfeatures=None, titles=None, figsize=(5, 5), save_to=None)</span>
 </code></dt>
 <dd>
 <div class="desc"><p>Plots contributions of each training feature to k-means cluster centers</p>
@@ -3585,6 +3583,9 @@ model. Parameters are also captured as attributes for posterity.</p></div>
 <dd>Number of columns for gridspec. If <code>None</code>, uses number of tissue domains k.</dd>
 <dt><strong><code>nfeatures</code></strong> :&ensp;<code>int</code>, optional <code>(default=</code>None<code>)</code></dt>
 <dd>Number of top-loaded features to show for each tissue domain</dd>
+<dt><strong><code>titles</code></strong> :&ensp;<code>list</code> of <code>str</code>, optional <code>(default=</code>None<code>)</code></dt>
+<dd>Titles of plots corresponding to each MILWRM domain. If <code>None</code>, titles
+will be numbers 0 through k.</dd>
 <dt><strong><code>figsize</code></strong> :&ensp;<code>tuple</code> of <code>float</code>, optional <code>(default=(5,5))</code></dt>
 <dd>Size of matplotlib figure</dd>
 <dt><strong><code>save_to</code></strong> :&ensp;<code>str</code>, optional <code>(default=</code>None<code>)</code></dt>
@@ -3597,7 +3598,7 @@ model. Parameters are also captured as attributes for posterity.</p></div>
 <span>Expand source code</span>
 </summary>
 <pre><code class="python">def plot_feature_loadings(
-    self, ncols=None, nfeatures=None, figsize=(5, 5), save_to=None
+    self, ncols=None, nfeatures=None, titles=None, figsize=(5, 5), save_to=None
 ):
     &#34;&#34;&#34;
     Plots contributions of each training feature to k-means cluster centers
@@ -3608,6 +3609,9 @@ model. Parameters are also captured as attributes for posterity.</p></div>
         Number of columns for gridspec. If `None`, uses number of tissue domains k.
     nfeatures : int, optional (default=`None`)
         Number of top-loaded features to show for each tissue domain
+    titles : list of str, optional (default=`None`)
+        Titles of plots corresponding to each MILWRM domain. If `None`, titles
+        will be numbers 0 through k.
     figsize : tuple of float, optional (default=(5,5))
         Size of matplotlib figure
     save_to : str, optional (default=`None`)
@@ -3629,17 +3633,14 @@ model. Parameters are also captured as attributes for posterity.</p></div>
             labels = labels + [&#34;ch_&#34; + str(x) for x in self.flour_channels]
     elif &#34;mxif_labeler&#34; in str(self.__class__):
         labels = self.model_features
-    titles = [
-        &#34;tissue_ID &#34; + str(x) for x in range(self.kmeans.cluster_centers_.shape[0])
-    ]
+    if titles is None:
+        titles = [
+            &#34;tissue_ID &#34; + str(x)
+            for x in range(self.kmeans.cluster_centers_.shape[0])
+        ]
     if nfeatures is None:
         nfeatures = len(labels)
     scores = self.kmeans.cluster_centers_.copy()
-
-    mean = self.kmeans.cluster_centers_.mean(axis=0)
-    sd = self.kmeans.cluster_centers_.std(axis=0)
-    # z-score cluster centroid values for more reliable loadings
-    z_scores = (scores - mean) / sd
 
     n_panels = len(titles)
     if ncols is None:
@@ -3668,7 +3669,6 @@ model. Parameters are also captured as attributes for posterity.</p></div>
                 y=ig,
                 s=labels[g],
                 color=&#34;black&#34;,
-                # rotation=&#34;vertical&#34;,
                 verticalalignment=&#34;center&#34;,
                 horizontalalignment=&#34;right&#34;,
                 fontsize=&#34;medium&#34;,

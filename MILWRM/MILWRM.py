@@ -470,7 +470,7 @@ class tissue_labeler:
             return fig
 
     def plot_feature_loadings(
-        self, ncols=None, nfeatures=None, figsize=(5, 5), save_to=None
+        self, ncols=None, nfeatures=None, titles=None, figsize=(5, 5), save_to=None
     ):
         """
         Plots contributions of each training feature to k-means cluster centers
@@ -481,6 +481,9 @@ class tissue_labeler:
             Number of columns for gridspec. If `None`, uses number of tissue domains k.
         nfeatures : int, optional (default=`None`)
             Number of top-loaded features to show for each tissue domain
+        titles : list of str, optional (default=`None`)
+            Titles of plots corresponding to each MILWRM domain. If `None`, titles
+            will be numbers 0 through k.
         figsize : tuple of float, optional (default=(5,5))
             Size of matplotlib figure
         save_to : str, optional (default=`None`)
@@ -502,17 +505,14 @@ class tissue_labeler:
                 labels = labels + ["ch_" + str(x) for x in self.flour_channels]
         elif "mxif_labeler" in str(self.__class__):
             labels = self.model_features
-        titles = [
-            "tissue_ID " + str(x) for x in range(self.kmeans.cluster_centers_.shape[0])
-        ]
+        if titles is None:
+            titles = [
+                "tissue_ID " + str(x)
+                for x in range(self.kmeans.cluster_centers_.shape[0])
+            ]
         if nfeatures is None:
             nfeatures = len(labels)
         scores = self.kmeans.cluster_centers_.copy()
-
-        mean = self.kmeans.cluster_centers_.mean(axis=0)
-        sd = self.kmeans.cluster_centers_.std(axis=0)
-        # z-score cluster centroid values for more reliable loadings
-        z_scores = (scores - mean) / sd
 
         n_panels = len(titles)
         if ncols is None:
@@ -541,7 +541,6 @@ class tissue_labeler:
                     y=ig,
                     s=labels[g],
                     color="black",
-                    # rotation="vertical",
                     verticalalignment="center",
                     horizontalalignment="right",
                     fontsize="medium",
