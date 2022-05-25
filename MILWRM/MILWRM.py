@@ -416,13 +416,16 @@ class tissue_labeler:
             self.cluster_data
         )
 
-    def plot_feature_proportions(self, figsize=(10, 7), save_to=None):
+    def plot_feature_proportions(self, labels=None, figsize=(10, 7), save_to=None):
         """
         Plots contributions of each training feature to k-means cluster centers as
         percentages of total
 
         Parameters
         ----------
+        labels : list of str, optional (default=`None`)
+            Labels corresponding to each MILWRM training feature. If `None`, features
+            will be numbered 0 through p.
         figsize : tuple of float, optional (default=(10,7))
             Size of matplotlib figure
         save_to : str, optional (default=`None`)
@@ -437,13 +440,23 @@ class tissue_labeler:
         ), "No cluster results found. Run \
         label_tissue_regions() first."
         if "st_labeler" in str(self.__class__):
-            labels = [self.rep + "_" + str(x) for x in self.features]
-            if self.histo:
-                labels = labels + ["R", "G", "B"]
-            if self.flour_channels is not None:
-                labels = labels + ["ch_" + str(x) for x in self.flour_channels]
+            if labels is not None:
+                assert len(labels) == len(
+                    self.features
+                ), "'labels' must be the same length as self.features."
+            else:
+                labels = [self.rep + "_" + str(x) for x in self.features]
+                if self.histo:
+                    labels = labels + ["R", "G", "B"]
+                if self.fluor_channels is not None:
+                    labels = labels + ["ch_" + str(x) for x in self.fluor_channels]
         elif "mxif_labeler" in str(self.__class__):
-            labels = self.model_features
+            if labels is not None:
+                assert len(labels) == len(
+                    self.features
+                ), "'labels' must be the same length as self.features."
+            else:
+                labels = self.model_features
         # create pandas df and calculate percentages of total
         ctr_df = pd.DataFrame(self.kmeans.cluster_centers_, columns=labels)
         totals = ctr_df.sum(axis=1)
@@ -470,7 +483,13 @@ class tissue_labeler:
             return fig
 
     def plot_feature_loadings(
-        self, ncols=None, nfeatures=None, titles=None, figsize=(5, 5), save_to=None
+        self,
+        ncols=None,
+        nfeatures=None,
+        labels=None,
+        titles=None,
+        figsize=(5, 5),
+        save_to=None,
     ):
         """
         Plots contributions of each training feature to k-means cluster centers
@@ -481,6 +500,9 @@ class tissue_labeler:
             Number of columns for gridspec. If `None`, uses number of tissue domains k.
         nfeatures : int, optional (default=`None`)
             Number of top-loaded features to show for each tissue domain
+        labels : list of str, optional (default=`None`)
+            Labels corresponding to each MILWRM training feature. If `None`, features
+            will be numbered 0 through p.
         titles : list of str, optional (default=`None`)
             Titles of plots corresponding to each MILWRM domain. If `None`, titles
             will be numbers 0 through k.
@@ -498,13 +520,23 @@ class tissue_labeler:
         ), "No cluster results found. Run \
         label_tissue_regions() first."
         if "st_labeler" in str(self.__class__):
-            labels = [self.rep + "_" + str(x) for x in self.features]
-            if self.histo:
-                labels = labels + ["R", "G", "B"]
-            if self.flour_channels is not None:
-                labels = labels + ["ch_" + str(x) for x in self.flour_channels]
+            if labels is not None:
+                assert len(labels) == len(
+                    self.features
+                ), "'labels' must be the same length as self.features."
+            else:
+                labels = [self.rep + "_" + str(x) for x in self.features]
+                if self.histo:
+                    labels = labels + ["R", "G", "B"]
+                if self.fluor_channels is not None:
+                    labels = labels + ["ch_" + str(x) for x in self.fluor_channels]
         elif "mxif_labeler" in str(self.__class__):
-            labels = self.model_features
+            if labels is not None:
+                assert len(labels) == len(
+                    self.features
+                ), "'labels' must be the same length as self.features."
+            else:
+                labels = self.model_features
         if titles is None:
             titles = [
                 "tissue_ID " + str(x)
@@ -647,7 +679,7 @@ class st_labeler(tissue_labeler):
         # save the hyperparams as object attributes
         self.rep = use_rep
         self.histo = histo
-        self.flour_channels = fluor_channels
+        self.fluor_channels = fluor_channels
         self.blur_pix = blur_pix
         # collect clustering data from self.adatas in parallel
         print(
@@ -934,7 +966,7 @@ class mxif_labeler(tissue_labeler):
                     "Image dictionary keys have to be string type and image dictionary values have to be in a list"
                 )
         elif isinstance(images, list):  # if images are in a list check mode
-            if mode is "batch":  # if mode is batch each image is a separate batch
+            if mode == "batch":  # if mode is batch each image is a separate batch
                 image_dict = {}
                 for i, image in enumerate(images):
                     image_dict[str(i)] = [image]
