@@ -689,7 +689,7 @@ def plot_single_image_discrete(
         fontsize=16,
     )
     _ = plt.colorbar(
-        im, shrink=0.7, ticks=range(int(max_val) + 1) if n_values <= 10 else None
+        im, shrink=0.7, ticks=range(int(max_val) + 2) if n_values <= 10 else None
     )
     # if number of discrete values is small, make colorbar discrete
     if n_values <= 10:
