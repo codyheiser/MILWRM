@@ -677,7 +677,7 @@ def plot_single_image_discrete(
     # get number of discrete values in image for categorical plot
     n_values = len(np.unique(image[~np.isnan(image)]))
     # call imshow with discrete colormap for categorical plot
-    im = ax.imshow(image, cmap=plt.cm.get_cmap(cmap, int(max_val) + 1), **kwargs)
+    im = ax.imshow(image, cmap=plt.cm.get_cmap(cmap, int(max_val)), **kwargs)
     # clean up axes
     plt.tick_params(labelbottom=False, labelleft=False)
     sns.despine(bottom=True, left=True)
@@ -689,7 +689,7 @@ def plot_single_image_discrete(
         fontsize=16,
     )
     _ = plt.colorbar(
-        im, shrink=0.7, ticks=range(int(max_val) + 2) if n_values <= 10 else None
+        im, shrink=0.7, ticks=range(int(max_val) + 1) if n_values <= 10 else None
     )
     # if number of discrete values is small, make colorbar discrete
     if n_values <= 10:
