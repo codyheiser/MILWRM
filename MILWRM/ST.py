@@ -624,7 +624,7 @@ def plot_single_image(
     )
     assert image.ndim < 3, "Image has too many dimensions: {} given".format(image.ndim)
     # call imshow with discrete colormap for categorical plot
-    _ = ax.imshow(image, cmap=plt.cm.get_cmap(cmap), **kwargs)
+    im = ax.imshow(image, cmap=plt.cm.get_cmap(cmap), **kwargs)
     # clean up axes
     plt.tick_params(labelbottom=False, labelleft=False)
     sns.despine(bottom=True, left=True)
@@ -730,7 +730,7 @@ def plot_single_image_rgb(
         image.shape
     )
     # call imshow
-    _ = ax.imshow(image, **kwargs)
+    im = ax.imshow(image, **kwargs)
     if channels is not None:
         # add legend for channel IDs
         custom_lines = [
