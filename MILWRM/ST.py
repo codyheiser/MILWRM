@@ -625,7 +625,7 @@ def plot_single_image(
     )
     assert image.ndim < 3, "Image has too many dimensions: {} given".format(image.ndim)
     # call imshow with discrete colormap for categorical plot
-    im = plt.imshow(image, cmap=plt.cm.get_cmap(cmap), **kwargs)
+    _ = ax.imshow(image, cmap=plt.cm.get_cmap(cmap), **kwargs)
     # clean up axes
     plt.tick_params(labelbottom=False, labelleft=False)
     sns.despine(bottom=True, left=True)
@@ -678,7 +678,7 @@ def plot_single_image_discrete(
     # get number of discrete values in image for categorical plot
     n_values = len(np.unique(image[~np.isnan(image)]))
     # call imshow with discrete colormap for categorical plot
-    im = plt.imshow(image, cmap=plt.cm.get_cmap(cmap, int(max_val) + 1), **kwargs)
+    im = ax.imshow(image, cmap=plt.cm.get_cmap(cmap, int(max_val) + 1), **kwargs)
     # clean up axes
     plt.tick_params(labelbottom=False, labelleft=False)
     sns.despine(bottom=True, left=True)
@@ -731,7 +731,7 @@ def plot_single_image_rgb(
         image.shape
     )
     # call imshow
-    im = plt.imshow(image, **kwargs)
+    _ = ax.imshow(image, **kwargs)
     if channels is not None:
         # add legend for channel IDs
         custom_lines = [
@@ -814,13 +814,6 @@ def show_pita(
         pita.ndim
     )
     assert pita.ndim < 4, "Pita has too many dimensions: {} given".format(pita.ndim)
-    # check for specified discrete features
-    if discrete_features is None:
-        discrete_features = []
-    else:
-        # coerce single integer index to list
-        if isinstance(discrete_features, int):
-            discrete_features = [discrete_features]
     # if only one feature (2D), plot it quickly
     if (pita.ndim == 2) and histo is None:
         fig, ax = plt.subplots(1, 1, figsize=figsize)
@@ -847,8 +840,6 @@ def show_pita(
             plt.savefig(fname=save_to, transparent=True, bbox_inches="tight", dpi=300)
         return fig
     if (pita.ndim == 2) and histo is not None:
-        # if number of discrete values is small, make colorbar discrete
-        n_values = len(np.unique(pita[~np.isnan(pita)]))
         n_rows, n_cols = 1, 2  # two images here, histo and RGB
         fig = plt.figure(figsize=(ncols * n_cols, ncols * n_rows))
         # arrange axes as subplots
@@ -992,20 +983,18 @@ def show_pita(
     if histo is not None:
         # add histology plot to first axes
         ax = plt.subplot(gs[i])
-        im = ax.imshow(histo, **kwargs)
-        ax.tick_params(labelbottom=False, labelleft=False)
-        sns.despine(bottom=True, left=True)
-        ax.set_title(
+        plot_single_image_rgb(
+            image=histo,
+            ax=ax,
+            channels=None,
             label=labels[i],
-            loc="left",
-            fontweight="bold",
-            fontsize=16,
+            **kwargs,
         )
         i = i + 1
     for feature in features:
         ax = plt.subplot(gs[i])
         if discrete_features is not None:
-            if feature in discrete_features.keys():
+            if feature in discrete_features:
                 plot_single_image_discrete(
                     image=pita[:, :, feature],
                     ax=ax,
