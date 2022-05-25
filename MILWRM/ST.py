@@ -635,7 +635,7 @@ def plot_single_image(
         fontweight="bold",
         fontsize=16,
     )
-    _ = plt.colorbar(shrink=0.7, ticks=None)
+    _ = plt.colorbar(im, shrink=0.7, ticks=None)
 
 
 def plot_single_image_discrete(
@@ -689,7 +689,7 @@ def plot_single_image_discrete(
         fontsize=16,
     )
     _ = plt.colorbar(
-        shrink=0.7, ticks=range(int(max_val) + 1) if n_values <= 10 else None
+        im, shrink=0.7, ticks=range(int(max_val) + 1) if n_values <= 10 else None
     )
     # if number of discrete values is small, make colorbar discrete
     if n_values <= 10:
@@ -730,7 +730,7 @@ def plot_single_image_rgb(
         image.shape
     )
     # call imshow
-    im = ax.imshow(image, **kwargs)
+    _ = ax.imshow(image, **kwargs)
     if channels is not None:
         # add legend for channel IDs
         custom_lines = [
