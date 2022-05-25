@@ -966,7 +966,7 @@ class mxif_labeler(tissue_labeler):
                     "Image dictionary keys have to be string type and image dictionary values have to be in a list"
                 )
         elif isinstance(images, list):  # if images are in a list check mode
-            if mode is "batch":  # if mode is batch each image is a separate batch
+            if mode == "batch":  # if mode is batch each image is a separate batch
                 image_dict = {}
                 for i, image in enumerate(images):
                     image_dict[str(i)] = [image]

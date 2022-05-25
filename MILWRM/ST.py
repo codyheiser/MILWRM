@@ -542,12 +542,11 @@ def assemble_pita(
     discrete_cols = {}
     for col in mapper.columns:
         if pd.api.types.is_categorical_dtype(mapper[col]):
+            cat_max = len(mapper[col].cat.categories)
             mapper[col] = mapper[col].replace(
                 {v: k for k, v in dict(enumerate(mapper[col].cat.categories)).items()}
             )
-            discrete_cols[mapper.columns.get_loc(col)] = (
-                mapper[col].cat.as_ordered().max()
-            )
+            discrete_cols[mapper.columns.get_loc(col)] = cat_max
     # if no categorical columns, pass None to discrete_cols
     if bool(discrete_cols) is False:
         discrete_cols = None
