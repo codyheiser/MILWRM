@@ -978,7 +978,7 @@ class mxif_labeler(tissue_labeler):
                     )
                 )
             elif (
-                mode is "standard"
+                mode == "standard"
             ):  # if mode is standard all images are from one batch
                 image_dict = {}
                 image_dict["0"] = images
