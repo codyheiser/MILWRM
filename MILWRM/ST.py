@@ -674,8 +674,6 @@ def plot_single_image_discrete(
         image.ndim
     )
     assert image.ndim < 3, "Image has too many dimensions: {} given".format(image.ndim)
-    # get number of discrete values in image for categorical plot
-    n_values = len(np.unique(image[~np.isnan(image)]))
     # call imshow with discrete colormap for categorical plot
     im = ax.imshow(image, cmap=plt.cm.get_cmap(cmap, int(max_val)), **kwargs)
     # clean up axes
@@ -688,13 +686,9 @@ def plot_single_image_discrete(
         fontweight="bold",
         fontsize=16,
     )
-    _ = plt.colorbar(
-        im, shrink=0.7, ticks=range(int(max_val) + 1) if n_values <= 10 else None
-    )
-    # if number of discrete values is small, make colorbar discrete
-    if n_values <= 10:
-        vmin, vmax = im.get_clim()
-        im.set_clim(vmin=vmin - 0.5, vmax=vmax + 0.5)
+    _ = plt.colorbar(im, shrink=0.7, ticks=range(int(max_val)))
+    # move edges of colorbar by 0.5
+    im.set_clim(vmin=-0.5, vmax=max_val - 0.5)
 
 
 def plot_single_image_rgb(
