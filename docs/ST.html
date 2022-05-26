@@ -573,12 +573,11 @@ def assemble_pita(
     discrete_cols = {}
     for col in mapper.columns:
         if pd.api.types.is_categorical_dtype(mapper[col]):
+            cat_max = len(mapper[col].cat.categories)
             mapper[col] = mapper[col].replace(
                 {v: k for k, v in dict(enumerate(mapper[col].cat.categories)).items()}
             )
-            discrete_cols[mapper.columns.get_loc(col)] = (
-                mapper[col].cat.as_ordered().max()
-            )
+            discrete_cols[mapper.columns.get_loc(col)] = cat_max
     # if no categorical columns, pass None to discrete_cols
     if bool(discrete_cols) is False:
         discrete_cols = None
@@ -656,7 +655,7 @@ def plot_single_image(
     )
     assert image.ndim &lt; 3, &#34;Image has too many dimensions: {} given&#34;.format(image.ndim)
     # call imshow with discrete colormap for categorical plot
-    im = plt.imshow(image, cmap=plt.cm.get_cmap(cmap), **kwargs)
+    im = ax.imshow(image, cmap=plt.cm.get_cmap(cmap), **kwargs)
     # clean up axes
     plt.tick_params(labelbottom=False, labelleft=False)
     sns.despine(bottom=True, left=True)
@@ -667,7 +666,7 @@ def plot_single_image(
         fontweight=&#34;bold&#34;,
         fontsize=16,
     )
-    _ = plt.colorbar(shrink=0.7, ticks=None)
+    _ = plt.colorbar(im, shrink=0.7, ticks=None)
 
 
 def plot_single_image_discrete(
@@ -706,10 +705,8 @@ def plot_single_image_discrete(
         image.ndim
     )
     assert image.ndim &lt; 3, &#34;Image has too many dimensions: {} given&#34;.format(image.ndim)
-    # get number of discrete values in image for categorical plot
-    n_values = len(np.unique(image[~np.isnan(image)]))
     # call imshow with discrete colormap for categorical plot
-    im = plt.imshow(image, cmap=plt.cm.get_cmap(cmap, int(max_val) + 1), **kwargs)
+    im = ax.imshow(image, cmap=plt.cm.get_cmap(cmap, int(max_val)), **kwargs)
     # clean up axes
     plt.tick_params(labelbottom=False, labelleft=False)
     sns.despine(bottom=True, left=True)
@@ -720,13 +717,9 @@ def plot_single_image_discrete(
         fontweight=&#34;bold&#34;,
         fontsize=16,
     )
-    _ = plt.colorbar(
-        shrink=0.7, ticks=range(int(max_val) + 1) if n_values &lt;= 10 else None
-    )
-    # if number of discrete values is small, make colorbar discrete
-    if n_values &lt;= 10:
-        vmin, vmax = im.get_clim()
-        im.set_clim(vmin=vmin - 0.5, vmax=vmax + 0.5)
+    _ = plt.colorbar(im, shrink=0.7, ticks=range(int(max_val)))
+    # move edges of colorbar by 0.5
+    im.set_clim(vmin=-0.5, vmax=max_val - 0.5)
 
 
 def plot_single_image_rgb(
@@ -762,7 +755,7 @@ def plot_single_image_rgb(
         image.shape
     )
     # call imshow
-    im = plt.imshow(image, **kwargs)
+    _ = ax.imshow(image, **kwargs)
     if channels is not None:
         # add legend for channel IDs
         custom_lines = [
@@ -845,13 +838,6 @@ def show_pita(
         pita.ndim
     )
     assert pita.ndim &lt; 4, &#34;Pita has too many dimensions: {} given&#34;.format(pita.ndim)
-    # check for specified discrete features
-    if discrete_features is None:
-        discrete_features = []
-    else:
-        # coerce single integer index to list
-        if isinstance(discrete_features, int):
-            discrete_features = [discrete_features]
     # if only one feature (2D), plot it quickly
     if (pita.ndim == 2) and histo is None:
         fig, ax = plt.subplots(1, 1, figsize=figsize)
@@ -878,8 +864,6 @@ def show_pita(
             plt.savefig(fname=save_to, transparent=True, bbox_inches=&#34;tight&#34;, dpi=300)
         return fig
     if (pita.ndim == 2) and histo is not None:
-        # if number of discrete values is small, make colorbar discrete
-        n_values = len(np.unique(pita[~np.isnan(pita)]))
         n_rows, n_cols = 1, 2  # two images here, histo and RGB
         fig = plt.figure(figsize=(ncols * n_cols, ncols * n_rows))
         # arrange axes as subplots
@@ -1023,20 +1007,18 @@ def show_pita(
     if histo is not None:
         # add histology plot to first axes
         ax = plt.subplot(gs[i])
-        im = ax.imshow(histo, **kwargs)
-        ax.tick_params(labelbottom=False, labelleft=False)
-        sns.despine(bottom=True, left=True)
-        ax.set_title(
+        plot_single_image_rgb(
+            image=histo,
+            ax=ax,
+            channels=None,
             label=labels[i],
-            loc=&#34;left&#34;,
-            fontweight=&#34;bold&#34;,
-            fontsize=16,
+            **kwargs,
         )
         i = i + 1
     for feature in features:
         ax = plt.subplot(gs[i])
         if discrete_features is not None:
-            if feature in discrete_features.keys():
+            if feature in discrete_features:
                 plot_single_image_discrete(
                     image=pita[:, :, feature],
                     ax=ax,
@@ -1223,12 +1205,11 @@ specified and <code>plot_out</code>, first feature (index 0) will be plotted.</d
     discrete_cols = {}
     for col in mapper.columns:
         if pd.api.types.is_categorical_dtype(mapper[col]):
+            cat_max = len(mapper[col].cat.categories)
             mapper[col] = mapper[col].replace(
                 {v: k for k, v in dict(enumerate(mapper[col].cat.categories)).items()}
             )
-            discrete_cols[mapper.columns.get_loc(col)] = (
-                mapper[col].cat.as_ordered().max()
-            )
+            discrete_cols[mapper.columns.get_loc(col)] = cat_max
     # if no categorical columns, pass None to discrete_cols
     if bool(discrete_cols) is False:
         discrete_cols = None
@@ -1623,7 +1604,7 @@ Pixel space array of Visium spot barcode IDs</dd>
     )
     assert image.ndim &lt; 3, &#34;Image has too many dimensions: {} given&#34;.format(image.ndim)
     # call imshow with discrete colormap for categorical plot
-    im = plt.imshow(image, cmap=plt.cm.get_cmap(cmap), **kwargs)
+    im = ax.imshow(image, cmap=plt.cm.get_cmap(cmap), **kwargs)
     # clean up axes
     plt.tick_params(labelbottom=False, labelleft=False)
     sns.despine(bottom=True, left=True)
@@ -1634,7 +1615,7 @@ Pixel space array of Visium spot barcode IDs</dd>
         fontweight=&#34;bold&#34;,
         fontsize=16,
     )
-    _ = plt.colorbar(shrink=0.7, ticks=None)</code></pre>
+    _ = plt.colorbar(im, shrink=0.7, ticks=None)</code></pre>
 </details>
 </dd>
 <dt id="MILWRM.ST.plot_single_image_discrete"><code class="name flex">
@@ -1704,10 +1685,8 @@ Categories are expected to be zero-indexed integers.</dd>
         image.ndim
     )
     assert image.ndim &lt; 3, &#34;Image has too many dimensions: {} given&#34;.format(image.ndim)
-    # get number of discrete values in image for categorical plot
-    n_values = len(np.unique(image[~np.isnan(image)]))
     # call imshow with discrete colormap for categorical plot
-    im = plt.imshow(image, cmap=plt.cm.get_cmap(cmap, int(max_val) + 1), **kwargs)
+    im = ax.imshow(image, cmap=plt.cm.get_cmap(cmap, int(max_val)), **kwargs)
     # clean up axes
     plt.tick_params(labelbottom=False, labelleft=False)
     sns.despine(bottom=True, left=True)
@@ -1718,13 +1697,9 @@ Categories are expected to be zero-indexed integers.</dd>
         fontweight=&#34;bold&#34;,
         fontsize=16,
     )
-    _ = plt.colorbar(
-        shrink=0.7, ticks=range(int(max_val) + 1) if n_values &lt;= 10 else None
-    )
-    # if number of discrete values is small, make colorbar discrete
-    if n_values &lt;= 10:
-        vmin, vmax = im.get_clim()
-        im.set_clim(vmin=vmin - 0.5, vmax=vmax + 0.5)</code></pre>
+    _ = plt.colorbar(im, shrink=0.7, ticks=range(int(max_val)))
+    # move edges of colorbar by 0.5
+    im.set_clim(vmin=-0.5, vmax=max_val - 0.5)</code></pre>
 </details>
 </dd>
 <dt id="MILWRM.ST.plot_single_image_rgb"><code class="name flex">
@@ -1787,7 +1762,7 @@ Categories are expected to be zero-indexed integers.</dd>
         image.shape
     )
     # call imshow
-    im = plt.imshow(image, **kwargs)
+    _ = ax.imshow(image, **kwargs)
     if channels is not None:
         # add legend for channel IDs
         custom_lines = [
@@ -1915,13 +1890,6 @@ channel in RGB image. Can also pass list of names e.g. ["NeuN","GFAP",
         pita.ndim
     )
     assert pita.ndim &lt; 4, &#34;Pita has too many dimensions: {} given&#34;.format(pita.ndim)
-    # check for specified discrete features
-    if discrete_features is None:
-        discrete_features = []
-    else:
-        # coerce single integer index to list
-        if isinstance(discrete_features, int):
-            discrete_features = [discrete_features]
     # if only one feature (2D), plot it quickly
     if (pita.ndim == 2) and histo is None:
         fig, ax = plt.subplots(1, 1, figsize=figsize)
@@ -1948,8 +1916,6 @@ channel in RGB image. Can also pass list of names e.g. ["NeuN","GFAP",
             plt.savefig(fname=save_to, transparent=True, bbox_inches=&#34;tight&#34;, dpi=300)
         return fig
     if (pita.ndim == 2) and histo is not None:
-        # if number of discrete values is small, make colorbar discrete
-        n_values = len(np.unique(pita[~np.isnan(pita)]))
         n_rows, n_cols = 1, 2  # two images here, histo and RGB
         fig = plt.figure(figsize=(ncols * n_cols, ncols * n_rows))
         # arrange axes as subplots
@@ -2093,20 +2059,18 @@ channel in RGB image. Can also pass list of names e.g. ["NeuN","GFAP",
     if histo is not None:
         # add histology plot to first axes
         ax = plt.subplot(gs[i])
-        im = ax.imshow(histo, **kwargs)
-        ax.tick_params(labelbottom=False, labelleft=False)
-        sns.despine(bottom=True, left=True)
-        ax.set_title(
+        plot_single_image_rgb(
+            image=histo,
+            ax=ax,
+            channels=None,
             label=labels[i],
-            loc=&#34;left&#34;,
-            fontweight=&#34;bold&#34;,
-            fontsize=16,
+            **kwargs,
         )
         i = i + 1
     for feature in features:
         ax = plt.subplot(gs[i])
         if discrete_features is not None:
-            if feature in discrete_features.keys():
+            if feature in discrete_features:
                 plot_single_image_discrete(
                     image=pita[:, :, feature],
                     ax=ax,

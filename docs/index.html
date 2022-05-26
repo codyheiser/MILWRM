@@ -230,12 +230,11 @@ specified and <code>plot_out</code>, first feature (index 0) will be plotted.</d
     discrete_cols = {}
     for col in mapper.columns:
         if pd.api.types.is_categorical_dtype(mapper[col]):
+            cat_max = len(mapper[col].cat.categories)
             mapper[col] = mapper[col].replace(
                 {v: k for k, v in dict(enumerate(mapper[col].cat.categories)).items()}
             )
-            discrete_cols[mapper.columns.get_loc(col)] = (
-                mapper[col].cat.as_ordered().max()
-            )
+            discrete_cols[mapper.columns.get_loc(col)] = cat_max
     # if no categorical columns, pass None to discrete_cols
     if bool(discrete_cols) is False:
         discrete_cols = None
@@ -615,13 +614,6 @@ channel in RGB image. Can also pass list of names e.g. ["NeuN","GFAP",
         pita.ndim
     )
     assert pita.ndim &lt; 4, &#34;Pita has too many dimensions: {} given&#34;.format(pita.ndim)
-    # check for specified discrete features
-    if discrete_features is None:
-        discrete_features = []
-    else:
-        # coerce single integer index to list
-        if isinstance(discrete_features, int):
-            discrete_features = [discrete_features]
     # if only one feature (2D), plot it quickly
     if (pita.ndim == 2) and histo is None:
         fig, ax = plt.subplots(1, 1, figsize=figsize)
@@ -648,8 +640,6 @@ channel in RGB image. Can also pass list of names e.g. ["NeuN","GFAP",
             plt.savefig(fname=save_to, transparent=True, bbox_inches=&#34;tight&#34;, dpi=300)
         return fig
     if (pita.ndim == 2) and histo is not None:
-        # if number of discrete values is small, make colorbar discrete
-        n_values = len(np.unique(pita[~np.isnan(pita)]))
         n_rows, n_cols = 1, 2  # two images here, histo and RGB
         fig = plt.figure(figsize=(ncols * n_cols, ncols * n_rows))
         # arrange axes as subplots
@@ -793,20 +783,18 @@ channel in RGB image. Can also pass list of names e.g. ["NeuN","GFAP",
     if histo is not None:
         # add histology plot to first axes
         ax = plt.subplot(gs[i])
-        im = ax.imshow(histo, **kwargs)
-        ax.tick_params(labelbottom=False, labelleft=False)
-        sns.despine(bottom=True, left=True)
-        ax.set_title(
+        plot_single_image_rgb(
+            image=histo,
+            ax=ax,
+            channels=None,
             label=labels[i],
-            loc=&#34;left&#34;,
-            fontweight=&#34;bold&#34;,
-            fontsize=16,
+            **kwargs,
         )
         i = i + 1
     for feature in features:
         ax = plt.subplot(gs[i])
         if discrete_features is not None:
-            if feature in discrete_features.keys():
+            if feature in discrete_features:
                 plot_single_image_discrete(
                     image=pita[:, :, feature],
                     ax=ax,
@@ -2334,7 +2322,7 @@ tissue domains</dd>
                     &#34;Image dictionary keys have to be string type and image dictionary values have to be in a list&#34;
                 )
         elif isinstance(images, list):  # if images are in a list check mode
-            if mode is &#34;batch&#34;:  # if mode is batch each image is a separate batch
+            if mode == &#34;batch&#34;:  # if mode is batch each image is a separate batch
                 image_dict = {}
                 for i, image in enumerate(images):
                     image_dict[str(i)] = [image]
@@ -2346,7 +2334,7 @@ tissue domains</dd>
                     )
                 )
             elif (
-                mode is &#34;standard&#34;
+                mode == &#34;standard&#34;
             ):  # if mode is standard all images are from one batch
                 image_dict = {}
                 image_dict[&#34;0&#34;] = images
@@ -3061,7 +3049,7 @@ image)</dd>
         # save the hyperparams as object attributes
         self.rep = use_rep
         self.histo = histo
-        self.flour_channels = fluor_channels
+        self.fluor_channels = fluor_channels
         self.blur_pix = blur_pix
         # collect clustering data from self.adatas in parallel
         print(
@@ -3478,7 +3466,7 @@ Parameters are also captured as attributes for posterity.</p></div>
     # save the hyperparams as object attributes
     self.rep = use_rep
     self.histo = histo
-    self.flour_channels = fluor_channels
+    self.fluor_channels = fluor_channels
     self.blur_pix = blur_pix
     # collect clustering data from self.adatas in parallel
     print(
