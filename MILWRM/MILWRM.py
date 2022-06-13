@@ -24,6 +24,66 @@ from skimage.transform import resize
 from .MxIF import checktype, img
 from .ST import assemble_pita
 
+
+def create_tissue_mask_mxif(images, markers=None):
+    """
+    Creates a whole tissue mask for the given tissue image
+
+    Parameters
+    ----------
+    images : list or img
+        images for which the tissue mask will be created for
+    markers : list
+        markers required to create MxIF labeller object
+
+    Returns
+    -------
+    mask is added to self.mask
+    """
+    if isinstance(
+        images, img
+    ):  # force img objects into a list if a single object is given
+        images = [images]
+    if markers is None:  # using all markers if list of markers is not given
+        markers = images[0].ch
+    # TODO : check if the images have masks already or not
+    for image in images:
+        # create a copy of the image
+        image_cp = image.copy()
+        # creating a temprory mask
+        w, h, d = image_cp.img.shape
+        tmp_mask = np.ones((w, h))
+        # setting the mask within the image object
+        image_cp.mask = tmp_mask
+        # creating the mask_tl tissue labeler
+        mask_tl = mxif_labeler(images=[image_cp])
+        # preprocessing before running MILWRM
+        mask_tl.prep_cluster_data(
+            features=markers, downsample_factor=16, sigma=2, fract=0.1
+        )
+        # running MILWRM with two clusters
+        mask_tl.label_tissue_regions(k=2, alpha=0.05)
+        # estimating centroids
+        scores = mask_tl.kmeans.cluster_centers_.copy()
+        mean = mask_tl.kmeans.cluster_centers_.mean(axis=0)
+        sd = mask_tl.kmeans.cluster_centers_.std(axis=0)
+        # z-score cluster centroid values for more reliable loadings
+        z_scores = (scores - mean) / sd
+        # making sure the background is set as 0
+        if z_scores[0].mean() > 0:
+            print(z_scores[0], "the background is set as tissue ID 1")
+            where_0 = np.where(mask_tl.tissue_IDs[0] == 0.0)
+            mask_tl.tissue_IDs[0][where_0] = 0.5
+            where_1 = np.where(mask_tl.tissue_IDs[0] == 1.0)
+            mask_tl.tissue_IDs[0][where_1] = 0.0
+            where_05 = np.where(mask_tl.tissue_IDs[0] == 0.5)
+            mask_tl.tissue_IDs[0][where_05] = 1.0
+        # rescaling the mask
+        mask_final = resize(mask_tl.tissue_IDs[0], (w, h))
+        # setting the final mask
+        image.mask = mask_final
+
+
 def kMeansRes(scaled_data, k, alpha_k=0.02, random_state=18):
     """
     Calculates inertia value for a given k value by fitting k-means model to scaled data
@@ -422,13 +482,16 @@ class tissue_labeler:
             self.cluster_data
         )
 
-    def plot_feature_proportions(self, figsize=(10, 7), save_to=None):
+    def plot_feature_proportions(self, labels=None, figsize=(10, 7), save_to=None):
         """
         Plots contributions of each training feature to k-means cluster centers as
         percentages of total
 
         Parameters
         ----------
+        labels : list of str, optional (default=`None`)
+            Labels corresponding to each MILWRM training feature. If `None`, features
+            will be numbered 0 through p.
         figsize : tuple of float, optional (default=(10,7))
             Size of matplotlib figure
         save_to : str, optional (default=`None`)
@@ -443,13 +506,23 @@ class tissue_labeler:
         ), "No cluster results found. Run \
         label_tissue_regions() first."
         if "st_labeler" in str(self.__class__):
-            labels = [self.rep + "_" + str(x) for x in self.features]
-            if self.histo:
-                labels = labels + ["R", "G", "B"]
-            if self.flour_channels is not None:
-                labels = labels + ["ch_" + str(x) for x in self.flour_channels]
+            if labels is not None:
+                assert len(labels) == len(
+                    self.features
+                ), "'labels' must be the same length as self.features."
+            else:
+                labels = [self.rep + "_" + str(x) for x in self.features]
+                if self.histo:
+                    labels = labels + ["R", "G", "B"]
+                if self.fluor_channels is not None:
+                    labels = labels + ["ch_" + str(x) for x in self.fluor_channels]
         elif "mxif_labeler" in str(self.__class__):
-            labels = self.model_features
+            if labels is not None:
+                assert len(labels) == len(
+                    self.features
+                ), "'labels' must be the same length as self.features."
+            else:
+                labels = self.model_features
         # create pandas df and calculate percentages of total
         ctr_df = pd.DataFrame(self.kmeans.cluster_centers_, columns=labels)
         totals = ctr_df.sum(axis=1)
@@ -476,7 +549,13 @@ class tissue_labeler:
             return fig
 
     def plot_feature_loadings(
-        self, ncols=None, nfeatures=None, figsize=(5, 5), save_to=None
+        self,
+        ncols=None,
+        nfeatures=None,
+        labels=None,
+        titles=None,
+        figsize=(5, 5),
+        save_to=None,
     ):
         """
         Plots contributions of each training feature to k-means cluster centers
@@ -487,6 +566,12 @@ class tissue_labeler:
             Number of columns for gridspec. If `None`, uses number of tissue domains k.
         nfeatures : int, optional (default=`None`)
             Number of top-loaded features to show for each tissue domain
+        labels : list of str, optional (default=`None`)
+            Labels corresponding to each MILWRM training feature. If `None`, features
+            will be numbered 0 through p.
+        titles : list of str, optional (default=`None`)
+            Titles of plots corresponding to each MILWRM domain. If `None`, titles
+            will be numbers 0 through k.
         figsize : tuple of float, optional (default=(5,5))
             Size of matplotlib figure
         save_to : str, optional (default=`None`)
@@ -501,16 +586,28 @@ class tissue_labeler:
         ), "No cluster results found. Run \
         label_tissue_regions() first."
         if "st_labeler" in str(self.__class__):
-            labels = [self.rep + "_" + str(x) for x in self.features]
-            if self.histo:
-                labels = labels + ["R", "G", "B"]
-            if self.flour_channels is not None:
-                labels = labels + ["ch_" + str(x) for x in self.flour_channels]
+            if labels is not None:
+                assert len(labels) == len(
+                    self.features
+                ), "'labels' must be the same length as self.features."
+            else:
+                labels = [self.rep + "_" + str(x) for x in self.features]
+                if self.histo:
+                    labels = labels + ["R", "G", "B"]
+                if self.fluor_channels is not None:
+                    labels = labels + ["ch_" + str(x) for x in self.fluor_channels]
         elif "mxif_labeler" in str(self.__class__):
-            labels = self.model_features
-        titles = [
-            "tissue_ID " + str(x) for x in range(self.kmeans.cluster_centers_.shape[0])
-        ]
+            if labels is not None:
+                assert len(labels) == len(
+                    self.features
+                ), "'labels' must be the same length as self.features."
+            else:
+                labels = self.model_features
+        if titles is None:
+            titles = [
+                "tissue_ID " + str(x)
+                for x in range(self.kmeans.cluster_centers_.shape[0])
+            ]
         if nfeatures is None:
             nfeatures = len(labels)
         scores = self.kmeans.cluster_centers_.copy()
@@ -541,7 +638,6 @@ class tissue_labeler:
                     y=ig,
                     s=labels[g],
                     color="black",
-                    # rotation="vertical",
                     verticalalignment="center",
                     horizontalalignment="right",
                     fontsize="medium",
@@ -649,7 +745,7 @@ class st_labeler(tissue_labeler):
         # save the hyperparams as object attributes
         self.rep = use_rep
         self.histo = histo
-        self.flour_channels = fluor_channels
+        self.fluor_channels = fluor_channels
         self.blur_pix = blur_pix
         # collect clustering data from self.adatas in parallel
         print(
@@ -704,10 +800,8 @@ class st_labeler(tissue_labeler):
             self.find_optimal_k(
                 plot_out=plot_out, alpha=alpha, random_state=random_state, n_jobs=n_jobs
             )
-        else:
-            self.k = k  # if k is specified set attribute
         # call k-means model from parent class
-        self.find_tissue_regions(k=self.k, random_state=random_state)
+        self.find_tissue_regions(k=k, random_state=random_state)
         # loop through anndata object and add tissue labels to adata.obs dataframe
         start = 0
         print("Adding tissue_ID label to anndata objects")
@@ -777,6 +871,7 @@ class st_labeler(tissue_labeler):
             features="tissue_ID",
             use_rep="obs",
             plot_out=False,
+            verbose=False,
         )
         # if pita has multiple features, plot them in gridspec
         if isinstance(features, int):  # force features into list if single integer
@@ -1043,14 +1138,16 @@ class mxif_labeler(tissue_labeler):
         # unpack results from parallel process
         df = pd.DataFrame(out, columns = ["batch_names", 'Image mean', 'pixel counts'] )
         # calculate mean for each batch of images
-        df['mean estimator'] = df['Image mean']*df['pixel counts']
+        df["mean estimator"] = df["Image mean"] * df["pixel counts"]
         mean_batches = {}
         for key in self.images.keys():
             means = df[df["batch_names"]== key]['mean estimator'].sum()
             pixels = df[df["batch_names"]==key]['pixel counts'].sum()
             mean_batches[key] = means/pixels
         # creating a list of the mean for each batch
-        tmp_means = [[x]*len(v) for x,v in zip(mean_batches.values(),self.images.values())]
+        tmp_means = [
+            [x] * len(v) for x, v in zip(mean_batches.values(), self.images.values())
+        ]
         means = list(itertools.chain(*tmp_means))
         subsample_data = []
         subsample_data.append(Parallel(n_jobs=n_jobs, verbose=10, prefer ='threads')(
@@ -1104,10 +1201,8 @@ class mxif_labeler(tissue_labeler):
             self.find_optimal_k(
                 alpha=alpha, plot_out=plot_out, random_state=random_state, n_jobs=n_jobs
             )
-        else:
-            self.k = k  # if k is specified set attribute
         # call k-means model from parent class
-        self.find_tissue_regions(k=self.k, random_state=random_state)
+        self.find_tissue_regions(k=k, random_state=random_state)
         # loop through image objects and create tissue label images
         print("Creating tissue_ID images for image objects...")
         #TODO: Make this compatible with npz paths
@@ -1118,15 +1213,13 @@ class mxif_labeler(tissue_labeler):
             for image in self.image_df['Img']
         )
 
-
     def show_marker_overlay(
         self,
         image_index,
         channels=None,
-        color_name ="Paired",
+        cmap="Set1",
         mask_out=True,
         ncols=4,
-        figsize=(7, 7),
         save_to=None,
         **kwargs,
     ):
@@ -1147,8 +1240,6 @@ class mxif_labeler(tissue_labeler):
             Mask out non-tissue pixels prior to showing
         ncols : int
             Number of columns for gridspec if plotting individual channels.
-        figsize : tuple of float
-            Size in inches of output figure.
         save_to : str or None
             Path to image file to save results. If `None`, show figure.
         **kwargs
@@ -1175,10 +1266,10 @@ class mxif_labeler(tissue_labeler):
         )
         # creating a copy of the image
         image_cp = self[image_index].copy()
-        #re-scaling to set pixel value range between 0 to 1
+        # re-scaling to set pixel value range between 0 to 1
         image_cp.scale()
         # defining cmap for discrete color bar
-        cmap = plt.cm.get_cmap(color_name, self.k)
+        cmap = plt.cm.get_cmap(cmap, self.k)
         # calculate gridspec dimensions
         if len(channels) + 1 <= ncols:
             n_rows, n_cols = 1, len(channels) + 1
@@ -1208,9 +1299,7 @@ class mxif_labeler(tissue_labeler):
             im_tmp = image_cp.img[:, :, channel].copy()
             if self[image_index].mask is not None and mask_out:
                 # area outside mask NaN
-                self.tissue_IDs[image_index][
-                    self[image_index].mask == 0
-                ] = np.nan
+                self.tissue_IDs[image_index][self[image_index].mask == 0] = np.nan
                 im = ax.imshow(
                     self.tissue_IDs[image_index], cmap=cmap, alpha=im_tmp, **kwargs
                 )

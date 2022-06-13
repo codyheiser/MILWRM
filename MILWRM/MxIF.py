@@ -21,6 +21,7 @@ from matplotlib.lines import Line2D
 from skimage import filters
 from skimage.restoration import denoise_bilateral
 
+
 def checktype(obj):
     return bool(obj) and all(isinstance(elem, str) for elem in obj)
 
@@ -151,7 +152,7 @@ class img:
             self.ch = ["ch_{}".format(x) for x in range(self.n_ch)]
         else:
             if not isinstance(channels, list):
-               raise Exception("Channels must be given in a list") 
+                raise Exception("Channels must be given in a list")
             assert (
                 len(channels) == self.n_ch
             ), "Number of channels must match img_arr.shape[2]"
@@ -734,7 +735,8 @@ class img:
 
         Returns
         -------
-        Gridspec object (for multiple features). Saves plot to file if `save_to` is not `None`.
+        Gridspec object (for multiple features). Saves plot to file if `save_to` is
+        not `None`.
         """
         # calculate gridspec dimensions
         if len(channels) <= ncols:
@@ -756,5 +758,4 @@ class img:
         plt.show()
         if save_to:
             plt.savefig(fname=save_to, transparent=True, bbox_inches="tight", dpi=300)
-
         return gs
