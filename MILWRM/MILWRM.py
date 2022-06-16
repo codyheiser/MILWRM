@@ -231,62 +231,7 @@ def prep_data_single_sample_st(
     return tmp2.loc[:, cols]
 
 
-def prep_data_single_sample_mxif(image,
-    features,
-    downsample_factor,
-    batch):
-    """
-    Prepare dataframe for tissue-level clustering from a single MxIF sample
-
-    Parameters
-    ----------
-    images : Dataframe
-        containing images
-    indice : int
-        to extract image data from image object 
-    features : list of int or str
-        Indices or names of MxIF channels to use for tissue labeling
-    downsample_factor : int
-        Factor by which to downsample images from their original resolution
-    sigma : float, optional (default=2)
-        Standard deviation of Gaussian kernel for blurring
-    fract : float, optional (default=0.2)
-        Fraction of cluster data from each image to randomly select for model
-        building
-
-    Returns
-    -------
-    image : MILWRM.MxIF.img
-        Image object containing MxIF data downsampled and blurred
-    tmp : np.array
-        Clustering data from `image`
-    """
-    # scale the image
-    image.scale()
-    # downsample image
-    image.downsample(fact=downsample_factor, func=np.mean)
-    # # blur downsampled image
-    # image.blurring(filter_name=filter_name, sigma=sigma)
-    # get list of int for features
-    if isinstance(features, int):  # force features into list if single integer
-        features = [features]
-    if isinstance(features, str):  # force features into int if single string
-        features = [image.ch.index(features)]
-    if checktype(features):  # force features into list of int if list of strings
-        features = [image.ch.index(x) for x in features]
-    if features is None:  # if no features are given, use all of them
-        features = [x for x in range(image.n_ch)]
-    # calculating non-zero mean and number of pixels
-    image_array = image.img
-    num_pixels = np.count_nonzero(image_array != 0)
-    means = []
-    for i in range(image_array.shape[2]):
-        ar = image_array[:,:,i]
-        mean_for_ch = ar[ar!=0].mean()
-        means.append(mean_for_ch)
-    return batch, means, num_pixels
-
-def prep_data_single_sample_mxif_test(image, use_path, mean, filter_name, sigma, features, fract, path_save):
+def prep_data_single_sample_mxif(image, use_path, mean, filter_name, sigma, features, fract, path_save):
     """
     Perform log normalization, blurring and minmax scaling on the given image data
 
@@ -1029,7 +974,7 @@ class mxif_labeler(tissue_labeler):
         else:
             raise Exception("Img column in the dataframe should be either str for paths to the files or mxif.img object")
 
-    def prep_cluster_data_test(self, features, filter_name = 'gaussian', sigma = 2, fract = 0.2, path_save = None):
+    def prep_cluster_data(self, features, filter_name = 'gaussian', sigma = 2, fract = 0.2, path_save = None):
         """
         Prepare master array for tissue level clustering
 
@@ -1072,7 +1017,7 @@ class mxif_labeler(tissue_labeler):
         subsampled_data = []
         path_to_blurred_npz = []
         for image,batch in zip(self.image_df['Img'],self.image_df['batch_names']):
-            tmp = prep_data_single_sample_mxif_test(
+            tmp = prep_data_single_sample_mxif(
                 image,use_path=use_path, mean = mean_for_each_batch[batch], filter_name= filter_name,
                 sigma = sigma, features = self.model_features, fract = fract, path_save= path_save
             )
@@ -1089,82 +1034,6 @@ class mxif_labeler(tissue_labeler):
         self.scaler = scaler.fit(cluster_data)
         scaled_data = scaler.transform(cluster_data)
         self.cluster_data = scaled_data 
-
-    def prep_cluster_data(
-        self, features, downsample_factor=8, sigma=2, fract=0.2, n_jobs=-1, filter_name = 'gaussian'):
-        """
-        Prepare master dataframe for tissue-level clustering
-
-        Parameters
-        ----------
-        features : list of int or str
-            Indices or names of MxIF channels to use for tissue labeling
-        downsample_factor : int
-            Factor by which to downsample images from their original resolution
-        sigma : float, optional (default=2)
-            Standard deviation of Gaussian kernel for blurring
-        fract : float, optional (default=0.2)
-            Fraction of cluster data from each image to randomly select for model
-            building
-        n_jobs : int, optional (default=-1)
-            Number of cores to parallelize over. Default all available cores.
-
-        Returns
-        -------
-        Does not return anything. `self.images` are downsampled and blurred according
-        to user parameters. `self.cluster_data` becomes master `np.array` for cluster
-        training. Parameters are also captured as attributes for posterity.
-        """
-        if self.cluster_data is not None:
-            print("WARNING: overwriting existing cluster data")
-            self.cluster_data = None
-        # save the hyperparams as object attributes
-        self.model_features = features
-        self.downsample_factor = downsample_factor
-        self.sigma = sigma
-        # downsampling, scaling and smoothening the images in parallel
-        print(
-            "Downsampling, and blurring {} features from {} images...".format(
-                len(features),
-                len(self.images.index),
-            )
-        )
-        out = Parallel(n_jobs=n_jobs, verbose=10, prefer = 'threads')(
-            delayed(prep_data_single_sample_mxif)(
-                image, features, downsample_factor, sigma, batch, filter_name
-            )
-            for image,batch in zip(self.images.index,self.images["batch_names"]
-        ))
-        # unpack results from parallel process
-        df = pd.DataFrame(out, columns = ["batch_names", 'Image mean', 'pixel counts'] )
-        # calculate mean for each batch of images
-        df["mean estimator"] = df["Image mean"] * df["pixel counts"]
-        mean_batches = {}
-        for key in self.images.keys():
-            means = df[df["batch_names"]== key]['mean estimator'].sum()
-            pixels = df[df["batch_names"]==key]['pixel counts'].sum()
-            mean_batches[key] = means/pixels
-        # creating a list of the mean for each batch
-        tmp_means = [
-            [x] * len(v) for x, v in zip(mean_batches.values(), self.images.values())
-        ]
-        means = list(itertools.chain(*tmp_means))
-        subsample_data = []
-        subsample_data.append(Parallel(n_jobs=n_jobs, verbose=10, prefer ='threads')(
-            delayed(image.log_normalize)(fract,features,pseudoval=1, mean = mean, mask=True)
-            for image,mean in zip(itertools.chain.from_iterable(self.images.values()),
-            means)
-            ))
-        tmp_subsample_data = list(itertools.chain(*subsample_data))
-        # concatenate blurred features into cluster_data df for cluster training
-        cluster_data = np.row_stack(tmp_subsample_data)
-        self.cluster_data = cluster_data
-        # unscaled_data = cluster_data
-        # # perform z-normalization on cluster data
-        # self.mean_z_norm = unscaled_data.mean(axis=0)
-        # self.std_z_norm = unscaled_data.std(axis=0)
-        # self.cluster_data = (unscaled_data - self.mean_z_norm)/self.std_z_norm
-        print("Collected clustering data of shape: {}".format(self.cluster_data.shape))
 
     def label_tissue_regions(
         self, k=None, alpha=0.05, plot_out=True, random_state=18, n_jobs=-1
