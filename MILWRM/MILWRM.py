@@ -18,70 +18,10 @@ from math import ceil
 from joblib import Parallel, delayed
 from sklearn.cluster import KMeans
 from sklearn.preprocessing import StandardScaler
-from skimage.filters import gaussian
-from skimage.transform import resize
+from sklearn.preprocessing import MinMaxScaler
 
 from .MxIF import checktype, img
 from .ST import assemble_pita
-
-
-def create_tissue_mask_mxif(images, markers=None):
-    """
-    Creates a whole tissue mask for the given tissue image
-
-    Parameters
-    ----------
-    images : list or img
-        images for which the tissue mask will be created for
-    markers : list
-        markers required to create MxIF labeller object
-
-    Returns
-    -------
-    mask is added to self.mask
-    """
-    if isinstance(
-        images, img
-    ):  # force img objects into a list if a single object is given
-        images = [images]
-    if markers is None:  # using all markers if list of markers is not given
-        markers = images[0].ch
-    # TODO : check if the images have masks already or not
-    for image in images:
-        # create a copy of the image
-        image_cp = image.copy()
-        # creating a temprory mask
-        w, h, d = image_cp.img.shape
-        tmp_mask = np.ones((w, h))
-        # setting the mask within the image object
-        image_cp.mask = tmp_mask
-        # creating the mask_tl tissue labeler
-        mask_tl = mxif_labeler(images=[image_cp])
-        # preprocessing before running MILWRM
-        mask_tl.prep_cluster_data(
-            features=markers, downsample_factor=16, sigma=2, fract=0.1
-        )
-        # running MILWRM with two clusters
-        mask_tl.label_tissue_regions(k=2, alpha=0.05)
-        # estimating centroids
-        scores = mask_tl.kmeans.cluster_centers_.copy()
-        mean = mask_tl.kmeans.cluster_centers_.mean(axis=0)
-        sd = mask_tl.kmeans.cluster_centers_.std(axis=0)
-        # z-score cluster centroid values for more reliable loadings
-        z_scores = (scores - mean) / sd
-        # making sure the background is set as 0
-        if z_scores[0].mean() > 0:
-            print(z_scores[0], "the background is set as tissue ID 1")
-            where_0 = np.where(mask_tl.tissue_IDs[0] == 0.0)
-            mask_tl.tissue_IDs[0][where_0] = 0.5
-            where_1 = np.where(mask_tl.tissue_IDs[0] == 1.0)
-            mask_tl.tissue_IDs[0][where_1] = 0.0
-            where_05 = np.where(mask_tl.tissue_IDs[0] == 0.5)
-            mask_tl.tissue_IDs[0][where_05] = 1.0
-        # rescaling the mask
-        mask_final = resize(mask_tl.tissue_IDs[0], (w, h))
-        # setting the final mask
-        image.mask = mask_final
 
 
 def kMeansRes(scaled_data, k, alpha_k=0.02, random_state=18):
@@ -705,12 +645,16 @@ class st_labeler(tissue_labeler):
             )
             for adata_i, adata in enumerate(self.adatas)
         )
+        batch_labels = [[x]*len(cluster_data[x]) for x in range(len(cluster_data))] # batch labels for umap
+        self.merged_batch_labels = list(itertools.chain(*batch_labels))
         # concatenate blurred features into cluster_data df for cluster training
         self.cluster_data = pd.concat(cluster_data)
         # perform min-max scaling on final cluster data
-        mms = MinMaxScaler()
-        unscaled_data = self.cluster_data.values
-        self.cluster_data = mms.fit_transform(unscaled_data)
+        # scaler = StandardScaler()
+        scaler = MinMaxScaler()
+        self.scaler = scaler.fit(cluster_data)
+        scaled_data = scaler.transform(cluster_data)
+        self.cluster_data = scaled_data 
         print("Collected clustering data of shape: {}".format(self.cluster_data.shape))
 
     def label_tissue_regions(
@@ -1026,6 +970,8 @@ class mxif_labeler(tissue_labeler):
                 path_to_blurred_npz.append(tmp[1])
             else:
                 subsampled_data.append(tmp)
+        batch_labels = [[x]*len(subsampled_data[x]) for x in range(len(subsampled_data))] # batch labels for umap
+        self.merged_batch_labels = list(itertools.chain(*batch_labels))
         if self.use_paths == True:
             self.image_df['Img'] = path_to_blurred_npz
         cluster_data = np.row_stack(subsampled_data)
