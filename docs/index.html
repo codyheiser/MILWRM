@@ -231,10 +231,11 @@ specified and <code>plot_out</code>, first feature (index 0) will be plotted.</d
     for col in mapper.columns:
         if pd.api.types.is_categorical_dtype(mapper[col]):
             cat_max = len(mapper[col].cat.categories)
+            categories = mapper[col].cat.categories  # save original categories
             mapper[col] = mapper[col].replace(
                 {v: k for k, v in dict(enumerate(mapper[col].cat.categories)).items()}
             )
-            discrete_cols[mapper.columns.get_loc(col)] = cat_max
+            discrete_cols[mapper.columns.get_loc(col)] = (cat_max, categories)
     # if no categorical columns, pass None to discrete_cols
     if bool(discrete_cols) is False:
         discrete_cols = None
@@ -277,7 +278,7 @@ specified and <code>plot_out</code>, first feature (index 0) will be plotted.</d
         )
     if verbose:
         print(&#34;Done!&#34;)
-    return assembled</code></pre>
+    return assembled, discrete_cols</code></pre>
 </details>
 </dd>
 <dt id="MILWRM.map_pixels"><code class="name flex">
@@ -527,9 +528,9 @@ Pixel space array of Visium spot barcode IDs</dd>
 <dd>List of features by index to show in plot. If <code>None</code>, use all features.</dd>
 <dt><strong><code>discrete_features</code></strong> :&ensp;<code>dict</code>, optional <code>(default=</code>None<code>)</code></dt>
 <dd>Dictionary of feature indices (keys) containing discrete (categorical) values
-(i.e. MILWRM domain). Values are <code>max_value</code> to pass to
-<code>plot_single_image_discrete</code> for each discrete feature. If <code>None</code>, treat all
-features as continuous.</dd>
+(i.e. MILWRM domain). Values are tuple of <code>max_value</code> to pass to
+<code>plot_single_image_discrete</code> for each discrete feature, and the ordered list
+of categories for legend plotting. If <code>None</code>, treat all features as continuous.</dd>
 <dt><strong><code>RGB</code></strong> :&ensp;<code>bool</code>, optional <code>(default=</code>False<code>)</code></dt>
 <dd>Treat 3-dimensional array as RGB image</dd>
 <dt><strong><code>histo</code></strong> :&ensp;<code>np.array</code> or <code>None</code>, optional <code>(default=</code>None<code>)</code></dt>
@@ -583,9 +584,9 @@ channel in RGB image. Can also pass list of names e.g. ["NeuN","GFAP",
         List of features by index to show in plot. If `None`, use all features.
     discrete_features : dict, optional (default=`None`)
         Dictionary of feature indices (keys) containing discrete (categorical) values
-        (i.e. MILWRM domain). Values are `max_value` to pass to
-        `plot_single_image_discrete` for each discrete feature. If `None`, treat all
-        features as continuous.
+        (i.e. MILWRM domain). Values are tuple of `max_value` to pass to
+        `plot_single_image_discrete` for each discrete feature, and the ordered list
+        of categories for legend plotting. If `None`, treat all features as continuous.
     RGB : bool, optional (default=`False`)
         Treat 3-dimensional array as RGB image
     histo : np.array or `None`, optional (default=`None`)
@@ -622,7 +623,8 @@ channel in RGB image. Can also pass list of names e.g. ["NeuN","GFAP",
                 image=pita,
                 ax=ax,
                 # use first value in dict as max
-                max_val=list(discrete_features.values())[0],
+                max_val=list(discrete_features.values())[0][0],
+                ticklabels=list(discrete_features.values())[0][1],
                 label=label[0] if isinstance(label, list) else label,
                 cmap=cmap,
                 **kwargs,
@@ -659,7 +661,8 @@ channel in RGB image. Can also pass list of names e.g. ["NeuN","GFAP",
                 image=pita,
                 ax=ax,
                 # use first value in dict as max
-                max_val=list(discrete_features.values())[0],
+                max_val=list(discrete_features.values())[0][0],
+                ticklabels=list(discrete_features.values())[0][1],
                 label=label[0] if isinstance(label, list) else label,
                 cmap=cmap,
                 **kwargs,
@@ -799,7 +802,8 @@ channel in RGB image. Can also pass list of names e.g. ["NeuN","GFAP",
                     image=pita[:, :, feature],
                     ax=ax,
                     # use corresponding value in dict as max
-                    max_val=discrete_features[feature],
+                    max_val=discrete_features[feature][0],
+                    ticklabels=discrete_features[feature][1],
                     label=labels[i],
                     cmap=cmap,
                     **kwargs,

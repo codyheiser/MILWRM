@@ -543,10 +543,11 @@ def assemble_pita(
     for col in mapper.columns:
         if pd.api.types.is_categorical_dtype(mapper[col]):
             cat_max = len(mapper[col].cat.categories)
+            categories = mapper[col].cat.categories  # save original categories
             mapper[col] = mapper[col].replace(
                 {v: k for k, v in dict(enumerate(mapper[col].cat.categories)).items()}
             )
-            discrete_cols[mapper.columns.get_loc(col)] = cat_max
+            discrete_cols[mapper.columns.get_loc(col)] = (cat_max, categories)
     # if no categorical columns, pass None to discrete_cols
     if bool(discrete_cols) is False:
         discrete_cols = None
@@ -589,7 +590,7 @@ def assemble_pita(
         )
     if verbose:
         print("Done!")
-    return assembled
+    return assembled, discrete_cols
 
 
 def plot_single_image(
@@ -642,6 +643,7 @@ def plot_single_image_discrete(
     image,
     ax,
     max_val,
+    ticklabels=None,
     label="",
     cmap="plasma",
     **kwargs,
@@ -659,6 +661,9 @@ def plot_single_image_discrete(
     max_val : int
         Maximum integer value for categories (i.e. 4 for categories [0,1,2,3,4]).
         Categories are expected to be zero-indexed integers.
+    ticklabels : list of str, optional (default=`None`)
+        Ordered list of categories for labeling discrete colorbar ticks. If `None`,
+        number categories 0 - `max_val`.
     label : str, optional (default="")
         What to title the image plot
     cmap : str, optional (default="plasma")
@@ -686,9 +691,12 @@ def plot_single_image_discrete(
         fontweight="bold",
         fontsize=16,
     )
-    _ = plt.colorbar(im, shrink=0.7, ticks=range(int(max_val)))
+    cbar = plt.colorbar(im, shrink=0.7, ticks=range(int(max_val)))
     # move edges of colorbar by 0.5
     im.set_clim(vmin=-0.5, vmax=max_val - 0.5)
+    # add custom ticklabels based on categories
+    if ticklabels is not None:
+        cbar.set_ticklabels(ticklabels)
 
 
 def plot_single_image_rgb(
@@ -776,9 +784,9 @@ def show_pita(
         List of features by index to show in plot. If `None`, use all features.
     discrete_features : dict, optional (default=`None`)
         Dictionary of feature indices (keys) containing discrete (categorical) values
-        (i.e. MILWRM domain). Values are `max_value` to pass to
-        `plot_single_image_discrete` for each discrete feature. If `None`, treat all
-        features as continuous.
+        (i.e. MILWRM domain). Values are tuple of `max_value` to pass to
+        `plot_single_image_discrete` for each discrete feature, and the ordered list
+        of categories for legend plotting. If `None`, treat all features as continuous.
     RGB : bool, optional (default=`False`)
         Treat 3-dimensional array as RGB image
     histo : np.array or `None`, optional (default=`None`)
@@ -815,7 +823,8 @@ def show_pita(
                 image=pita,
                 ax=ax,
                 # use first value in dict as max
-                max_val=list(discrete_features.values())[0],
+                max_val=list(discrete_features.values())[0][0],
+                ticklabels=list(discrete_features.values())[0][1],
                 label=label[0] if isinstance(label, list) else label,
                 cmap=cmap,
                 **kwargs,
@@ -852,7 +861,8 @@ def show_pita(
                 image=pita,
                 ax=ax,
                 # use first value in dict as max
-                max_val=list(discrete_features.values())[0],
+                max_val=list(discrete_features.values())[0][0],
+                ticklabels=list(discrete_features.values())[0][1],
                 label=label[0] if isinstance(label, list) else label,
                 cmap=cmap,
                 **kwargs,
@@ -992,7 +1002,8 @@ def show_pita(
                     image=pita[:, :, feature],
                     ax=ax,
                     # use corresponding value in dict as max
-                    max_val=discrete_features[feature],
+                    max_val=discrete_features[feature][0],
+                    ticklabels=discrete_features[feature][1],
                     label=labels[i],
                     cmap=cmap,
                     **kwargs,
