@@ -11,6 +11,7 @@ import numpy as np
 import pandas as pd
 import itertools
 import seaborn as sns
+import umap
 
 sns.set_style("white")
 
@@ -435,7 +436,7 @@ def estimate_confidence_score_mxif(image, use_path, scaler, centroids, features,
     return Conf_ID, mean_conf_score
 
 
-def estimate_mse_mxif(images, use_path, scaler, centroids, features, k):
+def estimate_mse_mxif(images, use_path, tissue_IDs, scaler, centroids, features, k):
     """
     Estimate mean square error for each tissue ID for each MxIF images
 
@@ -446,6 +447,8 @@ def estimate_mse_mxif(images, use_path, scaler, centroids, features, k):
     use_path : Boolean
         True if image is given as a path to the compressed npz file, False if image is given 
         as MILWRM.MxIF.img object
+    tissue_IDs : list
+        list of predicted tissue_ID for each image
     scaler : standardscaler() object
         standard scaler used for cluster data normalization
     centroids : np.ndarray
@@ -935,6 +938,7 @@ class st_labeler(tissue_labeler):
         self,
         use_rep,
         features=None,
+        blur_pix=2,
         histo=False,
         fluor_channels=None,
         spatial_graph_key = None,
@@ -992,6 +996,7 @@ class st_labeler(tissue_labeler):
         self.rep = use_rep
         self.histo = histo
         self.fluor_channels = fluor_channels
+        self.blur_pix = blur_pix
         # collect clustering data from self.adatas in parallel
         print(
             "Collecting and blurring {} features from .obsm[{}]...".format(
@@ -1303,6 +1308,8 @@ class st_labeler(tissue_labeler):
                     # only jitter in the x-direction
                     jittered_offsets[:, 0] += np.random.uniform(-0.3, 0.3, offsets.shape[0])
                     dots.set_offsets(jittered_offsets)
+            plt.xlabel("slides")
+            plt.ylabel("mean square error")
             plt.title(titles[i])
         plt.legend(loc=loc, bbox_to_anchor=bbox_coordinates)
         if save_to:
@@ -1333,6 +1340,8 @@ class st_labeler(tissue_labeler):
         df_count = df_count.T.reset_index(drop = True)
         ax = df_count.plot.bar(stacked = True, cmap = color)
         ax.legend(loc = 'best', bbox_to_anchor = (1,1))
+        ax.set_xlabel("slides")
+        ax.set_ylabel("tissue ID proportion")
         if save_to is not None:
             ax.figure.savefig(save_to)
         else:
@@ -1682,23 +1691,24 @@ class mxif_labeler(tissue_labeler):
         scaler = self.scaler
         centroids = self.kmeans.cluster_centers_
         features = self.model_features
+        use_path = self.use_paths
         S_squre_for_each_image = []
         R_squre_for_each_image = []
         for image, tissue_ID in zip(self.image_df['Img'], self.tissue_IDs):
-            S_square = estimate_percentage_variance_mxif(image,
-             scaler, centroids, features, tissue_ID)
+            S_square = estimate_percentage_variance_mxif(image, use_path
+            ,scaler, centroids, features, tissue_ID)
             S_squre_for_each_image.append(S_square)
             R_squre_for_each_image.append(100-S_square)
 
         if R_square == True:
             fig = plt.figure(figsize = fig_size)
-            plt.bar(len(R_squre_for_each_image),R_squre_for_each_image)
+            plt.bar(range(len(R_squre_for_each_image)),R_squre_for_each_image)
             plt.xlabel('images')
             plt.ylabel('percentage variance not explained by Kmeans')
 
         else:
             fig = plt.figure(figsize = fig_size)
-            plt.bar(len(S_squre_for_each_image),S_squre_for_each_image)
+            plt.bar(range(len(S_squre_for_each_image)),S_squre_for_each_image)
             plt.xlabel('images')
             plt.ylabel('percentage variance explained by Kmeans')
 
@@ -1723,16 +1733,16 @@ class mxif_labeler(tissue_labeler):
         centroids = self.kmeans.cluster_centers_
         features = self.model_features
         tissue_IDs = self.tissue_IDs
-        use_path = self.use_path
+        use_path = self.use_paths
         # confidence score estimation for each image
         confidence_IDs = []
         confidence_score_df = pd.DataFrame()
-        for image,tissue_ID in zip(self.image_df['Img'], tissue_IDs):
+        for i,image in enumerate(self.image_df['Img']):
             cID, scores_dict = estimate_confidence_score_mxif(image, use_path, scaler
-            , centroids, features, tissue_ID)
+            , centroids, features, tissue_IDs[i])
             confidence_IDs.append(cID)
-            df = pd.DataFrame.from_dict(scores_dict)
-            confidence_score_df = pd.concat([confidence_score_df,df], ignore_index = True)
+            df = pd.DataFrame(scores_dict.values(), columns = [i])
+            confidence_score_df = pd.concat([confidence_score_df,df.T], ignore_index = True)
         # adding confidence_IDs and confidence_score_df to tissue labeller object
         self.confidence_IDs = confidence_IDs
         self.confidence_score_df = confidence_score_df
@@ -1769,13 +1779,14 @@ class mxif_labeler(tissue_labeler):
         ), "No cluster results found. Run \
         label_tissue_regions() first."
         images = self.image_df['Img']
-        use_path = self.use_path
+        use_path = self.use_paths  
         scaler = self.scaler
         centroids = self.kmeans.cluster_centers_
         features = self.model_features
         k = self.k
-        features = self.features
-        mse_id = estimate_mse_mxif(images, use_path, scaler, centroids, features, k)
+        features = self.model_features
+        tissue_IDs = self.tissue_IDs
+        mse_id = estimate_mse_mxif(images, use_path, tissue_IDs, scaler, centroids, features, k)
         if labels is None:
             labels = features
         if titles is None:
@@ -1812,7 +1823,9 @@ class mxif_labeler(tissue_labeler):
                     # only jitter in the x-direction
                     jittered_offsets[:, 0] += np.random.uniform(-0.3, 0.3, offsets.shape[0])
                     dots.set_offsets(jittered_offsets)
-            plt.title(tittles[i])
+            plt.xlabel("images")
+            plt.ylabel("mean square error")
+            plt.title(titles[i])
         plt.legend(loc=loc, bbox_to_anchor=bbox_coordinates)
         if save_to:
             plt.savefig(fname=save_to, transparent=True, dpi=300)
@@ -1843,6 +1856,8 @@ class mxif_labeler(tissue_labeler):
         df_count = df_count/df_count.sum()
         ax = df_count.T.plot.bar(stacked = True, cmap = color)
         ax.legend(loc = 'best', bbox_to_anchor = (1,1))
+        ax.set_xlabel("images")
+        ax.set_ylabel("tissue ID proportion")
         if save_to is not None:
             ax.figure.savefig(save_to)
         else:
@@ -1870,6 +1885,7 @@ class mxif_labeler(tissue_labeler):
         centroids = self.kmeans.cluster_centers_
         batch_labels = self.merged_batch_labels
         kmeans_labels = self.kmeans.labels_
+        k = self.k
         # perform umap on the cluster data
         umap_centroid_data, standard_embedding_1 = perform_umap(cluster_data = cluster_data, 
         centroids = centroids, batch_labels = batch_labels, kmeans_labels = kmeans_labels, frac = frac)
