@@ -91,8 +91,15 @@ def chooseBestKforKMeansParallel(scaled_data, k_range, n_jobs=-1, **kwargs):
 
 
 def prep_data_single_sample_st(
-    adata, adata_i, use_rep, features, histo, fluor_channels, 
-    spatial_graph_key = None, n_rings = 1):
+    adata,
+    adata_i,
+    use_rep,
+    features,
+    histo,
+    fluor_channels,
+    spatial_graph_key=None,
+    n_rings=1,
+):
     """
     Prepare dataframe for tissue-level clustering from a single AnnData sample
 
@@ -155,11 +162,13 @@ def prep_data_single_sample_st(
             "image_means"
         ][:, fluor_channels]
     # blur the features extracted in tmp
-    tmp2 = blur_features_st(adata, tmp, spatial_graph_key=None, n_rings=1)
+    tmp2 = blur_features_st(adata, tmp, spatial_graph_key=spatial_graph_key, n_rings=n_rings)
     return tmp2
 
 
-def prep_data_single_sample_mxif(image, use_path, mean, filter_name, sigma, features, fract, path_save):
+def prep_data_single_sample_mxif(
+    image, use_path, mean, filter_name, sigma, features, fract, path_save
+):
     """
     Perform log normalization, blurring and minmax scaling on the given image data
 
@@ -168,8 +177,8 @@ def prep_data_single_sample_mxif(image, use_path, mean, filter_name, sigma, feat
     image : MILWRM.MxIF.img or str
         np.array containing MxIF data or path to the compressed npz file
     use_path : Boolean
-        True if image is given as a path to the compressed npz file, False if image is given
-        as MILWRM.MxIF.img object
+        True if image is given as a path to the compressed npz file, False if image is 
+        given as MILWRM.MxIF.img object
     mean : numpy array
         Containing mean for each channel for that batch
     filter_name : str
@@ -182,7 +191,7 @@ def prep_data_single_sample_mxif(image, use_path, mean, filter_name, sigma, feat
         Fraction of cluster data from each image to randomly select for model
         building
     path_save : str
-        Path to save final preprocessed files 
+        Path to save final preprocessed files
     Returns
     -------
     Subsampled_data : np.array
@@ -190,35 +199,37 @@ def prep_data_single_sample_mxif(image, use_path, mean, filter_name, sigma, feat
     file_save : str
         path to save preprocessed img object
     """
-    if use_path == True: # if images are given as path to the compressed npz file
-        if path_save == None: # check if path to save final processed file is given
-            raise Exception("Path to save final preprocessed npz files is requird when given path to image files")
+    if use_path == True:  # if images are given as path to the compressed npz file
+        if path_save == None:  # check if path to save final processed file is given
+            raise Exception(
+                "Path to save final preprocessed npz files is requird when given path to image files"
+            )
         image_path = image
         image = img.from_npz(image_path + ".npz")
     # batch correction
-    image.log_normalize(mean = mean)
+    image.log_normalize(mean=mean)
     # apply the desired filter
-    image.blurring(filter_name=filter_name, sigma = sigma)
+    image.blurring(filter_name=filter_name, sigma=sigma)
     # min max scaling of each channel
     for i in range(image.img.shape[2]):
         img_ar = image.img[:, :, i][image.mask != 0]
         img_ar_max = img_ar.max()
         img_ar_min = img_ar.min()
         # print(img_ar_max, img_ar_min)
-        image_ar_scaled = (image.img[:,:,i] - img_ar_min)/(img_ar_max - img_ar_min)
-        image.img[:,:,i] = image_ar_scaled
+        image_ar_scaled = (image.img[:, :, i] - img_ar_min) / (img_ar_max - img_ar_min)
+        image.img[:, :, i] = image_ar_scaled
     # subsample pixels to build the kmeans model
-    subsampled_data = image.subsample_pixels(features,fract)
+    subsampled_data = image.subsample_pixels(features, fract)
     if use_path == True:
-        new_image_path = os.path.join(path_save,"final_preprocessed_images")
+        new_image_path = os.path.join(path_save, "final_preprocessed_images")
         if not os.path.exists(new_image_path):
             os.mkdir(new_image_path)
-        file_name = image_path.split('/')[-1] + "final_preprocessed"
-        file_save = os.path.join(new_image_path,file_name)
+        file_name = image_path.split("/")[-1] + "final_preprocessed"
+        file_save = os.path.join(new_image_path, file_name)
         image.to_npz(file_save)
         return subsampled_data, file_save
-    return subsampled_data   
-        
+    return subsampled_data
+
 
 def add_tissue_ID_single_sample_mxif(image, use_path, features, kmeans, scaler):
     """
@@ -229,8 +240,8 @@ def add_tissue_ID_single_sample_mxif(image, use_path, features, kmeans, scaler):
     image : MILWRM.MxIF.img or str
         np.array containing MxIF data or path to the compressed npz file
     use_path : Boolean
-        True if image is given as a path to the compressed npz file, False if image is given
-        as MILWRM.MxIF.img object
+        True if image is given as a path to the compressed npz file, False if image is 
+        given as MILWRM.MxIF.img object
     features : list of int or str
         Indices or names of MxIF channels to use for tissue labeling
     kmeans : sklearn.kmeans
@@ -263,8 +274,10 @@ def add_tissue_ID_single_sample_mxif(image, use_path, features, kmeans, scaler):
     return tID
 
 
-def estimate_percentage_variance_mxif(image, use_path, scaler, centroids, features, tissue_ID):
-    '''
+def estimate_percentage_variance_mxif(
+    image, use_path, scaler, centroids, features, tissue_ID
+):
+    """
     Estimate percentage variance explained by clustering for an image
 
     Parameters
@@ -272,8 +285,8 @@ def estimate_percentage_variance_mxif(image, use_path, scaler, centroids, featur
     image : MILWRM.MxIF.img or str
         np.array containing MxIF data or path to the compressed npz file
     use_path : Boolean
-        True if image is given as a path to the compressed npz file, False if image is given 
-        as MILWRM.MxIF.img object
+        True if image is given as a path to the compressed npz file, False if image is 
+        given as MILWRM.MxIF.img object
     scaler : standardscaler() object
         standard scaler used for cluster data normalization
     centroids : np.ndarray
@@ -282,13 +295,13 @@ def estimate_percentage_variance_mxif(image, use_path, scaler, centroids, featur
         Indices or names of MxIF channels to use for tissue labeling
     tissue_ID : np.ndarray
         numpy array containing kmeans labels on image
-        
+
     Returns
     -------
     S_square_pct : float
         percentage variance in data explained by the kmeans clustering
 
-    '''
+    """
     if use_path == True:
         image_path = image + ".npz"
         image = img.from_npz(image_path)
@@ -301,25 +314,26 @@ def estimate_percentage_variance_mxif(image, use_path, scaler, centroids, featur
     if features is None:  # if no features are given, use all of them
         features = [x for x in range(image.n_ch)]
     # getting the channels used for MILWRM clustering and scaling the image
-    w,h,d = image.img[:,:,features].shape
-    img_ar = image.img[:,:,features].reshape((w*h),d)
+    w, h, d = image.img[:, :, features].shape
+    img_ar = image.img[:, :, features].reshape((w * h), d)
     scaled_img_ar = scaler.transform(img_ar)
-    tissue_ID = tissue_ID.reshape(w*h)
-    # initializing a numpy array of image shape to store the distance from pixels to closest centroid
+    tissue_ID = tissue_ID.reshape(w * h)
+    # init a numpy array of image shape to store the distance from pixels to centroids
     dc = np.zeros(scaled_img_ar.shape)
     for i in range(centroids.shape[0]):
-        dc[tissue_ID == i] = (scaled_img_ar[tissue_ID == i] - centroids[i])**2
+        dc[tissue_ID == i] = (scaled_img_ar[tissue_ID == i] - centroids[i]) ** 2
     # estimating the difference between pixels and the image mean
-    dm = (scaled_img_ar - scaled_img_ar.mean(axis=0))**2
+    dm = (scaled_img_ar - scaled_img_ar.mean(axis=0)) ** 2
     # getting sum across channels
-    dc = np.sum(dc, axis = 1)
-    dm = np.sum(dm, axis = 1)
-    # taking ratio of sum of differences for all data points from centroids and data mean
-    S_square = np.sum(dc)/np.sum(dm)
+    dc = np.sum(dc, axis=1)
+    dm = np.sum(dm, axis=1)
+    # taking ratio of sum of differences for all points from centroids and data mean
+    S_square = np.sum(dc) / np.sum(dm)
     S_square_pct = S_square * 100
     return S_square_pct
 
-def perform_umap( cluster_data, centroids, batch_labels, kmeans_labels, frac):
+
+def perform_umap(cluster_data, centroids, batch_labels, kmeans_labels, frac):
     """
     Compute umap coordinates for the given cluster_data
 
@@ -340,35 +354,45 @@ def perform_umap( cluster_data, centroids, batch_labels, kmeans_labels, frac):
     Returns
     -------
     umap_centroid_data : pd.DataFrame
-        combined dataframe with cluster_data used for computation 
+        combined dataframe with cluster_data used for computation
         of Umap, centroids, batch_labels and kmeans_labels
-    standard_embedding : pd.DataFrame 
+    standard_embedding : pd.DataFrame
         containing umap coordinates
     """
     df = pd.DataFrame(cluster_data, batch_labels)
-    df['Kmeans_labels'] = kmeans_labels
-    # if cluster_data is too big randomly subsample a fraction of it otherwise use the entire data
+    df["Kmeans_labels"] = kmeans_labels
+    # if cluster_data is too big randomly subsample a fraction of it otherwise use the 
+    # entire data
     if frac:
         umap_data = pd.DataFrame()
         for i in np.unique(batch_labels):
-            umap_data = pd.concat([umap_data,df.loc[i].sample(frac = frac)])
+            umap_data = pd.concat([umap_data, df.loc[i].sample(frac=frac)])
     else:
         umap_data = df
-    # append the centroids to the dataframe with a different index and kmeans labels 
-    centroids = pd.DataFrame(centroids, index = [umap_data.index[-1]+1]*len(centroids))
-    centroids['Kmeans_labels'] = [kmeans_labels.max()+1]*len(centroids)
+    # append the centroids to the dataframe with a different index and kmeans labels
+    centroids = pd.DataFrame(
+        centroids, index=[umap_data.index[-1] + 1] * len(centroids)
+    )
+    centroids["Kmeans_labels"] = [kmeans_labels.max() + 1] * len(centroids)
     umap_centroid_data = pd.concat([umap_data, centroids])
     # compute umap
-    neighbours = int(len(umap_centroid_data)**0.5)
-    mapper = umap.UMAP(random_state=42,n_neighbors = neighbours).fit(umap_centroid_data.loc[:,umap_centroid_data.columns != 'Kmeans_labels'])
-    standard_embedding = mapper.transform(umap_centroid_data.loc[:,umap_centroid_data.columns != 'Kmeans_labels'])
+    neighbours = int(len(umap_centroid_data) ** 0.5)
+    mapper = umap.UMAP(random_state=42, n_neighbors=neighbours).fit(
+        umap_centroid_data.loc[:, umap_centroid_data.columns != "Kmeans_labels"]
+    )
+    standard_embedding = mapper.transform(
+        umap_centroid_data.loc[:, umap_centroid_data.columns != "Kmeans_labels"]
+    )
     return umap_centroid_data, standard_embedding
 
-def estimate_confidence_score_mxif(image, use_path, scaler, centroids, features, tissue_ID):
+
+def estimate_confidence_score_mxif(
+    image, use_path, scaler, centroids, features, tissue_ID
+):
     """
     Estimate confidence score for each image and tissue ID
 
-    Adapted from 
+    Adapted from
     https://towardsdatascience.com/confidence-in-k-means-d7d3a13ca856
 
 
@@ -377,8 +401,8 @@ def estimate_confidence_score_mxif(image, use_path, scaler, centroids, features,
     image : MILWRM.MxIF.img or str
         np.array containing MxIF data or path to the compressed npz file
     use_path : Boolean
-        True if image is given as a path to the compressed npz file, False if image is given 
-        as MILWRM.MxIF.img object
+        True if image is given as a path to the compressed npz file, False if image is 
+        given as MILWRM.MxIF.img object
     scaler : standardscaler() object
         standard scaler used for cluster data normalization
     centroids : np.ndarray
@@ -387,7 +411,7 @@ def estimate_confidence_score_mxif(image, use_path, scaler, centroids, features,
         Indices or names of MxIF channels to use for tissue labeling
     tissue_ID : np.ndarray
         numpy array containing kmeans labels on image
-        
+
     Returns
     -------
     Conf_ID : np.ndarray
@@ -407,28 +431,28 @@ def estimate_confidence_score_mxif(image, use_path, scaler, centroids, features,
     if features is None:  # if no features are given, use all of them
         features = [x for x in range(image.n_ch)]
     dist = {}
-    w,h,d = image.img[:,:,features].shape
-    img_ar = image.img[:,:,features].reshape((w*h),d)
+    w, h, d = image.img[:, :, features].shape
+    img_ar = image.img[:, :, features].reshape((w * h), d)
     scaled_img_ar = scaler.transform(img_ar)
     # estimating distance for each pixel from every cluster centroid
     for i, centroid in enumerate(centroids):
-        dist_cp = (scaled_img_ar - centroid)**2
-        dist[i] = np.sum(dist_cp, axis = 1)
+        dist_cp = (scaled_img_ar - centroid) ** 2
+        dist[i] = np.sum(dist_cp, axis=1)
     confidence_score = {}
-    # estimating confidence score by taking a ratio of distance from 
+    # estimating confidence score by taking a ratio of distance from
     # i cluster to all of the clusters and then taking an inverse of the summation
     for i in dist.keys():
         ck = dist[i]
         score = []
         for j in dist.keys():
             cs = dist[j]
-            score.append(ck/cs)
-        confidence_score[i] = 1/sum(score)
+            score.append(ck / cs)
+        confidence_score[i] = 1 / sum(score)
     # initializing an empty array for confidence score for each pixel
-    Conf_ID = np.empty((w,h))
+    Conf_ID = np.empty((w, h))
     mean_conf_score = {}
     for i, cID in confidence_score.items():
-        cID = cID.reshape((w,h))
+        cID = cID.reshape((w, h))
         cID[image.mask == 0] = np.nan
         Conf_ID[image.mask == 0] = np.nan
         Conf_ID[tissue_ID == i] = cID[tissue_ID == i]
@@ -445,8 +469,8 @@ def estimate_mse_mxif(images, use_path, tissue_IDs, scaler, centroids, features,
     images : list
         list of MILWRM.MxIF.img objects or path to images (str)
     use_path : Boolean
-        True if image is given as a path to the compressed npz file, False if image is given 
-        as MILWRM.MxIF.img object
+        True if image is given as a path to the compressed npz file, False if image is 
+        given as MILWRM.MxIF.img object
     tissue_IDs : list
         list of predicted tissue_ID for each image
     scaler : standardscaler() object
@@ -455,16 +479,16 @@ def estimate_mse_mxif(images, use_path, tissue_IDs, scaler, centroids, features,
         kmeans cluster centroids
     features : list of int or str
         Indices or names of MxIF channels to use for tissue labeling
-    k : int 
+    k : int
         number of tissue domains
-    
+
     Returns
     -------
     mse_id : dict
-        containing mean square error for each tissue for each visium slide 
+        containing mean square error for each tissue for each visium slide
     """
     mse_temp = {}
-    for image_index,image in enumerate(images):
+    for image_index, image in enumerate(images):
         if use_path == True:
             image_path = image + ".npz"
             image = img.from_npz(image_path)
@@ -477,20 +501,22 @@ def estimate_mse_mxif(images, use_path, tissue_IDs, scaler, centroids, features,
         if features is None:  # if no features are given, use all of them
             features = [x for x in range(image.n_ch)]
         # getting the channels used for MILWRM clustering and scaling the image
-        img_ar = image.img[:,:,features]
-        w,h,d = img_ar.shape
-        scaled_img_ar = scaler.transform(img_ar.reshape((w*h,d)))
-        scaled_img_ar = scaled_img_ar.reshape((w,h,d))
+        img_ar = image.img[:, :, features]
+        w, h, d = img_ar.shape
+        scaled_img_ar = scaler.transform(img_ar.reshape((w * h, d)))
+        scaled_img_ar = scaled_img_ar.reshape((w, h, d))
         ar = tissue_IDs[image_index]
         mse = {}
         for i in range(k):
-            x = (abs(scaled_img_ar[ar==i])-abs(centroids[i]))**2 # estimating mse for each tissue ID for that image
+            x = (
+                abs(scaled_img_ar[ar == i]) - abs(centroids[i])
+            ) ** 2  # estimating mse for each tissue ID for that image
             mse[i] = x.mean(axis=0)
         mse_temp[image_index] = mse
-    mse_id = {} # reorganizing within a new dictionary with keys as tissue IDs 
+    mse_id = {}  # reorganizing within a new dictionary with keys as tissue IDs
     for i in range(k):
         mse_l = []
-        for image_index,image in enumerate(images):
+        for image_index, image in enumerate(images):
             mse_l.append(mse_temp[image_index][i])
             mse_id[i] = mse_l
     return mse_id
@@ -508,7 +534,7 @@ def estimate_percentage_variance_st(sub_cluster_data, adata, centroids):
         AnnData object containing Visium data
     centroids : np.ndarray
         kmeans cluster centroids
-        
+
     Returns
     -------
     S_square_pct : float
@@ -516,21 +542,21 @@ def estimate_percentage_variance_st(sub_cluster_data, adata, centroids):
 
     """
     dc = []
-    df = pd.DataFrame(adata.obs['tissue_ID'])
-    ids = pd.unique(df['tissue_ID'])
-    df['index'] = list(range(adata.n_obs))
+    df = pd.DataFrame(adata.obs["tissue_ID"])
+    ids = pd.unique(df["tissue_ID"])
+    df["index"] = list(range(adata.n_obs))
     for i in ids:
         # estimating euclidean distance from the data point to closest centroid
-        diff = (sub_cluster_data[df[df["tissue_ID"]==i]["index"]] - centroids[i])**2
+        diff = (sub_cluster_data[df[df["tissue_ID"] == i]["index"]] - centroids[i]) ** 2
         dc.append(diff)
     dc = np.row_stack(dc)
     # estimating euclidean distance from each data point to the mean of the data
-    dm = (sub_cluster_data - sub_cluster_data.mean(axis = 0))**2
+    dm = (sub_cluster_data - sub_cluster_data.mean(axis=0)) ** 2
     # getting sum across features
-    dc_sum = np.sum(dc, axis = 1)
-    dm_sum = np.sum(dm, axis = 1)
+    dc_sum = np.sum(dc, axis=1)
+    dm_sum = np.sum(dm, axis=1)
     # taking ratio of sum of distances for all data points from centroids and data mean
-    S = np.sum(dc)/np.sum(dm)
+    S = dc_sum / dm_sum
     S_square_pct = S * 100
     return S_square_pct
 
@@ -539,7 +565,7 @@ def estimate_confidence_score_st(sub_cluster_data, adata, centroids):
     """
     Estimate confidence score for the assigned tissue_IDs in a visium slide
 
-    Adapted from 
+    Adapted from
     https://towardsdatascience.com/confidence-in-k-means-d7d3a13ca856
 
     Parameters
@@ -559,35 +585,38 @@ def estimate_confidence_score_st(sub_cluster_data, adata, centroids):
     """
     dist = {}
     # estimating distance for each pixel from every cluster centroid
-    for i,centroid in enumerate(centroids):
-        dist_cp = (sub_cluster_data - centroid)**2
-        dist[i] = np.sum(dist_cp, axis = 1)
+    for i, centroid in enumerate(centroids):
+        dist_cp = (sub_cluster_data - centroid) ** 2
+        dist[i] = np.sum(dist_cp, axis=1)
     confidence_score = {}
-    # estimating confidence score by taking a ratio of distance from 
+    # estimating confidence score by taking a ratio of distance from
     # i cluster to all of the clusters and then taking an inverse of the summation
     for i in dist.keys():
         ck = dist[i]
         score = []
         for j in dist.keys():
             cs = dist[j]
-            score.append(ck/cs)
-        confidence_score[i] = 1/sum(score)
-    # initializing a pandas DataFrame to add confidence scores to respective tissue ID indices
+            score.append(ck / cs)
+        confidence_score[i] = 1 / sum(score)
+    # initializing a pandas DataFrame to add confidence scores to respective tissue ID 
+    # indices
     score_df = pd.DataFrame(adata.obs["tissue_ID"])
     score_df["index"] = list(range(len(score_df["tissue_ID"])))
     score_df["score"] = list(range(len(score_df["tissue_ID"])))
     mean_conf_score = {}
-    for i,cID in confidence_score.items():
-        score_df.loc[score_df["tissue_ID"]==i, "score"] = cID[score_df[score_df["tissue_ID"] == i]["index"]]
-        if (score_df["tissue_ID"]==i).any():
-            mean_conf_score[i] = score_df[score_df["tissue_ID"]==i]["score"].mean()
+    for i, cID in confidence_score.items():
+        score_df.loc[score_df["tissue_ID"] == i, "score"] = cID[
+            score_df[score_df["tissue_ID"] == i]["index"]
+        ]
+        if (score_df["tissue_ID"] == i).any():
+            mean_conf_score[i] = score_df[score_df["tissue_ID"] == i]["score"].mean()
         else:
             mean_conf_score[i] = np.nan
     adata.obs["confidence_score"] = score_df["score"].astype("float64")
     return mean_conf_score
 
 
-def estimate_mse_st(cluster_data, adatas,centroids, k):
+def estimate_mse_st(cluster_data, adatas, centroids, k):
     """
     Estimate mean square error for each tissue ID for each visium slide
 
@@ -600,8 +629,8 @@ def estimate_mse_st(cluster_data, adatas,centroids, k):
     centroids : np.ndarray
         kmeans cluster centroids
     k : int
-        number of tissue domains 
-    
+        number of tissue domains
+
     Returns
     -------
     mse_id : dict
@@ -609,19 +638,23 @@ def estimate_mse_st(cluster_data, adatas,centroids, k):
     """
     mse_id = {}
     for i in range(k):
-        i_slice = 0 
+        i_slice = 0
         j_slice = 0
         diff = []
         for adata in adatas:
             j_slice = j_slice + adata.n_obs
-            df = pd.DataFrame(adata.obs['tissue_ID'])
-            df['index'] = list(range(adata.n_obs))
-            data = cluster_data[i_slice:j_slice] # slicing cluster data for sub_cluster_data for that visium slide
-            x = (data[df[df["tissue_ID"]==i]["index"]] - centroids[i])**2 # difference between each data point and centroids
+            df = pd.DataFrame(adata.obs["tissue_ID"])
+            df["index"] = list(range(adata.n_obs))
+            data = cluster_data[
+                i_slice:j_slice
+            ]  # slicing cluster data for sub_cluster_data for that visium slide
+            x = (
+                data[df[df["tissue_ID"] == i]["index"]] - centroids[i]
+            ) ** 2  # difference between each data point and centroids
             if len(x) == 0:
                 diff.append(np.zeros(mse.shape))
             else:
-                mse = x.mean(axis = 0) # mean of all the differences
+                mse = x.mean(axis=0)  # mean of all the differences
                 # diff.append(mse.mean(axis = 0))
                 diff.append(mse)
             i_slice = adata.n_obs
@@ -787,7 +820,6 @@ class tissue_labeler:
         else:
             return fig
 
-
     def plot_feature_loadings(
         self,
         ncols=None,
@@ -941,8 +973,8 @@ class st_labeler(tissue_labeler):
         blur_pix=2,
         histo=False,
         fluor_channels=None,
-        spatial_graph_key = None,
-        n_rings = 1,
+        spatial_graph_key=None,
+        n_rings=1,
         n_jobs=-1,
     ):
         """
@@ -1006,12 +1038,20 @@ class st_labeler(tissue_labeler):
         )
         cluster_data = Parallel(n_jobs=n_jobs, verbose=10)(
             delayed(prep_data_single_sample_st)(
-                adata, adata_i, use_rep, self.features, histo, fluor_channels, 
-                spatial_graph_key, n_rings
+                adata,
+                adata_i,
+                use_rep,
+                self.features,
+                histo,
+                fluor_channels,
+                spatial_graph_key,
+                n_rings,
             )
             for adata_i, adata in enumerate(self.adatas)
         )
-        batch_labels = [[x]*len(cluster_data[x]) for x in range(len(cluster_data))] # batch labels for umap
+        batch_labels = [
+            [x] * len(cluster_data[x]) for x in range(len(cluster_data))
+        ]  # batch labels for umap
         self.merged_batch_labels = list(itertools.chain(*batch_labels))
         # concatenate blurred features into cluster_data df for cluster training
         subsampled_data = pd.concat(cluster_data)
@@ -1019,7 +1059,7 @@ class st_labeler(tissue_labeler):
         scaler = StandardScaler()
         self.scaler = scaler.fit(subsampled_data)
         scaled_data = scaler.transform(subsampled_data)
-        self.cluster_data = scaled_data 
+        self.cluster_data = scaled_data
         print("Collected clustering data of shape: {}".format(self.cluster_data.shape))
 
     def label_tissue_regions(
@@ -1070,9 +1110,15 @@ class st_labeler(tissue_labeler):
             )
             start += self.adatas[i].n_obs
 
-
-    def plot_gene_loadings(self, PC_loadings, n_genes = 10, ncols = None, titles = None
-        , fig_size = (5,5), save_to = None):
+    def plot_gene_loadings(
+        self,
+        PC_loadings,
+        n_genes=10,
+        ncols=None,
+        titles=None,
+        fig_size=(5, 5),
+        save_to=None,
+    ):
         """
         Plot MILWRM loadings in gene space specifically for MILWRM done with PCs
 
@@ -1096,31 +1142,32 @@ class st_labeler(tissue_labeler):
         -------
         Matplotlib object and PC loadings in gene space set as self.gene_loadings_df
         """
-        assert PC_loadings.shape[0] == self.adatas[0].n_vars, f"loadings matrix does not, \
+        assert (
+            PC_loadings.shape[0] == self.adatas[0].n_vars
+        ), f"loadings matrix does not, \
         contain enough genes, there should be {self.adatas[0].n_vars} genes"
-        assert PC_loadings.shape[1] >= self.kmeans.cluster_centers_.shape[1], f"loadings matrix \
+        assert (
+            PC_loadings.shape[1] >= self.kmeans.cluster_centers_.shape[1]
+        ), f"loadings matrix \
         does not contain enough components, there should be atleast {self.adatas[0].n_vars} components"
         if titles is None:
-            titles = [
-                "tissue_ID " + str(x)
-                for x in range(self.k)
-            ]        
+            titles = ["tissue_ID " + str(x) for x in range(self.k)]
         centroids = self.kmeans.cluster_centers_
         temp = PC_loadings.T
         loadings = temp[range(self.kmeans.cluster_centers_.shape[1])]
         gene_loadings = np.matmul(centroids, loadings)
         gene_loadings_df = pd.DataFrame(gene_loadings)
         gene_loadings_df = gene_loadings_df.T
-        gene_loadings_df['genes'] = self.adatas[0].var_names
+        gene_loadings_df["genes"] = self.adatas[0].var_names
         self.gene_loadings_df = gene_loadings_df
         n_panels = self.k
-        if ncols is None :
+        if ncols is None:
             ncols = self.k
-        if n_panels <= ncols :
+        if n_panels <= ncols:
             n_rows, n_cols = 1, n_panels
-        else :
+        else:
             n_rows, n_cols = ceil(n_panels / ncols), ncols
-        fig = plt.figure(figsize = ((ncols * n_cols, ncols * n_rows)))
+        fig = plt.figure(figsize=((ncols * n_cols, ncols * n_rows)))
         left, bottom = 0.1 / n_cols, 0.1 / n_rows
         gs = gridspec.GridSpec(
             nrows=n_rows,
@@ -1131,37 +1178,46 @@ class st_labeler(tissue_labeler):
             top=1 - (n_rows - 1) * bottom - 0.1 / n_rows,
         )
         for i in range(self.k):
-            df = gene_loadings_df[[i,'genes']].sort_values(i, axis = 0, ascending= False)[:n_genes].reset_index(drop=True)
+            df = (
+                gene_loadings_df[[i, "genes"]]
+                .sort_values(i, axis=0, ascending=False)[:n_genes]
+                .reset_index(drop=True)
+            )
             plt.subplot(gs[i])
-            df_rev = df.sort_values(i).reset_index(drop = True)
+            df_rev = df.sort_values(i).reset_index(drop=True)
             for j, score in enumerate((df_rev[i])):
-                plt.text(x = score, y = j+0.1,
-                        s = df_rev.loc[j, 'genes'],
-                        color="black",
-                        verticalalignment="center",
-                        horizontalalignment="right",
-                        fontsize="medium",
-                        fontstyle="italic")
-                plt.ylim([0,j+1])
-                plt.xlim([0,score+0.5])
+                plt.text(
+                    x=score,
+                    y=j + 0.1,
+                    s=df_rev.loc[j, "genes"],
+                    color="black",
+                    verticalalignment="center",
+                    horizontalalignment="right",
+                    fontsize="medium",
+                    fontstyle="italic",
+                )
+                plt.ylim([0, j + 1])
+                plt.xlim([0, score + 0.5])
                 plt.tick_params(
-                        axis="y",  # changes apply to the y-axis
-                        which="both",  # both major and minor ticks are affected
-                        left=False,
-                        right=False,
-                        labelleft=False,
-                    )
+                    axis="y",  # changes apply to the y-axis
+                    which="both",  # both major and minor ticks are affected
+                    left=False,
+                    right=False,
+                    labelleft=False,
+                )
                 plt.title(titles[i])
         if save_to is not None:
             print("Saving feature loadings to {}".format(save_to))
             plt.savefig(save_to)
         else:
             return gs
-            
-    def plot_percentage_variance_explained(self,fig_size = (5,5), R_square = False, save_to = None):
+
+    def plot_percentage_variance_explained(
+        self, fig_size=(5, 5), R_square=False, save_to=None
+    ):
         """
         plot percentage variance_explained or not explained by clustering
-        
+
         Parameters
         ----------
         figsize : tuple of float, optional (default=(5,5))
@@ -1185,39 +1241,41 @@ class st_labeler(tissue_labeler):
         for adata in adatas:
             j_slice = j_slice + adata.n_obs
             sub_cluster_data = cluster_data[i_slice:j_slice]
-            S_square = estimate_percentage_variance_st(sub_cluster_data, adata, centroids)
+            S_square = estimate_percentage_variance_st(
+                sub_cluster_data, adata, centroids
+            )
             S_squre_for_each_st.append(S_square)
-            R_squre_for_each_st.append(100-S_square)
+            R_squre_for_each_st.append(100 - S_square)
             i_slice = i_slice + adata.n_obs
 
         if R_square == True:
-            fig = plt.figure(figsize = fig_size)
+            fig = plt.figure(figsize=fig_size)
             plt.bar(range(len(R_squre_for_each_st)), R_squre_for_each_st)
-            plt.xlabel('slides')
-            plt.ylabel('percentage variance not explained by Kmeans')
+            plt.xlabel("slides")
+            plt.ylabel("percentage variance not explained by Kmeans")
 
         else:
-            fig = plt.figure(figsize = fig_size)
-            plt.bar(range(len(S_squre_for_each_st)),S_squre_for_each_st)
-            plt.xlabel('slides')
-            plt.ylabel('percentage variance explained by Kmeans')
+            fig = plt.figure(figsize=fig_size)
+            plt.bar(range(len(S_squre_for_each_st)), S_squre_for_each_st)
+            plt.xlabel("slides")
+            plt.ylabel("percentage variance explained by Kmeans")
 
         if save_to:
             plt.savefig(fname=save_to, transparent=True, bbox_inches="tight", dpi=300)
         return fig
-    
 
     def confidence_score(self):
         """
         estimate confidence score for each visium slide
-        
+
         Parameters
         ----------
 
         Returns
         -------
-        self.confidence_IDs and self.confidence_score_df is added containing confidence score
-        for each tissue ID assignment and mean confidence score for each tissue ID within each visium slide
+        self.confidence_IDs and self.confidence_score_df are added containing 
+        confidence score for each tissue ID assignment and mean confidence score for 
+        each tissue ID within each visium slide
         """
         i_slice = 0
         j_slice = 0
@@ -1225,18 +1283,25 @@ class st_labeler(tissue_labeler):
         adatas = self.adatas
         cluster_data = self.cluster_data
         centroids = self.kmeans.cluster_centers_
-        for i,adata in enumerate(adatas):
+        for i, adata in enumerate(adatas):
             j_slice = j_slice + adata.n_obs
             data = cluster_data[i_slice:j_slice]
             scores_dict = estimate_confidence_score_st(data, adata, centroids)
-            df = pd.DataFrame(scores_dict.values(), columns = [i])
-            confidence_score_df = pd.concat([confidence_score_df,df], axis = 1)
+            df = pd.DataFrame(scores_dict.values(), columns=[i])
+            confidence_score_df = pd.concat([confidence_score_df, df], axis=1)
             i_slice = i_slice + adata.n_obs
         self.confidence_score_df = confidence_score_df
 
-    
-    def plot_mse_st(self, figsize = (5,5), ncols = None, labels = None
-    , titles = None, loc = 'lower right', bbox_coordinates = (0,0,1.5,1.5), save_to = None):
+    def plot_mse_st(
+        self,
+        figsize=(5, 5),
+        ncols=None,
+        labels=None,
+        titles=None,
+        loc="lower right",
+        bbox_coordinates=(0, 0, 1.5, 1.5),
+        save_to=None,
+    ):
         """
         estimate mean square error within each tissue ID
 
@@ -1263,7 +1328,7 @@ class st_labeler(tissue_labeler):
         Matplotlib object
         """
         assert (
-        self.kmeans is not None
+            self.kmeans is not None
         ), "No cluster results found. Run \
         label_tissue_regions() first."
         cluster_data = self.cluster_data
@@ -1271,22 +1336,19 @@ class st_labeler(tissue_labeler):
         k = self.k
         features = self.features
         centroids = self.kmeans.cluster_centers_
-        mse_id = estimate_mse_st(cluster_data, adatas,centroids, k)
+        mse_id = estimate_mse_st(cluster_data, adatas, centroids, k)
         if titles is None:
-            titles = [
-                "tissue_ID " + str(x)
-                for x in range(self.k)
-            ]
+            titles = ["tissue_ID " + str(x) for x in range(self.k)]
         if labels is None:
             labels = range(len(features))
         n_panels = len(mse_id.keys())
-        if ncols is None :
+        if ncols is None:
             ncols = len(titles)
-        if n_panels <= ncols :
+        if n_panels <= ncols:
             n_rows, n_cols = 1, n_panels
-        else :
+        else:
             n_rows, n_cols = ceil(n_panels / ncols), ncols
-        fig = plt.figure(figsize = (n_cols * figsize[0], n_rows * figsize[1]))
+        fig = plt.figure(figsize=(n_cols * figsize[0], n_rows * figsize[1]))
         left, bottom = 0.1 / n_cols, 0.1 / n_rows
         gs = gridspec.GridSpec(
             nrows=n_rows,
@@ -1299,14 +1361,18 @@ class st_labeler(tissue_labeler):
         for i in mse_id.keys():
             plt.subplot(gs[i])
             df = pd.DataFrame.from_dict(mse_id[i]).T
-            plt.boxplot(df, positions = range(len(mse_id[i])), showfliers= False)
+            plt.boxplot(df, positions=range(len(mse_id[i])), showfliers=False)
             for col in df:
                 for k in features:
-                    dots = plt.scatter(col,df[col][k],s = k+1, label = labels[k] if col == 0 else "")
+                    dots = plt.scatter(
+                        col, df[col][k], s=k + 1, label=labels[k] if col == 0 else ""
+                    )
                     offsets = dots.get_offsets()
                     jittered_offsets = offsets
                     # only jitter in the x-direction
-                    jittered_offsets[:, 0] += np.random.uniform(-0.3, 0.3, offsets.shape[0])
+                    jittered_offsets[:, 0] += np.random.uniform(
+                        -0.3, 0.3, offsets.shape[0]
+                    )
                     dots.set_offsets(jittered_offsets)
             plt.xlabel("slides")
             plt.ylabel("mean square error")
@@ -1316,8 +1382,9 @@ class st_labeler(tissue_labeler):
             plt.savefig(fname=save_to, transparent=True, dpi=300)
         return fig
 
-    
-    def plot_tissue_ID_proportions_st(self, figsize = (5,5), color = 'rainbow', save_to = None):
+    def plot_tissue_ID_proportions_st(
+        self, figsize=(5, 5), color="rainbow", save_to=None
+    ):
         """
         Plot proportion of each tissue ID within each slide
 
@@ -1328,25 +1395,24 @@ class st_labeler(tissue_labeler):
         color : str, optional (default = `rainbow`)
         save_to : str, optional (default=`None`)
             Path to image file to save plot
-        
+
         Returns
         -------
         `gridspec.GridSpec` if `save_to` is `None`, else saves plot to file
         """
         df_count = pd.DataFrame()
-        for i,adata in enumerate(self.adatas):
-            df = adata.obs['tissue_ID'].value_counts(normalize = True, sort = False)
-            df_count = pd.concat([df_count, df], axis = 1)
-        df_count = df_count.T.reset_index(drop = True)
-        ax = df_count.plot.bar(stacked = True, cmap = color)
-        ax.legend(loc = 'best', bbox_to_anchor = (1,1))
+        for i, adata in enumerate(self.adatas):
+            df = adata.obs["tissue_ID"].value_counts(normalize=True, sort=False)
+            df_count = pd.concat([df_count, df], axis=1)
+        df_count = df_count.T.reset_index(drop=True)
+        ax = df_count.plot.bar(stacked=True, cmap=color)
+        ax.legend(loc="best", bbox_to_anchor=(1, 1))
         ax.set_xlabel("slides")
         ax.set_ylabel("tissue ID proportion")
         if save_to is not None:
             ax.figure.savefig(save_to)
         else:
-            return ax    
-
+            return ax
 
     def show_feature_overlay(
         self,
@@ -1396,7 +1462,9 @@ class st_labeler(tissue_labeler):
         assert pita.ndim > 1, "Pita does not have enough dimensions: {} given".format(
             pita.ndim
         )
-        assert pita.ndim < 4, "Pita has too many dimensions: {} given".format(pita.ndim)
+        assert pita.ndim < 4, "Pita has too many dimensions: {} given".format(
+            pita.ndim
+        )
         # create tissue_ID pita for plotting
         tIDs = assemble_pita(
             self.adatas[adata_index],
@@ -1538,30 +1606,37 @@ class mxif_labeler(tissue_labeler):
         Parameters
         ----------
         image_df : pd.DataFrame object
-            Containing MILWRM.MxIF.img objects or str path to compressed npz files, batch names, 
-            mean estimator and pixel count for each image in the following column order
-            ['Img', 'batch_names', 'mean estimators', 'pixels']
+            Containing MILWRM.MxIF.img objects or str path to compressed npz files, 
+            batch names, mean estimator and pixel count for each image in the 
+            following column order ['Img', 'batch_names', 'mean estimators', 'pixels']
 
         Returns
         -------
-
         Does not return anything. `self.images` attribute is updated,
         `self.cluster_data` attribute is initiated as `None`.
         """
         tissue_labeler.__init__(self)  # initialize parent class
         # validate the format of the image_df dataframe
-        if np.all(image_df.columns == ['Img', 'batch_names', 'mean estimators', 'pixels']):
+        if np.all(
+            image_df.columns == ["Img", "batch_names", "mean estimators", "pixels"]
+        ):
             self.image_df = image_df
         else:
-            raise Exception("Image_df must be given with these columns in this format ['Img', 'batch_names', 'mean estimators', 'pixels']")
-        if self.image_df['Img'].apply(isinstance, args = [img]).all():
+            raise Exception(
+                "Image_df must be given with these columns in this format ['Img', 'batch_names', 'mean estimators', 'pixels']"
+            )
+        if self.image_df["Img"].apply(isinstance, args=[img]).all():
             self.use_paths = False
-        elif self.image_df['Img'].apply(isinstance, args = [str]).all():
+        elif self.image_df["Img"].apply(isinstance, args=[str]).all():
             self.use_paths = True
         else:
-            raise Exception("Img column in the dataframe should be either str for paths to the files or mxif.img object")
+            raise Exception(
+                "Img column in the dataframe should be either str for paths to the files or mxif.img object"
+            )
 
-    def prep_cluster_data(self, features, filter_name = 'gaussian', sigma = 2, fract = 0.2, path_save = None):
+    def prep_cluster_data(
+        self, features, filter_name="gaussian", sigma=2, fract=0.2, path_save=None
+    ):
         """
         Prepare master array for tissue level clustering
 
@@ -1582,9 +1657,9 @@ class mxif_labeler(tissue_labeler):
 
         Returns
         -------
-        Does not return anything. `self.images` are normalized, blurred and scaled according
-        to user parameters. `self.cluster_data` becomes master `np.array` for cluster
-        training. Parameters are also captured as attributes for posterity.
+        Does not return anything. `self.images` are normalized, blurred and scaled 
+        according to user parameters. `self.cluster_data` becomes master `np.array` 
+        for cluster training. Parameters are also captured as attributes for posterity.
 
         """
         if self.cluster_data is not None:
@@ -1595,34 +1670,46 @@ class mxif_labeler(tissue_labeler):
         use_path = self.use_paths
         # calculate the batch wise means
         mean_for_each_batch = {}
-        for batch in self.image_df['batch_names'].unique():
-            list_mean_estimators = list(self.image_df[self.image_df['batch_names'] == batch]['mean estimators'])
+        for batch in self.image_df["batch_names"].unique():
+            list_mean_estimators = list(
+                self.image_df[self.image_df["batch_names"] == batch]["mean estimators"]
+            )
             mean_estimator_batch = sum(map(np.array, list_mean_estimators))
-            pixels = sum(self.image_df[self.image_df['batch_names'] == batch]['pixels'])
-            mean_for_each_batch[batch] = mean_estimator_batch/pixels
-        # log_normalize, apply blurring filter, minmax scale each channel and subsample data
+            pixels = sum(
+                self.image_df[self.image_df["batch_names"] == batch]["pixels"]
+            )
+            mean_for_each_batch[batch] = mean_estimator_batch / pixels
+        # log_normalize, apply blurring filter, minmax scale each channel and subsample
         subsampled_data = []
         path_to_blurred_npz = []
-        for image,batch in zip(self.image_df['Img'],self.image_df['batch_names']):
+        for image, batch in zip(self.image_df["Img"], self.image_df["batch_names"]):
             tmp = prep_data_single_sample_mxif(
-                image,use_path=use_path, mean = mean_for_each_batch[batch], filter_name= filter_name,
-                sigma = sigma, features = self.model_features, fract = fract, path_save= path_save
+                image,
+                use_path=use_path,
+                mean=mean_for_each_batch[batch],
+                filter_name=filter_name,
+                sigma=sigma,
+                features=self.model_features,
+                fract=fract,
+                path_save=path_save,
             )
             if self.use_paths == True:
                 subsampled_data.append(tmp[0])
                 path_to_blurred_npz.append(tmp[1])
             else:
                 subsampled_data.append(tmp)
-        batch_labels = [[x]*len(subsampled_data[x]) for x in range(len(subsampled_data))] # batch labels for umap
+        batch_labels = [
+            [x] * len(subsampled_data[x]) for x in range(len(subsampled_data))
+        ]  # batch labels for umap
         self.merged_batch_labels = list(itertools.chain(*batch_labels))
         if self.use_paths == True:
-            self.image_df['Img'] = path_to_blurred_npz
+            self.image_df["Img"] = path_to_blurred_npz
         cluster_data = np.row_stack(subsampled_data)
         # perform z-score normalization on cluster_Data
         scaler = StandardScaler()
         self.scaler = scaler.fit(cluster_data)
         scaled_data = scaler.transform(cluster_data)
-        self.cluster_data = scaled_data 
+        self.cluster_data = scaled_data
 
     def label_tissue_regions(
         self, k=None, alpha=0.05, plot_out=True, random_state=18, n_jobs=-1
@@ -1657,7 +1744,10 @@ class mxif_labeler(tissue_labeler):
         if k is None:
             print("Determining optimal cluster number k via scaled inertia")
             self.find_optimal_k(
-                alpha=alpha, plot_out=plot_out, random_state=random_state, n_jobs=n_jobs
+                alpha=alpha,
+                plot_out=plot_out,
+                random_state=random_state,
+                n_jobs=n_jobs,
             )
         # call k-means model from parent class
         self.find_tissue_regions(k=k, random_state=random_state)
@@ -1667,14 +1757,15 @@ class mxif_labeler(tissue_labeler):
             delayed(add_tissue_ID_single_sample_mxif)(
                 image, use_path, self.model_features, self.kmeans, self.scaler
             )
-            for image in self.image_df['Img']
+            for image in self.image_df["Img"]
         )
-    
 
-    def plot_percentage_variance_explained(self,fig_size = (5,5), R_square = False, save_to = None):
+    def plot_percentage_variance_explained(
+        self, fig_size=(5, 5), R_square=False, save_to=None
+    ):
         """
         plot percentage variance_explained or not explained by clustering
-        
+
         Parameters
         ----------
         fig_size : Tuple
@@ -1694,40 +1785,41 @@ class mxif_labeler(tissue_labeler):
         use_path = self.use_paths
         S_squre_for_each_image = []
         R_squre_for_each_image = []
-        for image, tissue_ID in zip(self.image_df['Img'], self.tissue_IDs):
-            S_square = estimate_percentage_variance_mxif(image, use_path
-            ,scaler, centroids, features, tissue_ID)
+        for image, tissue_ID in zip(self.image_df["Img"], self.tissue_IDs):
+            S_square = estimate_percentage_variance_mxif(
+                image, use_path, scaler, centroids, features, tissue_ID
+            )
             S_squre_for_each_image.append(S_square)
-            R_squre_for_each_image.append(100-S_square)
+            R_squre_for_each_image.append(100 - S_square)
 
         if R_square == True:
-            fig = plt.figure(figsize = fig_size)
-            plt.bar(range(len(R_squre_for_each_image)),R_squre_for_each_image)
-            plt.xlabel('images')
-            plt.ylabel('percentage variance not explained by Kmeans')
+            fig = plt.figure(figsize=fig_size)
+            plt.bar(range(len(R_squre_for_each_image)), R_squre_for_each_image)
+            plt.xlabel("images")
+            plt.ylabel("percentage variance not explained by Kmeans")
 
         else:
-            fig = plt.figure(figsize = fig_size)
-            plt.bar(range(len(S_squre_for_each_image)),S_squre_for_each_image)
-            plt.xlabel('images')
-            plt.ylabel('percentage variance explained by Kmeans')
+            fig = plt.figure(figsize=fig_size)
+            plt.bar(range(len(S_squre_for_each_image)), S_squre_for_each_image)
+            plt.xlabel("images")
+            plt.ylabel("percentage variance explained by Kmeans")
 
         if save_to:
             plt.savefig(fname=save_to, transparent=True, bbox_inches="tight", dpi=300)
         return fig
-    
-    
+
     def confidence_score_images(self):
         """
         estimate confidence score for each image
-        
+
         Parameters
         ----------
 
         Returns
         -------
-        self.confidence_IDs and self.confidence_score_df is added containing confidence score
-        for each tissue ID assignment and mean confidence score for each tissue ID within each image
+        self.confidence_IDs and self.confidence_score_df is added containing 
+        confidence score for each tissue ID assignment and mean confidence score for 
+        each tissue ID within each image
         """
         scaler = self.scaler
         centroids = self.kmeans.cluster_centers_
@@ -1737,18 +1829,29 @@ class mxif_labeler(tissue_labeler):
         # confidence score estimation for each image
         confidence_IDs = []
         confidence_score_df = pd.DataFrame()
-        for i,image in enumerate(self.image_df['Img']):
-            cID, scores_dict = estimate_confidence_score_mxif(image, use_path, scaler
-            , centroids, features, tissue_IDs[i])
+        for i, image in enumerate(self.image_df["Img"]):
+            cID, scores_dict = estimate_confidence_score_mxif(
+                image, use_path, scaler, centroids, features, tissue_IDs[i]
+            )
             confidence_IDs.append(cID)
-            df = pd.DataFrame(scores_dict.values(), columns = [i])
-            confidence_score_df = pd.concat([confidence_score_df,df.T], ignore_index = True)
+            df = pd.DataFrame(scores_dict.values(), columns=[i])
+            confidence_score_df = pd.concat(
+                [confidence_score_df, df.T], ignore_index=True
+            )
         # adding confidence_IDs and confidence_score_df to tissue labeller object
         self.confidence_IDs = confidence_IDs
         self.confidence_score_df = confidence_score_df
 
-    def plot_mse_mxif(self, figsize = (5,5), ncols = None, labels = None
-    , titles = None, loc = 'lower right', bbox_coordinates = (0,0,1.5,1.5), save_to = None):
+    def plot_mse_mxif(
+        self,
+        figsize=(5, 5),
+        ncols=None,
+        labels=None,
+        titles=None,
+        loc="lower right",
+        bbox_coordinates=(0, 0, 1.5, 1.5),
+        save_to=None,
+    ):
         """
         estimate mean square error within each tissue ID
 
@@ -1775,33 +1878,32 @@ class mxif_labeler(tissue_labeler):
         Matplotlib object
         """
         assert (
-        self.kmeans is not None
+            self.kmeans is not None
         ), "No cluster results found. Run \
         label_tissue_regions() first."
-        images = self.image_df['Img']
-        use_path = self.use_paths  
+        images = self.image_df["Img"]
+        use_path = self.use_paths
         scaler = self.scaler
         centroids = self.kmeans.cluster_centers_
         features = self.model_features
         k = self.k
         features = self.model_features
         tissue_IDs = self.tissue_IDs
-        mse_id = estimate_mse_mxif(images, use_path, tissue_IDs, scaler, centroids, features, k)
+        mse_id = estimate_mse_mxif(
+            images, use_path, tissue_IDs, scaler, centroids, features, k
+        )
         if labels is None:
             labels = features
         if titles is None:
-            titles = [
-                "tissue_ID " + str(x)
-                for x in range(self.k)
-            ]
+            titles = ["tissue_ID " + str(x) for x in range(self.k)]
         n_panels = len(mse_id.keys())
-        if ncols is None :
+        if ncols is None:
             ncols = len(titles)
-        if n_panels <= ncols :
+        if n_panels <= ncols:
             n_rows, n_cols = 1, n_panels
-        else :
+        else:
             n_rows, n_cols = ceil(n_panels / ncols), ncols
-        fig = plt.figure(figsize = (n_cols * figsize[0], n_rows * figsize[1]))
+        fig = plt.figure(figsize=(n_cols * figsize[0], n_rows * figsize[1]))
         left, bottom = 0.1 / n_cols, 0.1 / n_rows
         gs = gridspec.GridSpec(
             nrows=n_rows,
@@ -1814,14 +1916,18 @@ class mxif_labeler(tissue_labeler):
         for i in mse_id.keys():
             plt.subplot(gs[i])
             df = pd.DataFrame.from_dict(mse_id[i]).T
-            plt.boxplot(df, positions = range(len(mse_id[i])), showfliers= False)
+            plt.boxplot(df, positions=range(len(mse_id[i])), showfliers=False)
             for col in df:
                 for k in range(len(self.model_features)):
-                    dots = plt.scatter(col,df[col][k],s = k+1, label = labels[k] if col == 0 else "")
+                    dots = plt.scatter(
+                        col, df[col][k], s=k + 1, label=labels[k] if col == 0 else ""
+                    )
                     offsets = dots.get_offsets()
                     jittered_offsets = offsets
                     # only jitter in the x-direction
-                    jittered_offsets[:, 0] += np.random.uniform(-0.3, 0.3, offsets.shape[0])
+                    jittered_offsets[:, 0] += np.random.uniform(
+                        -0.3, 0.3, offsets.shape[0]
+                    )
                     dots.set_offsets(jittered_offsets)
             plt.xlabel("images")
             plt.ylabel("mean square error")
@@ -1831,8 +1937,9 @@ class mxif_labeler(tissue_labeler):
             plt.savefig(fname=save_to, transparent=True, dpi=300)
         return fig
 
-
-    def plot_tissue_ID_proportions_mxif(self, figsize = (5,5), color = 'rainbow', save_to = None):
+    def plot_tissue_ID_proportions_mxif(
+        self, figsize=(5, 5), color="rainbow", save_to=None
+    ):
         """
         Plot proportion of each tissue ID within each slide
 
@@ -1843,27 +1950,27 @@ class mxif_labeler(tissue_labeler):
         color : str, optional (default = `rainbow`)
         save_to : str, optional (default=`None`)
             Path to image file to save plot
-        
+
         Returns
         -------
         `gridspec.GridSpec` if `save_to` is `None`, else saves plot to file
         """
         df_count = pd.DataFrame()
         for i in range(len(self.tissue_IDs)):
-            unique,counts = np.unique(self.tissue_IDs[i], return_counts=True)
-            df = pd.DataFrame(counts[:self.k], columns = [i])
-            df_count = pd.concat([df_count,df], axis = 1)
-        df_count = df_count/df_count.sum()
-        ax = df_count.T.plot.bar(stacked = True, cmap = color)
-        ax.legend(loc = 'best', bbox_to_anchor = (1,1))
+            unique, counts = np.unique(self.tissue_IDs[i], return_counts=True)
+            df = pd.DataFrame(counts[: self.k], columns=[i])
+            df_count = pd.concat([df_count, df], axis=1)
+        df_count = df_count / df_count.sum()
+        ax = df_count.T.plot.bar(stacked=True, cmap=color)
+        ax.legend(loc="best", bbox_to_anchor=(1, 1))
         ax.set_xlabel("images")
         ax.set_ylabel("tissue ID proportion")
         if save_to is not None:
             ax.figure.savefig(save_to)
         else:
-            return ax        
+            return ax
 
-    def make_umap(self, frac = None, color_map = 'rainbow', save_to = None):
+    def make_umap(self, frac=None, color_map="rainbow", save_to=None):
         """
         plot umap for the cluster data
 
@@ -1876,7 +1983,7 @@ class mxif_labeler(tissue_labeler):
             str for cmap used for plotting. Default cmap is rainbow
         save_to : str or None
             Path to image file to save results. if `None`, show figure.
-        
+
         Returns
         -------
         Matplotlib object
@@ -1887,25 +1994,46 @@ class mxif_labeler(tissue_labeler):
         kmeans_labels = self.kmeans.labels_
         k = self.k
         # perform umap on the cluster data
-        umap_centroid_data, standard_embedding_1 = perform_umap(cluster_data = cluster_data, 
-        centroids = centroids, batch_labels = batch_labels, kmeans_labels = kmeans_labels, frac = frac)
+        umap_centroid_data, standard_embedding_1 = perform_umap(
+            cluster_data=cluster_data,
+            centroids=centroids,
+            batch_labels=batch_labels,
+            kmeans_labels=kmeans_labels,
+            frac=frac,
+        )
         # defining a size of datapoints for scatter plot and tick labels
-        size = [0.01]*len(umap_centroid_data.index)
-        size[-k:] = [10]*k
-        ticks = np.unique(np.array(umap_centroid_data['Kmeans_labels']))
-        tick_label = list(np.unique(np.array(umap_centroid_data['Kmeans_labels'])))
-        tick_label[-1] = 'centroids'
+        size = [0.01] * len(umap_centroid_data.index)
+        size[-k:] = [10] * k
+        ticks = np.unique(np.array(umap_centroid_data["Kmeans_labels"]))
+        tick_label = list(np.unique(np.array(umap_centroid_data["Kmeans_labels"])))
+        tick_label[-1] = "centroids"
         # plotting a fig with two subplots
-        fig, (ax1, ax2) = plt.subplots(1, 2, figsize = (20,10))
+        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(20, 10))
         # defining color_map
-        disc_cmap_1 = plt.cm.get_cmap(color_map, len(np.unique(np.array(umap_centroid_data.index))))
-        disc_cmap_2 = plt.cm.get_cmap(color_map, len(np.unique(np.array(umap_centroid_data['Kmeans_labels']))))
-        plot_1 = ax1.scatter(standard_embedding_1[:, 0], standard_embedding_1[:, 1],s = 0.01,c = umap_centroid_data.index, cmap=disc_cmap_1)
+        disc_cmap_1 = plt.cm.get_cmap(
+            color_map, len(np.unique(np.array(umap_centroid_data.index)))
+        )
+        disc_cmap_2 = plt.cm.get_cmap(
+            color_map, len(np.unique(np.array(umap_centroid_data["Kmeans_labels"])))
+        )
+        plot_1 = ax1.scatter(
+            standard_embedding_1[:, 0],
+            standard_embedding_1[:, 1],
+            s=0.01,
+            c=umap_centroid_data.index,
+            cmap=disc_cmap_1,
+        )
         ax1.set_title("Umap with batch labels")
-        cbar_1 = plt.colorbar(plot_1, ax = ax1)
-        plot_2 = ax2.scatter(standard_embedding_1[:, 0], standard_embedding_1[:, 1],s = size,c = umap_centroid_data['Kmeans_labels'], cmap=disc_cmap_2)
+        cbar_1 = plt.colorbar(plot_1, ax=ax1)
+        plot_2 = ax2.scatter(
+            standard_embedding_1[:, 0],
+            standard_embedding_1[:, 1],
+            s=size,
+            c=umap_centroid_data["Kmeans_labels"],
+            cmap=disc_cmap_2,
+        )
         ax2.set_title("Umap with tissue IDs")
-        cbar_2 = plt.colorbar(plot_2, ax = ax2, ticks = ticks)
+        cbar_2 = plt.colorbar(plot_2, ax=ax2, ticks=ticks)
         cbar_2.ax.set_yticklabels(tick_label)
         if save_to:
             plt.savefig(fname=save_to, transparent=True, bbox_inches="tight", dpi=300)
@@ -1988,7 +2116,7 @@ class mxif_labeler(tissue_labeler):
         ax.tick_params(labelbottom=False, labelleft=False)
         sns.despine(bottom=True, left=True)
         # colorbar scale for tissue_IDs
-        _ = plt.colorbar(im, ticks = range(self.k), shrink=0.7)
+        _ = plt.colorbar(im, ticks=range(self.k), shrink=0.7)
         # add plots to axes
         i = 1
         for channel in channels:

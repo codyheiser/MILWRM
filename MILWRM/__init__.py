@@ -8,6 +8,7 @@ from .MILWRM import (
 )
 from .MxIF import img
 from .ST import (
+    blur_features_st,
     map_pixels,
     trim_image,
     assemble_pita,
@@ -16,6 +17,7 @@ from .ST import (
 
 __all__ = [
     "img",
+    "blur_features_st",
     "map_pixels",
     "trim_image",
     "assemble_pita",

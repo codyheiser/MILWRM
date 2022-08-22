@@ -4,6 +4,7 @@ pandas
 scanpy
 scikit-image
 scikit-learn
-imagecodecs
 scipy
+squidpy
+imagecodecs
 seaborn
