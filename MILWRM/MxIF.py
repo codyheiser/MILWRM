@@ -7,6 +7,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
 import seaborn as sns
+from sklearn.utils import shuffle
+from sklearn.cluster import KMeans
 
 sns.set_style("white")
 plt.rcParams["font.family"] = "monospace"
@@ -16,11 +18,12 @@ from skimage import exposure
 from skimage.io import imread
 from skimage.measure import block_reduce
 from matplotlib.lines import Line2D
+from skimage import filters
+from skimage.restoration import denoise_bilateral
 
 
 def checktype(obj):
     return bool(obj) and all(isinstance(elem, str) for elem in obj)
-
 
 def clip_values(image, channels=None):
     """
@@ -58,7 +61,6 @@ def clip_values(image, channels=None):
             )
             image_cp[:, :, z] = plane_clip
     return image_cp
-
 
 def scale_rgb(image, channels=None):
     """
@@ -371,7 +373,36 @@ class img:
         """
         self.img = CLAHE(self.img, **kwargs)
 
-    def log_normalize(self, fract, features, pseudoval=1, mean=None, mask=True):
+    def blurring(self, filter_name = 'gaussian', sigma = 2, **kwargs):
+        """
+        Aplying a filter on the images
+
+        Parameters
+        ----------
+        filter : str
+            str to define which type of filter to apply
+
+        sigma : int
+            parameter controlling extent of smoothening
+        """
+        if filter_name == 'gaussian':
+            print("Applying gaussian filter")
+            self.img = filters.gaussian(self.img, sigma = sigma, channel_axis = 2, **kwargs)
+        elif filter_name == 'median':
+            print("Applying median filter")
+            if isinstance(sigma, float):
+                sigma = int(sigma)
+            for i in range(self.img.shape[2]):
+                image_array = self.img[:,:,i]
+                image_array_blurred = filters.median(image_array, np.ones(sigma, sigma))
+                self.img[:,:,i] = image_array_blurred
+        elif filter_name == "bilateral":
+            print("Applying biltaral filter")
+            self.img = denoise_bilateral(self.img ,sigma_spatial = sigma, channel_axis = 2, **kwargs)
+        else:
+            raise Exception("filter name should be either gaussian, median or bilateral")
+
+    def log_normalize(self, pseudoval=1, mean = None, mask=True):
         """
         Log-normalizes values for each marker with `log10(arr/arr.mean() + pseudoval)`
 
@@ -388,21 +419,12 @@ class img:
         -------
         Log-normalizes values in each channel of `self.img`
         """
-        if isinstance(features, int):  # force features into list if single integer
-            features = [features]
-        if isinstance(features, str):  # force features into int if single string
-            features = [self.ch.index(features)]
-        if checktype(features):  # force features into list of int if list of strings
-            features = [self.ch.index(x) for x in features]
-        if features is None:  # if no features are given, use all of them
-            features = [x for x in range(self.n_ch)]
-        if mean.all():
+        if mean is not None:
             if mask:
                 assert self.mask is not None, "No tissue mask available"
                 for i in range(self.img.shape[2]):
                     fact = mean[i]
-                    self.img[:, :, i] = np.log10(self.img[:, :, i] / fact + pseudoval)
-
+                    self.img[:, :, i] = np.log10(self.img[:, :, i] / fact + pseudoval)             
             else:
                 print("WARNING: Performing normalization without a tissue mask.")
                 for i in range(self.img.shape[2]):
@@ -415,13 +437,39 @@ class img:
                 for i in range(self.img.shape[2]):
                     fact = self.img[:, :, i].mean()
                     self.img[:, :, i] = np.log10(self.img[:, :, i] / fact + pseudoval)
-
             else:
                 print("WARNING: Performing normalization without a tissue mask.")
                 for i in range(self.img.shape[2]):
                     fact = self.img[:, :, i].mean()
                     self.img[:, :, i] = np.log10(self.img[:, :, i] / fact + pseudoval)
-        # get cluster data for image_i
+
+    def subsample_pixels(self, features, fract = 0.2):
+        """
+        Sub-samples fraction of pixels from the image randomly for each channel
+
+        Parameters
+        ----------
+        features : list of int or str
+            Indices or names of MxIF channels to use for tissue labeling
+        fract : float, optional (default=0.2)
+            Fraction of cluster data from each image to randomly select 
+            for model building
+        
+        Returns
+        -------
+        tmp : np.array
+            Clustering data from `image`
+
+        """
+        if isinstance(features, int):  # force features into list if single integer
+            features = [features]
+        if isinstance(features, str):  # force features into int if single string
+            features = [self.ch.index(features)]
+        if checktype(features):  # force features into list of int if list of strings
+            features = [self.ch.index(x) for x in features]
+        if features is None:  # if no features are given, use all of them
+            features = [x for x in range(self.n_ch)]
+        # subsample data for given image
         tmp = []
         for i in range(self.img.shape[2]):
             tmp.append(self.img[:, :, i][self.mask != 0])
@@ -451,10 +499,81 @@ class img:
         # downsample mask if mask available
         if self.mask is not None:
             self.mask = block_reduce(
-                self.mask, block_size=(fact, fact), func=np.max, cval=0
+                self.mask, block_size=(fact, fact), func = func, cval=0
             )
         # downsample image
         self.img = block_reduce(self.img, block_size=(fact, fact, 1), func=func, cval=0)
+    
+    def calculate_non_zero_mean(self):
+        """
+        Calculate mean estimator for the given image array avoiding mask pixels or pixels with value 0
+
+        Parameters
+        ----------
+
+        Returns
+        -------
+        mean_estimator : list of float
+            List of mean estimator (mean*pixel) values for each channel
+        pixels : int
+            pixel count for the image excluding masked pixels
+        """
+        image = self.img
+        pixels = np.count_nonzero(image != 0)
+        mean_estimator = []
+        for i in range(image.shape[2]):
+            ar = image[:,:,i]
+            mean = ar[ar != 0].mean()
+            mean_estimator.append(mean*pixels)
+        return mean_estimator, pixels
+
+    def create_tissue_mask(self, features = None, fract = 0.2):
+        """
+        Create tissue mask
+        
+        Parameters
+        ----------
+        features : list of int or str
+            Indices or names of MxIF channels to use for tissue labeling
+        fract : float, optional (default=0.2)
+            Fraction of cluster data from each image to randomly select 
+            for model building
+            
+        Returns
+        -------
+        a numpy array as tissue mask set to self.mask
+        """
+        # create a copy of the image
+        image_cp = self.copy()
+        # create a temporary tissue mask that covers no region
+        w,h,d = image_cp.img.shape
+        image_cp.mask = np.ones((w,h))
+        # log normalization on image
+        image_cp.log_normalize()
+        # apply gaussian filter
+        image_cp.img = filters.gaussian(image_cp.img,sigma=2,channel_axis=2)
+        # subsample data to build kmeans model
+        subsampled_data = image_cp.subsample_pixels(features, fract=fract)
+        cluster_data = np.row_stack(subsampled_data)
+        # reshape image for prediction
+        image_ar_reshape = image_cp.img.reshape((w*h,d))
+        # build kmeans model with 2 clusters
+        kmeans = KMeans(n_clusters=2, random_state=18).fit(cluster_data)
+        labels = kmeans.predict(image_ar_reshape).astype(float)
+        tID = labels.reshape((w,h))
+        # check if the background is labelled as 0 or 1
+        scores = kmeans.cluster_centers_
+        mean = scores.mean()
+        std = scores.std()
+        z_scores = (scores-mean)/std
+        if z_scores[0].mean()>0:
+            where_0 = np.where(tID==0.0)
+            tID[where_0] = 0.5
+            where_1 = np.where(tID==1.0)
+            tID[where_1] = 0.0
+            where_05 = np.where(tID==0.5)
+            tID[where_05] = 1.0
+        self.mask = tID
 
     def show(
         self,

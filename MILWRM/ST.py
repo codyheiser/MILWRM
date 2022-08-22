@@ -9,6 +9,7 @@ import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
 import seaborn as sns
 import scanpy as sc
+import squidpy as sq
 
 sc.set_figure_params(dpi=100, dpi_save=400)
 sns.set_style("white")
@@ -20,6 +21,59 @@ from scipy.spatial import cKDTree
 from scipy.interpolate import interpnd, griddata
 from sklearn.metrics.pairwise import euclidean_distances
 
+def blur_features_st(adata, tmp, spatial_graph_key=None, n_rings=1):
+    """
+    Blur values in an `AnnData` object using spatial nearest neighbors
+
+    Parameters
+    ----------
+    adata : anndata.AnnData
+        AnnData object containing Visium data
+    tmp : pd.DataFrame
+        containing feature columns from adata.obs that will be blurred
+    spatial_graph_key : str, optional (default=`None`)
+        Key in `adata.obsp` containing spatial graph connectivities (i.e.
+        `"spatial_connectivities"`). If `None`, compute new spatial graph using
+        `n_rings` in `squidpy`.
+    n_rings : int, optional (default=1)
+        Number of hexagonal rings around each spatial transcriptomics spot to blur
+        features by for capturing regional information. Assumes 10X Genomics Visium
+        platform.
+
+    Returns
+    -------
+    adata.obs is edited in place with new blurred columns
+    """
+    if spatial_graph_key is not None:
+        # use existing spatial graph
+        assert (
+            spatial_graph_key in adata.obsp.keys()
+        ), "Spatial connectivities key '{}' not found.".format(spatial_graph_key)
+    else:
+        # create spatial graph
+        print("Computing spatial graph with {} hexagonal rings".format(n_rings))
+        sq.gr.spatial_neighbors(adata, coord_type="grid", n_rings=n_rings)
+        spatial_graph_key = "spatial_connectivities"  # set key to expected output
+    tmp2 = tmp.copy()  # copy of temporary dataframe for dropping blurred features into
+    cols = tmp.columns  # get column names
+    # perform blurring by nearest spot neighbors
+    for x in range(len(tmp)):
+        vals = tmp.iloc[
+            list(
+                np.argwhere(
+                    adata.obsp[spatial_graph_key][
+                        x,
+                    ]
+                )[:, 1]
+            )
+            + [x],
+            :,
+        ].mean()
+        tmp2.iloc[x, :] = vals.values
+    # add blurred features to anndata object
+    adata.obs[[x for x in cols]] = tmp.loc[:, cols].values
+    adata.obs[["blur_" + x for x in cols]] = tmp2.loc[:, cols].values
+    return tmp2.loc[:, cols]
 
 def bin_threshold(mat, threshmin=None, threshmax=0.5):
     """
