@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1" />
-<meta name="generator" content="pdoc 0.9.2" />
+<meta name="generator" content="pdoc 0.10.0" />
 <title>MILWRM API documentation</title>
 <meta name="description" content="Multiplex Image Labeling With Regional Morphology" />
 <link rel="preload stylesheet" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/10up-sanitize.css/11.0.1/sanitize.min.css" integrity="sha256-PK9q560IAAa6WVRRh76LtCaI8pjTJ2z11v0miyNNjrs=" crossorigin>
@@ -37,6 +37,7 @@ from .MILWRM import (
 )
 from .MxIF import img
 from .ST import (
+    blur_features_st,
     map_pixels,
     trim_image,
     assemble_pita,
@@ -45,6 +46,7 @@ from .ST import (
 
 __all__ = [
     &#34;img&#34;,
+    &#34;blur_features_st&#34;,
     &#34;map_pixels&#34;,
     &#34;trim_image&#34;,
     &#34;assemble_pita&#34;,
@@ -137,8 +139,8 @@ specified and <code>plot_out</code>, first feature (index 0) will be plotted.</d
     adata : AnnData.anndata
         the data
     features : list of int or str
-        Names or indices of features to cast onto spot image. If `None`, cast all
-        features. If `plot_out`, first feature in list will be plotted. If not
+        Names or indices of features to cast onto spot image. If `None`, cast all 
+        features. If `plot_out`, first feature in list will be plotted. If not 
         specified and `plot_out`, first feature (index 0) will be plotted.
     use_rep : str
         Key from `adata.obsm` to use for plotting. If `None`, use `adata.X`.
@@ -147,7 +149,7 @@ specified and <code>plot_out</code>, first feature (index 0) will be plotted.</d
     plot_out : bool
         Show resulting image?
     histo : str or `None`, optional (default=`None`)
-        Histology image to show along with pita in gridspec (i.e. &#34;hires&#34;,
+        Histology image to show along with pita in gridspec (i.e. &#34;hires&#34;, 
         &#34;hires_trim&#34;, &#34;lowres&#34;). If `None` or if `plot_out`==`False`, ignore.
     verbose : bool, optional (default=`True`)
         Print updates to console
@@ -231,10 +233,11 @@ specified and <code>plot_out</code>, first feature (index 0) will be plotted.</d
     for col in mapper.columns:
         if pd.api.types.is_categorical_dtype(mapper[col]):
             cat_max = len(mapper[col].cat.categories)
+            categories = mapper[col].cat.categories  # save original categories
             mapper[col] = mapper[col].replace(
                 {v: k for k, v in dict(enumerate(mapper[col].cat.categories)).items()}
             )
-            discrete_cols[mapper.columns.get_loc(col)] = cat_max
+            discrete_cols[mapper.columns.get_loc(col)] = (cat_max, categories)
     # if no categorical columns, pass None to discrete_cols
     if bool(discrete_cols) is False:
         discrete_cols = None
@@ -277,7 +280,91 @@ specified and <code>plot_out</code>, first feature (index 0) will be plotted.</d
         )
     if verbose:
         print(&#34;Done!&#34;)
-    return assembled</code></pre>
+    return assembled, discrete_cols</code></pre>
+</details>
+</dd>
+<dt id="MILWRM.blur_features_st"><code class="name flex">
+<span>def <span class="ident">blur_features_st</span></span>(<span>adata, tmp, spatial_graph_key=None, n_rings=1)</span>
+</code></dt>
+<dd>
+<div class="desc"><p>Blur values in an <code>AnnData</code> object using spatial nearest neighbors</p>
+<h2 id="parameters">Parameters</h2>
+<dl>
+<dt><strong><code>adata</code></strong> :&ensp;<code>anndata.AnnData</code></dt>
+<dd>AnnData object containing Visium data</dd>
+<dt><strong><code>tmp</code></strong> :&ensp;<code>pd.DataFrame</code></dt>
+<dd>containing feature columns from adata.obs that will be blurred</dd>
+<dt><strong><code>spatial_graph_key</code></strong> :&ensp;<code>str</code>, optional <code>(default=</code>None<code>)</code></dt>
+<dd>Key in <code>adata.obsp</code> containing spatial graph connectivities (i.e.
+<code>"spatial_connectivities"</code>). If <code>None</code>, compute new spatial graph using
+<code>n_rings</code> in <code>squidpy</code>.</dd>
+<dt><strong><code>n_rings</code></strong> :&ensp;<code>int</code>, optional <code>(default=1)</code></dt>
+<dd>Number of hexagonal rings around each spatial transcriptomics spot to blur
+features by for capturing regional information. Assumes 10X Genomics Visium
+platform.</dd>
+</dl>
+<h2 id="returns">Returns</h2>
+<dl>
+<dt><code>adata.obs is edited in place with new blurred columns</code></dt>
+<dd>&nbsp;</dd>
+</dl></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def blur_features_st(adata, tmp, spatial_graph_key=None, n_rings=1):
+    &#34;&#34;&#34;
+    Blur values in an `AnnData` object using spatial nearest neighbors
+
+    Parameters
+    ----------
+    adata : anndata.AnnData
+        AnnData object containing Visium data
+    tmp : pd.DataFrame
+        containing feature columns from adata.obs that will be blurred
+    spatial_graph_key : str, optional (default=`None`)
+        Key in `adata.obsp` containing spatial graph connectivities (i.e. 
+        `&#34;spatial_connectivities&#34;`). If `None`, compute new spatial graph using 
+        `n_rings` in `squidpy`.
+    n_rings : int, optional (default=1)
+        Number of hexagonal rings around each spatial transcriptomics spot to blur 
+        features by for capturing regional information. Assumes 10X Genomics Visium 
+        platform.
+
+    Returns
+    -------
+    adata.obs is edited in place with new blurred columns
+    &#34;&#34;&#34;
+    if spatial_graph_key is not None:
+        # use existing spatial graph
+        assert (
+            spatial_graph_key in adata.obsp.keys()
+        ), &#34;Spatial connectivities key &#39;{}&#39; not found.&#34;.format(spatial_graph_key)
+    else:
+        # create spatial graph
+        print(&#34;Computing spatial graph with {} hexagonal rings&#34;.format(n_rings))
+        sq.gr.spatial_neighbors(adata, coord_type=&#34;grid&#34;, n_rings=n_rings)
+        spatial_graph_key = &#34;spatial_connectivities&#34;  # set key to expected output
+    tmp2 = tmp.copy()  # copy of temporary dataframe for dropping blurred features into
+    cols = tmp.columns  # get column names
+    # perform blurring by nearest spot neighbors
+    for x in range(len(tmp)):
+        vals = tmp.iloc[
+            list(
+                np.argwhere(
+                    adata.obsp[spatial_graph_key][
+                        x,
+                    ]
+                )[:, 1]
+            )
+            + [x],
+            :,
+        ].mean()
+        tmp2.iloc[x, :] = vals.values
+    # add blurred features to anndata object
+    adata.obs[[x for x in cols]] = tmp.loc[:, cols].values
+    adata.obs[[&#34;blur_&#34; + x for x in cols]] = tmp2.loc[:, cols].values
+    return tmp2.loc[:, cols]</code></pre>
 </details>
 </dd>
 <dt id="MILWRM.map_pixels"><code class="name flex">
@@ -318,7 +405,7 @@ Pixel space array of Visium spot barcode IDs</dd>
     adata : AnnData.anndata
         The data
     filter_label : str or None
-        adata.obs column key that contains binary labels for filtering barcodes. If
+        adata.obs column key that contains binary labels for filtering barcodes. If 
         None, do not filter.
     img_key : str
         adata.uns key containing the image to use for mapping
@@ -328,7 +415,7 @@ Pixel space array of Visium spot barcode IDs</dd>
     adata : AnnData.anndata
         with the following attributes:
         adata.uns[&#34;pixel_map_df&#34;] : pd.DataFrame
-            Long-form dataframe of Visium spot barcode IDs, pixel coordinates, and
+            Long-form dataframe of Visium spot barcode IDs, pixel coordinates, and 
             .obs metadata
         adata.uns[&#34;pixel_map&#34;] : np.array
             Pixel space array of Visium spot barcode IDs
@@ -477,7 +564,10 @@ Pixel space array of Visium spot barcode IDs</dd>
     # map barcodes to pixel coordinates
     pixel_coords = np.column_stack((grid_x.ravel(order=&#34;C&#34;), grid_y.ravel(order=&#34;C&#34;)))
     barcode_list = griddata(
-        np.multiply(a_frame.obsm[&#34;spatial&#34;], a_frame.uns[&#34;pixel_map_params&#34;][&#34;scalef&#34;]),
+        np.multiply(
+            a_frame.obsm[&#34;spatial&#34;],
+            a_frame.uns[&#34;pixel_map_params&#34;][&#34;scalef&#34;]
+        ),
         a_frame.obs_names,
         (pixel_coords[:, 0], pixel_coords[:, 1]),
         method=&#34;nearest&#34;,
@@ -527,9 +617,9 @@ Pixel space array of Visium spot barcode IDs</dd>
 <dd>List of features by index to show in plot. If <code>None</code>, use all features.</dd>
 <dt><strong><code>discrete_features</code></strong> :&ensp;<code>dict</code>, optional <code>(default=</code>None<code>)</code></dt>
 <dd>Dictionary of feature indices (keys) containing discrete (categorical) values
-(i.e. MILWRM domain). Values are <code>max_value</code> to pass to
-<code>plot_single_image_discrete</code> for each discrete feature. If <code>None</code>, treat all
-features as continuous.</dd>
+(i.e. MILWRM domain). Values are tuple of <code>max_value</code> to pass to
+<code>plot_single_image_discrete</code> for each discrete feature, and the ordered list
+of categories for legend plotting. If <code>None</code>, treat all features as continuous.</dd>
 <dt><strong><code>RGB</code></strong> :&ensp;<code>bool</code>, optional <code>(default=</code>False<code>)</code></dt>
 <dd>Treat 3-dimensional array as RGB image</dd>
 <dt><strong><code>histo</code></strong> :&ensp;<code>np.array</code> or <code>None</code>, optional <code>(default=</code>None<code>)</code></dt>
@@ -551,7 +641,7 @@ channel in RGB image. Can also pass list of names e.g. ["NeuN","GFAP",
 </dl>
 <h2 id="returns">Returns</h2>
 <dl>
-<dt><code>Matplotlib object (if plotting one feature</code> or <code>RGB)</code> or <code>gridspec object (for</code></dt>
+<dt><code>Matplotlib object (if plotting one feature</code> or <code>RGB)</code> or <code>gridspec object (for </code></dt>
 <dd>&nbsp;</dd>
 </dl>
 <p>multiple features). Saves plot to file if <code>save_to</code> is not <code>None</code>.</p></div>
@@ -582,16 +672,16 @@ channel in RGB image. Can also pass list of names e.g. ["NeuN","GFAP",
     features : list of int, optional (default=`None`)
         List of features by index to show in plot. If `None`, use all features.
     discrete_features : dict, optional (default=`None`)
-        Dictionary of feature indices (keys) containing discrete (categorical) values
-        (i.e. MILWRM domain). Values are `max_value` to pass to
-        `plot_single_image_discrete` for each discrete feature. If `None`, treat all
-        features as continuous.
+        Dictionary of feature indices (keys) containing discrete (categorical) values 
+        (i.e. MILWRM domain). Values are tuple of `max_value` to pass to 
+        `plot_single_image_discrete` for each discrete feature, and the ordered list 
+        of categories for legend plotting. If `None`, treat all features as continuous.
     RGB : bool, optional (default=`False`)
         Treat 3-dimensional array as RGB image
     histo : np.array or `None`, optional (default=`None`)
         Histology image to show along with pita in gridspec. If `None`, ignore.
     label : str, optional (default=&#34;feature&#34;)
-        What to title each panel of the gridspec (i.e. &#34;PC&#34; or &#34;usage&#34;) or each
+        What to title each panel of the gridspec (i.e. &#34;PC&#34; or &#34;usage&#34;) or each 
         channel in RGB image. Can also pass list of names e.g. [&#34;NeuN&#34;,&#34;GFAP&#34;,
         &#34;DAPI&#34;] corresponding to channels.
     ncols : int, optional (default=4)
@@ -607,7 +697,7 @@ channel in RGB image. Can also pass list of names e.g. ["NeuN","GFAP",
 
     Returns
     -------
-    Matplotlib object (if plotting one feature or RGB) or gridspec object (for
+    Matplotlib object (if plotting one feature or RGB) or gridspec object (for 
     multiple features). Saves plot to file if `save_to` is not `None`.
     &#34;&#34;&#34;
     assert pita.ndim &gt; 1, &#34;Pita does not have enough dimensions: {} given&#34;.format(
@@ -622,7 +712,8 @@ channel in RGB image. Can also pass list of names e.g. ["NeuN","GFAP",
                 image=pita,
                 ax=ax,
                 # use first value in dict as max
-                max_val=list(discrete_features.values())[0],
+                max_val=list(discrete_features.values())[0][0],
+                ticklabels=list(discrete_features.values())[0][1],
                 label=label[0] if isinstance(label, list) else label,
                 cmap=cmap,
                 **kwargs,
@@ -659,7 +750,8 @@ channel in RGB image. Can also pass list of names e.g. ["NeuN","GFAP",
                 image=pita,
                 ax=ax,
                 # use first value in dict as max
-                max_val=list(discrete_features.values())[0],
+                max_val=list(discrete_features.values())[0][0],
+                ticklabels=list(discrete_features.values())[0][1],
                 label=label[0] if isinstance(label, list) else label,
                 cmap=cmap,
                 **kwargs,
@@ -799,7 +891,8 @@ channel in RGB image. Can also pass list of names e.g. ["NeuN","GFAP",
                     image=pita[:, :, feature],
                     ax=ax,
                     # use corresponding value in dict as max
-                    max_val=discrete_features[feature],
+                    max_val=discrete_features[feature][0],
+                    ticklabels=discrete_features[feature][1],
                     label=labels[i],
                     cmap=cmap,
                     **kwargs,
@@ -873,10 +966,10 @@ if <code>distance_trim==False</code>.</dd>
     distance_trim : bool
         Manually trim pixels by distance to nearest Visium spot center
     threshold : int or None
-        Number of pixels from nearest Visium spot center to call barcode ID. Ignored
+        Number of pixels from nearest Visium spot center to call barcode ID. Ignored 
         if `distance_trim==False`.
     channels : list of str or None
-        Names of image channels in axis order. If None, channels are named &#34;ch_0&#34;,
+        Names of image channels in axis order. If None, channels are named &#34;ch_0&#34;, 
         &#34;ch_1&#34;, etc.
     plot_out : bool
         Plot final trimmed image
@@ -1106,15 +1199,12 @@ if <code>distance_trim==False</code>.</dd>
 
     def __repr__(self) -&gt; str:
         &#34;&#34;&#34;Representation of contents of img object&#34;&#34;&#34;
-        descr = (
-            &#34;img object with {} of {} and shape {}px x {}px\n&#34;.format(
-                type(self.img),
-                self.img.dtype,
-                self.img.shape[0],
-                self.img.shape[1],
-            )
-            + &#34;{} image channels:\n\t{}&#34;.format(self.n_ch, self.ch)
-        )
+        descr = &#34;img object with {} of {} and shape {}px x {}px\n&#34;.format(
+            type(self.img),
+            self.img.dtype,
+            self.img.shape[0],
+            self.img.shape[1],
+        ) + &#34;{} image channels:\n\t{}&#34;.format(self.n_ch, self.ch)
         if self.mask is not None:
             descr += &#34;\n\ntissue mask {} of {} and shape {}px x {}px&#34;.format(
                 type(self.mask),
@@ -1313,7 +1403,48 @@ if <code>distance_trim==False</code>.</dd>
         &#34;&#34;&#34;
         self.img = CLAHE(self.img, **kwargs)
 
-    def log_normalize(self, fract, features, pseudoval=1, mean=None, mask=True):
+    def blurring(self, filter_name=&#34;gaussian&#34;, sigma=2, **kwargs):
+        &#34;&#34;&#34;
+        Aplying a filter on the images
+
+        Parameters
+        ----------
+        filter : str
+            str to define which type of filter to apply
+
+        sigma : int
+            parameter controlling extent of smoothening
+        &#34;&#34;&#34;
+        if filter_name == &#34;gaussian&#34;:
+            print(&#34;Applying gaussian filter&#34;)
+            self.img = filters.gaussian(
+                self.img,
+                sigma=sigma,
+                channel_axis=2,
+                **kwargs,
+            )
+        elif filter_name == &#34;median&#34;:
+            print(&#34;Applying median filter&#34;)
+            if isinstance(sigma, float):
+                sigma = int(sigma)
+            for i in range(self.img.shape[2]):
+                image_array = self.img[:, :, i]
+                image_array_blurred = filters.median(
+                    image_array,
+                    np.ones(sigma, sigma),
+                )
+                self.img[:, :, i] = image_array_blurred
+        elif filter_name == &#34;bilateral&#34;:
+            print(&#34;Applying biltaral filter&#34;)
+            self.img = denoise_bilateral(
+                self.img, sigma_spatial=sigma, channel_axis=2, **kwargs
+            )
+        else:
+            raise Exception(
+                &#34;filter name should be either gaussian, median or bilateral&#34;
+            )
+
+    def log_normalize(self, pseudoval=1, mean=None, mask=True):
         &#34;&#34;&#34;
         Log-normalizes values for each marker with `log10(arr/arr.mean() + pseudoval)`
 
@@ -1330,21 +1461,12 @@ if <code>distance_trim==False</code>.</dd>
         -------
         Log-normalizes values in each channel of `self.img`
         &#34;&#34;&#34;
-        if isinstance(features, int):  # force features into list if single integer
-            features = [features]
-        if isinstance(features, str):  # force features into int if single string
-            features = [self.ch.index(features)]
-        if checktype(features):  # force features into list of int if list of strings
-            features = [self.ch.index(x) for x in features]
-        if features is None:  # if no features are given, use all of them
-            features = [x for x in range(self.n_ch)]
-        if mean.all():
+        if mean is not None:
             if mask:
                 assert self.mask is not None, &#34;No tissue mask available&#34;
                 for i in range(self.img.shape[2]):
                     fact = mean[i]
                     self.img[:, :, i] = np.log10(self.img[:, :, i] / fact + pseudoval)
-
             else:
                 print(&#34;WARNING: Performing normalization without a tissue mask.&#34;)
                 for i in range(self.img.shape[2]):
@@ -1357,13 +1479,39 @@ if <code>distance_trim==False</code>.</dd>
                 for i in range(self.img.shape[2]):
                     fact = self.img[:, :, i].mean()
                     self.img[:, :, i] = np.log10(self.img[:, :, i] / fact + pseudoval)
-
             else:
                 print(&#34;WARNING: Performing normalization without a tissue mask.&#34;)
                 for i in range(self.img.shape[2]):
                     fact = self.img[:, :, i].mean()
                     self.img[:, :, i] = np.log10(self.img[:, :, i] / fact + pseudoval)
-        # get cluster data for image_i
+
+    def subsample_pixels(self, features, fract=0.2):
+        &#34;&#34;&#34;
+        Sub-samples fraction of pixels from the image randomly for each channel
+
+        Parameters
+        ----------
+        features : list of int or str
+            Indices or names of MxIF channels to use for tissue labeling
+        fract : float, optional (default=0.2)
+            Fraction of cluster data from each image to randomly select
+            for model building
+
+        Returns
+        -------
+        tmp : np.array
+            Clustering data from `image`
+
+        &#34;&#34;&#34;
+        if isinstance(features, int):  # force features into list if single integer
+            features = [features]
+        if isinstance(features, str):  # force features into int if single string
+            features = [self.ch.index(features)]
+        if checktype(features):  # force features into list of int if list of strings
+            features = [self.ch.index(x) for x in features]
+        if features is None:  # if no features are given, use all of them
+            features = [x for x in range(self.n_ch)]
+        # subsample data for given image
         tmp = []
         for i in range(self.img.shape[2]):
             tmp.append(self.img[:, :, i][self.mask != 0])
@@ -1393,10 +1541,82 @@ if <code>distance_trim==False</code>.</dd>
         # downsample mask if mask available
         if self.mask is not None:
             self.mask = block_reduce(
-                self.mask, block_size=(fact, fact), func=np.max, cval=0
+                self.mask, block_size=(fact, fact), func=func, cval=0
             )
         # downsample image
         self.img = block_reduce(self.img, block_size=(fact, fact, 1), func=func, cval=0)
+
+    def calculate_non_zero_mean(self):
+        &#34;&#34;&#34;
+        Calculate mean estimator for the given image array avoiding mask pixels or 
+        pixels with value 0
+
+        Parameters
+        ----------
+
+        Returns
+        -------
+        mean_estimator : list of float
+            List of mean estimator (mean*pixel) values for each channel
+        pixels : int
+            pixel count for the image excluding masked pixels
+        &#34;&#34;&#34;
+        image = self.img
+        pixels = np.count_nonzero(image != 0)
+        mean_estimator = []
+        for i in range(image.shape[2]):
+            ar = image[:, :, i]
+            mean = ar[ar != 0].mean()
+            mean_estimator.append(mean * pixels)
+        return mean_estimator, pixels
+
+    def create_tissue_mask(self, features=None, fract=0.2):
+        &#34;&#34;&#34;
+        Create tissue mask
+
+        Parameters
+        ----------
+        features : list of int or str
+            Indices or names of MxIF channels to use for tissue labeling
+        fract : float, optional (default=0.2)
+            Fraction of cluster data from each image to randomly select
+            for model building
+
+        Returns
+        -------
+        a numpy array as tissue mask set to self.mask
+        &#34;&#34;&#34;
+        # create a copy of the image
+        image_cp = self.copy()
+        # create a temporary tissue mask that covers no region
+        w, h, d = image_cp.img.shape
+        image_cp.mask = np.ones((w, h))
+        # log normalization on image
+        image_cp.log_normalize()
+        # apply gaussian filter
+        image_cp.img = filters.gaussian(image_cp.img, sigma=2, channel_axis=2)
+        # subsample data to build kmeans model
+        subsampled_data = image_cp.subsample_pixels(features, fract=fract)
+        cluster_data = np.row_stack(subsampled_data)
+        # reshape image for prediction
+        image_ar_reshape = image_cp.img.reshape((w * h, d))
+        # build kmeans model with 2 clusters
+        kmeans = KMeans(n_clusters=2, random_state=18).fit(cluster_data)
+        labels = kmeans.predict(image_ar_reshape).astype(float)
+        tID = labels.reshape((w, h))
+        # check if the background is labelled as 0 or 1
+        scores = kmeans.cluster_centers_
+        mean = scores.mean()
+        std = scores.std()
+        z_scores = (scores - mean) / std
+        if z_scores[0].mean() &gt; 0:
+            where_0 = np.where(tID == 0.0)
+            tID[where_0] = 0.5
+            where_1 = np.where(tID == 1.0)
+            tID[where_1] = 0.0
+            where_05 = np.where(tID == 0.5)
+            tID[where_05] = 1.0
+        self.mask = tID
 
     def show(
         self,
@@ -1417,10 +1637,10 @@ if <code>distance_trim==False</code>.</dd>
         channels : tuple of int or None, optional (default=`None`)
             List of channels by index or name to show
         RGB : bool
-            Treat 3- or 4-dimensional array as RGB image. If `False`, plot channels
+            Treat 3- or 4-dimensional array as RGB image. If `False`, plot channels 
             individually.
         cbar : bool
-            Show colorbar for scale of image intensities if plotting individual
+            Show colorbar for scale of image intensities if plotting individual 
             channels.
         mask_out : bool, optional (default=`True`)
             Mask out non-tissue pixels prior to showing
@@ -1435,7 +1655,7 @@ if <code>distance_trim==False</code>.</dd>
 
         Returns
         -------
-        Matplotlib object (if plotting one feature or RGB) or gridspec object (for
+        Matplotlib object (if plotting one feature or RGB) or gridspec object (for 
         multiple features). Saves plot to file if `save_to` is not `None`.
         &#34;&#34;&#34;
         # if only one feature (2D), plot it quickly
@@ -1733,6 +1953,107 @@ def from_tiffs(cls, tiffdir, channels, common_strings=None, mask=None):
 </dl>
 <h3>Methods</h3>
 <dl>
+<dt id="MILWRM.img.blurring"><code class="name flex">
+<span>def <span class="ident">blurring</span></span>(<span>self, filter_name='gaussian', sigma=2, **kwargs)</span>
+</code></dt>
+<dd>
+<div class="desc"><p>Aplying a filter on the images</p>
+<h2 id="parameters">Parameters</h2>
+<dl>
+<dt><strong><code>filter</code></strong> :&ensp;<code>str</code></dt>
+<dd>str to define which type of filter to apply</dd>
+<dt><strong><code>sigma</code></strong> :&ensp;<code>int</code></dt>
+<dd>parameter controlling extent of smoothening</dd>
+</dl></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def blurring(self, filter_name=&#34;gaussian&#34;, sigma=2, **kwargs):
+    &#34;&#34;&#34;
+    Aplying a filter on the images
+
+    Parameters
+    ----------
+    filter : str
+        str to define which type of filter to apply
+
+    sigma : int
+        parameter controlling extent of smoothening
+    &#34;&#34;&#34;
+    if filter_name == &#34;gaussian&#34;:
+        print(&#34;Applying gaussian filter&#34;)
+        self.img = filters.gaussian(
+            self.img,
+            sigma=sigma,
+            channel_axis=2,
+            **kwargs,
+        )
+    elif filter_name == &#34;median&#34;:
+        print(&#34;Applying median filter&#34;)
+        if isinstance(sigma, float):
+            sigma = int(sigma)
+        for i in range(self.img.shape[2]):
+            image_array = self.img[:, :, i]
+            image_array_blurred = filters.median(
+                image_array,
+                np.ones(sigma, sigma),
+            )
+            self.img[:, :, i] = image_array_blurred
+    elif filter_name == &#34;bilateral&#34;:
+        print(&#34;Applying biltaral filter&#34;)
+        self.img = denoise_bilateral(
+            self.img, sigma_spatial=sigma, channel_axis=2, **kwargs
+        )
+    else:
+        raise Exception(
+            &#34;filter name should be either gaussian, median or bilateral&#34;
+        )</code></pre>
+</details>
+</dd>
+<dt id="MILWRM.img.calculate_non_zero_mean"><code class="name flex">
+<span>def <span class="ident">calculate_non_zero_mean</span></span>(<span>self)</span>
+</code></dt>
+<dd>
+<div class="desc"><p>Calculate mean estimator for the given image array avoiding mask pixels or
+pixels with value 0</p>
+<h2 id="parameters">Parameters</h2>
+<h2 id="returns">Returns</h2>
+<dl>
+<dt><strong><code>mean_estimator</code></strong> :&ensp;<code>list</code> of <code>float</code></dt>
+<dd>List of mean estimator (mean*pixel) values for each channel</dd>
+<dt><strong><code>pixels</code></strong> :&ensp;<code>int</code></dt>
+<dd>pixel count for the image excluding masked pixels</dd>
+</dl></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def calculate_non_zero_mean(self):
+    &#34;&#34;&#34;
+    Calculate mean estimator for the given image array avoiding mask pixels or 
+    pixels with value 0
+
+    Parameters
+    ----------
+
+    Returns
+    -------
+    mean_estimator : list of float
+        List of mean estimator (mean*pixel) values for each channel
+    pixels : int
+        pixel count for the image excluding masked pixels
+    &#34;&#34;&#34;
+    image = self.img
+    pixels = np.count_nonzero(image != 0)
+    mean_estimator = []
+    for i in range(image.shape[2]):
+        ar = image[:, :, i]
+        mean = ar[ar != 0].mean()
+        mean_estimator.append(mean * pixels)
+    return mean_estimator, pixels</code></pre>
+</details>
+</dd>
 <dt id="MILWRM.img.clip"><code class="name flex">
 <span>def <span class="ident">clip</span></span>(<span>self, **kwargs)</span>
 </code></dt>
@@ -1786,6 +2107,77 @@ def from_tiffs(cls, tiffdir, channels, common_strings=None, mask=None):
     return img(img_arr=new[&#34;img&#34;], channels=new[&#34;ch&#34;], mask=new[&#34;mask&#34;])</code></pre>
 </details>
 </dd>
+<dt id="MILWRM.img.create_tissue_mask"><code class="name flex">
+<span>def <span class="ident">create_tissue_mask</span></span>(<span>self, features=None, fract=0.2)</span>
+</code></dt>
+<dd>
+<div class="desc"><p>Create tissue mask</p>
+<h2 id="parameters">Parameters</h2>
+<dl>
+<dt><strong><code>features</code></strong> :&ensp;<code>list</code> of <code>int</code> or <code>str</code></dt>
+<dd>Indices or names of MxIF channels to use for tissue labeling</dd>
+<dt><strong><code>fract</code></strong> :&ensp;<code>float</code>, optional <code>(default=0.2)</code></dt>
+<dd>Fraction of cluster data from each image to randomly select
+for model building</dd>
+</dl>
+<h2 id="returns">Returns</h2>
+<dl>
+<dt><code>a numpy array as tissue mask set to self.mask</code></dt>
+<dd>&nbsp;</dd>
+</dl></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def create_tissue_mask(self, features=None, fract=0.2):
+    &#34;&#34;&#34;
+    Create tissue mask
+
+    Parameters
+    ----------
+    features : list of int or str
+        Indices or names of MxIF channels to use for tissue labeling
+    fract : float, optional (default=0.2)
+        Fraction of cluster data from each image to randomly select
+        for model building
+
+    Returns
+    -------
+    a numpy array as tissue mask set to self.mask
+    &#34;&#34;&#34;
+    # create a copy of the image
+    image_cp = self.copy()
+    # create a temporary tissue mask that covers no region
+    w, h, d = image_cp.img.shape
+    image_cp.mask = np.ones((w, h))
+    # log normalization on image
+    image_cp.log_normalize()
+    # apply gaussian filter
+    image_cp.img = filters.gaussian(image_cp.img, sigma=2, channel_axis=2)
+    # subsample data to build kmeans model
+    subsampled_data = image_cp.subsample_pixels(features, fract=fract)
+    cluster_data = np.row_stack(subsampled_data)
+    # reshape image for prediction
+    image_ar_reshape = image_cp.img.reshape((w * h, d))
+    # build kmeans model with 2 clusters
+    kmeans = KMeans(n_clusters=2, random_state=18).fit(cluster_data)
+    labels = kmeans.predict(image_ar_reshape).astype(float)
+    tID = labels.reshape((w, h))
+    # check if the background is labelled as 0 or 1
+    scores = kmeans.cluster_centers_
+    mean = scores.mean()
+    std = scores.std()
+    z_scores = (scores - mean) / std
+    if z_scores[0].mean() &gt; 0:
+        where_0 = np.where(tID == 0.0)
+        tID[where_0] = 0.5
+        where_1 = np.where(tID == 1.0)
+        tID[where_1] = 0.0
+        where_05 = np.where(tID == 0.5)
+        tID[where_05] = 1.0
+    self.mask = tID</code></pre>
+</details>
+</dd>
 <dt id="MILWRM.img.downsample"><code class="name flex">
 <span>def <span class="ident">downsample</span></span>(<span>self, fact, func=&lt;function mean&gt;)</span>
 </code></dt>
@@ -1829,7 +2221,7 @@ each pixel</p>
     # downsample mask if mask available
     if self.mask is not None:
         self.mask = block_reduce(
-            self.mask, block_size=(fact, fact), func=np.max, cval=0
+            self.mask, block_size=(fact, fact), func=func, cval=0
         )
     # downsample image
     self.img = block_reduce(self.img, block_size=(fact, fact, 1), func=func, cval=0)</code></pre>
@@ -1868,7 +2260,7 @@ each pixel</p>
 </details>
 </dd>
 <dt id="MILWRM.img.log_normalize"><code class="name flex">
-<span>def <span class="ident">log_normalize</span></span>(<span>self, fract, features, pseudoval=1, mean=None, mask=True)</span>
+<span>def <span class="ident">log_normalize</span></span>(<span>self, pseudoval=1, mean=None, mask=True)</span>
 </code></dt>
 <dd>
 <div class="desc"><p>Log-normalizes values for each marker with <code>log10(arr/arr.mean() + pseudoval)</code></p>
@@ -1887,7 +2279,7 @@ with zeros</dd>
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">def log_normalize(self, fract, features, pseudoval=1, mean=None, mask=True):
+<pre><code class="python">def log_normalize(self, pseudoval=1, mean=None, mask=True):
     &#34;&#34;&#34;
     Log-normalizes values for each marker with `log10(arr/arr.mean() + pseudoval)`
 
@@ -1904,21 +2296,12 @@ with zeros</dd>
     -------
     Log-normalizes values in each channel of `self.img`
     &#34;&#34;&#34;
-    if isinstance(features, int):  # force features into list if single integer
-        features = [features]
-    if isinstance(features, str):  # force features into int if single string
-        features = [self.ch.index(features)]
-    if checktype(features):  # force features into list of int if list of strings
-        features = [self.ch.index(x) for x in features]
-    if features is None:  # if no features are given, use all of them
-        features = [x for x in range(self.n_ch)]
-    if mean.all():
+    if mean is not None:
         if mask:
             assert self.mask is not None, &#34;No tissue mask available&#34;
             for i in range(self.img.shape[2]):
                 fact = mean[i]
                 self.img[:, :, i] = np.log10(self.img[:, :, i] / fact + pseudoval)
-
         else:
             print(&#34;WARNING: Performing normalization without a tissue mask.&#34;)
             for i in range(self.img.shape[2]):
@@ -1931,21 +2314,11 @@ with zeros</dd>
             for i in range(self.img.shape[2]):
                 fact = self.img[:, :, i].mean()
                 self.img[:, :, i] = np.log10(self.img[:, :, i] / fact + pseudoval)
-
         else:
             print(&#34;WARNING: Performing normalization without a tissue mask.&#34;)
             for i in range(self.img.shape[2]):
                 fact = self.img[:, :, i].mean()
-                self.img[:, :, i] = np.log10(self.img[:, :, i] / fact + pseudoval)
-    # get cluster data for image_i
-    tmp = []
-    for i in range(self.img.shape[2]):
-        tmp.append(self.img[:, :, i][self.mask != 0])
-    tmp = np.column_stack(tmp)
-    # select cluster data
-    i = np.random.choice(tmp.shape[0], int(tmp.shape[0] * fract))
-    tmp = tmp[np.ix_(i, features)]
-    return tmp</code></pre>
+                self.img[:, :, i] = np.log10(self.img[:, :, i] / fact + pseudoval)</code></pre>
 </details>
 </dd>
 <dt id="MILWRM.img.plot_image_histogram"><code class="name flex">
@@ -2075,7 +2448,7 @@ channels.</dd>
 </dl>
 <h2 id="returns">Returns</h2>
 <dl>
-<dt><code>Matplotlib object (if plotting one feature</code> or <code>RGB)</code> or <code>gridspec object (for</code></dt>
+<dt><code>Matplotlib object (if plotting one feature</code> or <code>RGB)</code> or <code>gridspec object (for </code></dt>
 <dd>&nbsp;</dd>
 </dl>
 <p>multiple features). Saves plot to file if <code>save_to</code> is not <code>None</code>.</p></div>
@@ -2102,10 +2475,10 @@ channels.</dd>
     channels : tuple of int or None, optional (default=`None`)
         List of channels by index or name to show
     RGB : bool
-        Treat 3- or 4-dimensional array as RGB image. If `False`, plot channels
+        Treat 3- or 4-dimensional array as RGB image. If `False`, plot channels 
         individually.
     cbar : bool
-        Show colorbar for scale of image intensities if plotting individual
+        Show colorbar for scale of image intensities if plotting individual 
         channels.
     mask_out : bool, optional (default=`True`)
         Mask out non-tissue pixels prior to showing
@@ -2120,7 +2493,7 @@ channels.</dd>
 
     Returns
     -------
-    Matplotlib object (if plotting one feature or RGB) or gridspec object (for
+    Matplotlib object (if plotting one feature or RGB) or gridspec object (for 
     multiple features). Saves plot to file if `save_to` is not `None`.
     &#34;&#34;&#34;
     # if only one feature (2D), plot it quickly
@@ -2226,6 +2599,65 @@ channels.</dd>
     return fig</code></pre>
 </details>
 </dd>
+<dt id="MILWRM.img.subsample_pixels"><code class="name flex">
+<span>def <span class="ident">subsample_pixels</span></span>(<span>self, features, fract=0.2)</span>
+</code></dt>
+<dd>
+<div class="desc"><p>Sub-samples fraction of pixels from the image randomly for each channel</p>
+<h2 id="parameters">Parameters</h2>
+<dl>
+<dt><strong><code>features</code></strong> :&ensp;<code>list</code> of <code>int</code> or <code>str</code></dt>
+<dd>Indices or names of MxIF channels to use for tissue labeling</dd>
+<dt><strong><code>fract</code></strong> :&ensp;<code>float</code>, optional <code>(default=0.2)</code></dt>
+<dd>Fraction of cluster data from each image to randomly select
+for model building</dd>
+</dl>
+<h2 id="returns">Returns</h2>
+<dl>
+<dt><strong><code>tmp</code></strong> :&ensp;<code>np.array</code></dt>
+<dd>Clustering data from <code>image</code></dd>
+</dl></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def subsample_pixels(self, features, fract=0.2):
+    &#34;&#34;&#34;
+    Sub-samples fraction of pixels from the image randomly for each channel
+
+    Parameters
+    ----------
+    features : list of int or str
+        Indices or names of MxIF channels to use for tissue labeling
+    fract : float, optional (default=0.2)
+        Fraction of cluster data from each image to randomly select
+        for model building
+
+    Returns
+    -------
+    tmp : np.array
+        Clustering data from `image`
+
+    &#34;&#34;&#34;
+    if isinstance(features, int):  # force features into list if single integer
+        features = [features]
+    if isinstance(features, str):  # force features into int if single string
+        features = [self.ch.index(features)]
+    if checktype(features):  # force features into list of int if list of strings
+        features = [self.ch.index(x) for x in features]
+    if features is None:  # if no features are given, use all of them
+        features = [x for x in range(self.n_ch)]
+    # subsample data for given image
+    tmp = []
+    for i in range(self.img.shape[2]):
+        tmp.append(self.img[:, :, i][self.mask != 0])
+    tmp = np.column_stack(tmp)
+    # select cluster data
+    i = np.random.choice(tmp.shape[0], int(tmp.shape[0] * fract))
+    tmp = tmp[np.ix_(i, features)]
+    return tmp</code></pre>
+</details>
+</dd>
 <dt id="MILWRM.img.to_npz"><code class="name flex">
 <span>def <span class="ident">to_npz</span></span>(<span>self, file)</span>
 </code></dt>
@@ -2266,16 +2698,17 @@ channels.</dd>
 </dd>
 <dt id="MILWRM.mxif_labeler"><code class="flex name class">
 <span>class <span class="ident">mxif_labeler</span></span>
-<span>(</span><span>images, mode='batch')</span>
+<span>(</span><span>image_df)</span>
 </code></dt>
 <dd>
 <div class="desc"><p>Tissue domain labeling class for multiplex immunofluorescence (MxIF) data</p>
 <p>Initialize MxIF tissue labeler class</p>
 <h2 id="parameters">Parameters</h2>
 <dl>
-<dt><strong><code>images</code></strong> :&ensp;<code>list</code> of <code><a title="MILWRM.MxIF.img" href="MxIF.html#MILWRM.MxIF.img">img</a></code></dt>
-<dd>Single MILWRM.MxIF.img object or list of objects to label consensus
-tissue domains</dd>
+<dt><strong><code>image_df</code></strong> :&ensp;<code>pd.DataFrame object</code></dt>
+<dd>Containing MILWRM.MxIF.img objects or str path to compressed npz files,
+batch names, mean estimator and pixel count for each image in the
+following column order ['Img', 'batch_names', 'mean estimators', 'pixels']</dd>
 </dl>
 <h2 id="returns">Returns</h2>
 <p>Does not return anything. <code>self.images</code> attribute is updated,
@@ -2289,164 +2722,117 @@ tissue domains</dd>
     Tissue domain labeling class for multiplex immunofluorescence (MxIF) data
     &#34;&#34;&#34;
 
-    def __init__(self, images, mode=&#34;batch&#34;):
+    def __init__(self, image_df):
         &#34;&#34;&#34;
         Initialize MxIF tissue labeler class
 
         Parameters
         ----------
-        images : list of MILWRM.MxIF.img
-            Single MILWRM.MxIF.img object or list of objects to label consensus
-            tissue domains
+        image_df : pd.DataFrame object
+            Containing MILWRM.MxIF.img objects or str path to compressed npz files, 
+            batch names, mean estimator and pixel count for each image in the 
+            following column order [&#39;Img&#39;, &#39;batch_names&#39;, &#39;mean estimators&#39;, &#39;pixels&#39;]
 
         Returns
         -------
-
         Does not return anything. `self.images` attribute is updated,
         `self.cluster_data` attribute is initiated as `None`.
         &#34;&#34;&#34;
         tissue_labeler.__init__(self)  # initialize parent class
-        if isinstance(images, dict):  # validate the user defined dictionary
-            if all(isinstance(n, str) for n in images.keys()) and all(
-                isinstance(v, list) for v in images.values()
-            ):
-                self.images = images
-                self.batches = images.keys()
-                print(
-                    &#34;Initiating MxIF labeler with a user-defined dictionary containing {} images and {} batches&#34;.format(
-                        sum(list(map(len, self.images.values()))), len(self.batches)
-                    )
-                )
-            else:
-                raise Exception(
-                    &#34;Image dictionary keys have to be string type and image dictionary values have to be in a list&#34;
-                )
-        elif isinstance(images, list):  # if images are in a list check mode
-            if mode == &#34;batch&#34;:  # if mode is batch each image is a separate batch
-                image_dict = {}
-                for i, image in enumerate(images):
-                    image_dict[str(i)] = [image]
-                self.images = image_dict
-                self.batches = image_dict.keys()
-                print(
-                    &#34;Initiating MxIF labeler with {} images treating each image as a separate batch object&#34;.format(
-                        len(self.images)
-                    )
-                )
-            elif (
-                mode == &#34;standard&#34;
-            ):  # if mode is standard all images are from one batch
-                image_dict = {}
-                image_dict[&#34;0&#34;] = images
-                self.images = image_dict
-                self.batches = image_dict.keys()
-                print(
-                    &#34;Initiating MxIF labeler with {} images assuming all images are from the same batch&#34;.format(
-                        len(self.images)
-                    )
-                )
-            else:  # if mode is given as something else raise exception
-                raise Exception(&#34;Mode can only be either batch or standard&#34;)
+        # validate the format of the image_df dataframe
+        if np.all(
+            image_df.columns == [&#34;Img&#34;, &#34;batch_names&#34;, &#34;mean estimators&#34;, &#34;pixels&#34;]
+        ):
+            self.image_df = image_df
         else:
             raise Exception(
-                &#34;Input images need to be in a list or a dictionary with batches&#34;
+                &#34;Image_df must be given with these columns in this format [&#39;Img&#39;, &#39;batch_names&#39;, &#39;mean estimators&#39;, &#39;pixels&#39;]&#34;
+            )
+        if self.image_df[&#34;Img&#34;].apply(isinstance, args=[img]).all():
+            self.use_paths = False
+        elif self.image_df[&#34;Img&#34;].apply(isinstance, args=[str]).all():
+            self.use_paths = True
+        else:
+            raise Exception(
+                &#34;Img column in the dataframe should be either str for paths to the files or mxif.img object&#34;
             )
 
-    def __getitem__(self, image_index):
-        &#34;&#34;&#34;select for images based upon the index for the images&#34;&#34;&#34;
-        images = [v for v in itertools.chain.from_iterable(self.images.values())]
-        return images[image_index]
-
     def prep_cluster_data(
-        self, features, downsample_factor=8, sigma=2, fract=0.2, n_jobs=-1
+        self, features, filter_name=&#34;gaussian&#34;, sigma=2, fract=0.2, path_save=None
     ):
         &#34;&#34;&#34;
-        Prepare master dataframe for tissue-level clustering
+        Prepare master array for tissue level clustering
 
         Parameters
         ----------
         features : list of int or str
             Indices or names of MxIF channels to use for tissue labeling
-        downsample_factor : int
-            Factor by which to downsample images from their original resolution
+        filter_name : str
+            Name of the filter to use - gaussian, median or bilateral
         sigma : float, optional (default=2)
             Standard deviation of Gaussian kernel for blurring
         fract : float, optional (default=0.2)
             Fraction of cluster data from each image to randomly select for model
             building
-        n_jobs : int, optional (default=-1)
-            Number of cores to parallelize over. Default all available cores.
+        path_save : str (default = None)
+            Path to save final preprocessed files, if self.use_path is True
+            default path_save will raise Exception
 
         Returns
         -------
-        Does not return anything. `self.images` are downsampled and blurred according
-        to user parameters. `self.cluster_data` becomes master `np.array` for cluster
-        training. Parameters are also captured as attributes for posterity.
+        Does not return anything. `self.images` are normalized, blurred and scaled 
+        according to user parameters. `self.cluster_data` becomes master `np.array` 
+        for cluster training. Parameters are also captured as attributes for posterity.
+
         &#34;&#34;&#34;
         if self.cluster_data is not None:
             print(&#34;WARNING: overwriting existing cluster data&#34;)
             self.cluster_data = None
         # save the hyperparams as object attributes
         self.model_features = features
-        self.downsample_factor = downsample_factor
-        self.sigma = sigma
-        # extracting batch names in a list
-        batch_names = list(
-            itertools.chain.from_iterable(
-                [[k] * len(v) for k, v in self.images.items()]
+        use_path = self.use_paths
+        # calculate the batch wise means
+        mean_for_each_batch = {}
+        for batch in self.image_df[&#34;batch_names&#34;].unique():
+            list_mean_estimators = list(
+                self.image_df[self.image_df[&#34;batch_names&#34;] == batch][&#34;mean estimators&#34;]
             )
-        )
-        # downsampling, scaling and smoothening the images in parallel
-        print(
-            &#34;Downsampling, and blurring {} features from {} images...&#34;.format(
-                len(features),
-                len(batch_names),
+            mean_estimator_batch = sum(map(np.array, list_mean_estimators))
+            pixels = sum(
+                self.image_df[self.image_df[&#34;batch_names&#34;] == batch][&#34;pixels&#34;]
             )
-        )
-        out = Parallel(n_jobs=n_jobs, verbose=10, prefer=&#34;threads&#34;)(
-            delayed(prep_data_single_sample_mxif)(
-                image, features, downsample_factor, sigma, batch
+            mean_for_each_batch[batch] = mean_estimator_batch / pixels
+        # log_normalize, apply blurring filter, minmax scale each channel and subsample
+        subsampled_data = []
+        path_to_blurred_npz = []
+        for image, batch in zip(self.image_df[&#34;Img&#34;], self.image_df[&#34;batch_names&#34;]):
+            tmp = prep_data_single_sample_mxif(
+                image,
+                use_path=use_path,
+                mean=mean_for_each_batch[batch],
+                filter_name=filter_name,
+                sigma=sigma,
+                features=self.model_features,
+                fract=fract,
+                path_save=path_save,
             )
-            for image, batch in zip(
-                itertools.chain.from_iterable(self.images.values()), batch_names
-            )
-        )
-        # unpack results from parallel process
-        df = pd.DataFrame(out, columns=[&#34;Batch&#34;, &#34;Image mean&#34;, &#34;pixel counts&#34;])
-        # calculate mean for each batch of images
-        df[&#34;mean estimator&#34;] = df[&#34;Image mean&#34;] * df[&#34;pixel counts&#34;]
-        mean_batches = {}
-        for key in self.images.keys():
-            means = df[df[&#34;Batch&#34;] == key][&#34;mean estimator&#34;].sum()
-            pixels = df[df[&#34;Batch&#34;] == key][&#34;pixel counts&#34;].sum()
-            mean_batches[key] = means / pixels
-        # creating a list of the mean for each batch
-        tmp_means = [
-            [x] * len(v) for x, v in zip(mean_batches.values(), self.images.values())
-        ]
-        means = list(itertools.chain(*tmp_means))
-        # performing log normalization on images in parallel
-        subsample_data = []
-        subsample_data.append(
-            Parallel(n_jobs=n_jobs, verbose=10, prefer=&#34;threads&#34;)(
-                delayed(image.log_normalize)(
-                    fract, features, pseudoval=1, mean=mean, mask=True
-                )
-                for image, mean in zip(
-                    itertools.chain.from_iterable(self.images.values()), means
-                )
-            )
-        )
-        tmp_subsample_data = list(itertools.chain(*subsample_data))
-        # concatenate blurred features into cluster_data df for cluster training
-        cluster_data = np.row_stack(tmp_subsample_data)
-        self.cluster_data = cluster_data
-        unscaled_data = cluster_data
-        # perform z-normalization on cluster data
-        self.mean_z_norm = unscaled_data.mean(axis=0)
-        self.std_z_norm = unscaled_data.std(axis=0)
-        self.cluster_data = (unscaled_data - self.mean_z_norm) / self.std_z_norm
-        print(&#34;Collected clustering data of shape: {}&#34;.format(self.cluster_data.shape))
+            if self.use_paths == True:
+                subsampled_data.append(tmp[0])
+                path_to_blurred_npz.append(tmp[1])
+            else:
+                subsampled_data.append(tmp)
+        batch_labels = [
+            [x] * len(subsampled_data[x]) for x in range(len(subsampled_data))
+        ]  # batch labels for umap
+        self.merged_batch_labels = list(itertools.chain(*batch_labels))
+        if self.use_paths == True:
+            self.image_df[&#34;Img&#34;] = path_to_blurred_npz
+        cluster_data = np.row_stack(subsampled_data)
+        # perform z-score normalization on cluster_Data
+        scaler = StandardScaler()
+        self.scaler = scaler.fit(cluster_data)
+        scaled_data = scaler.transform(cluster_data)
+        self.cluster_data = scaled_data
 
     def label_tissue_regions(
         self, k=None, alpha=0.05, plot_out=True, random_state=18, n_jobs=-1
@@ -2475,11 +2861,16 @@ tissue domains</dd>
         final tissue region IDs. `self.kmeans` contains trained `sklearn` clustering
         model. Parameters are also captured as attributes for posterity.
         &#34;&#34;&#34;
+        # save the hyperparams as object attributes
+        use_path = self.use_paths
         # find optimal k with parent class
         if k is None:
             print(&#34;Determining optimal cluster number k via scaled inertia&#34;)
             self.find_optimal_k(
-                alpha=alpha, plot_out=plot_out, random_state=random_state, n_jobs=n_jobs
+                alpha=alpha,
+                plot_out=plot_out,
+                random_state=random_state,
+                n_jobs=n_jobs,
             )
         # call k-means model from parent class
         self.find_tissue_regions(k=k, random_state=random_state)
@@ -2487,14 +2878,289 @@ tissue domains</dd>
         print(&#34;Creating tissue_ID images for image objects...&#34;)
         self.tissue_IDs = Parallel(n_jobs=n_jobs, verbose=10)(
             delayed(add_tissue_ID_single_sample_mxif)(
-                image,
-                self.model_features,
-                self.kmeans,
-                self.mean_z_norm,
-                self.std_z_norm,
+                image, use_path, self.model_features, self.kmeans, self.scaler
             )
-            for image in itertools.chain.from_iterable(self.images.values())
+            for image in self.image_df[&#34;Img&#34;]
         )
+
+    def plot_percentage_variance_explained(
+        self, fig_size=(5, 5), R_square=False, save_to=None
+    ):
+        &#34;&#34;&#34;
+        plot percentage variance_explained or not explained by clustering
+
+        Parameters
+        ----------
+        fig_size : Tuple
+            size for the bar plot
+        R_square : Boolean
+            Decides if R_square is plotted or S_square
+        save_to : str or None
+            Path to image file to save results. If `None`, show figure.
+
+        Returns
+        -------
+        Matplotlib object
+        &#34;&#34;&#34;
+        scaler = self.scaler
+        centroids = self.kmeans.cluster_centers_
+        features = self.model_features
+        use_path = self.use_paths
+        S_squre_for_each_image = []
+        R_squre_for_each_image = []
+        for image, tissue_ID in zip(self.image_df[&#34;Img&#34;], self.tissue_IDs):
+            S_square = estimate_percentage_variance_mxif(
+                image, use_path, scaler, centroids, features, tissue_ID
+            )
+            S_squre_for_each_image.append(S_square)
+            R_squre_for_each_image.append(100 - S_square)
+
+        if R_square == True:
+            fig = plt.figure(figsize=fig_size)
+            plt.bar(range(len(R_squre_for_each_image)), R_squre_for_each_image)
+            plt.xlabel(&#34;images&#34;)
+            plt.ylabel(&#34;percentage variance not explained by Kmeans&#34;)
+
+        else:
+            fig = plt.figure(figsize=fig_size)
+            plt.bar(range(len(S_squre_for_each_image)), S_squre_for_each_image)
+            plt.xlabel(&#34;images&#34;)
+            plt.ylabel(&#34;percentage variance explained by Kmeans&#34;)
+
+        if save_to:
+            plt.savefig(fname=save_to, transparent=True, bbox_inches=&#34;tight&#34;, dpi=300)
+        return fig
+
+    def confidence_score_images(self):
+        &#34;&#34;&#34;
+        estimate confidence score for each image
+
+        Parameters
+        ----------
+
+        Returns
+        -------
+        self.confidence_IDs and self.confidence_score_df is added containing 
+        confidence score for each tissue ID assignment and mean confidence score for 
+        each tissue ID within each image
+        &#34;&#34;&#34;
+        scaler = self.scaler
+        centroids = self.kmeans.cluster_centers_
+        features = self.model_features
+        tissue_IDs = self.tissue_IDs
+        use_path = self.use_paths
+        # confidence score estimation for each image
+        confidence_IDs = []
+        confidence_score_df = pd.DataFrame()
+        for i, image in enumerate(self.image_df[&#34;Img&#34;]):
+            cID, scores_dict = estimate_confidence_score_mxif(
+                image, use_path, scaler, centroids, features, tissue_IDs[i]
+            )
+            confidence_IDs.append(cID)
+            df = pd.DataFrame(scores_dict.values(), columns=[i])
+            confidence_score_df = pd.concat(
+                [confidence_score_df, df.T], ignore_index=True
+            )
+        # adding confidence_IDs and confidence_score_df to tissue labeller object
+        self.confidence_IDs = confidence_IDs
+        self.confidence_score_df = confidence_score_df
+
+    def plot_mse_mxif(
+        self,
+        figsize=(5, 5),
+        ncols=None,
+        labels=None,
+        titles=None,
+        loc=&#34;lower right&#34;,
+        bbox_coordinates=(0, 0, 1.5, 1.5),
+        save_to=None,
+    ):
+        &#34;&#34;&#34;
+        estimate mean square error within each tissue ID
+
+        Parameters
+        ----------
+        fig_size : Tuple
+            size for the bar plot
+        ncols : int, optional (default=`None`)
+            Number of columns for gridspec. If `None`, uses number of tissue domains k.
+        labels : list of str, optional (default=`None`)
+            Labels corresponding to each MILWRM training feature. If `None`, features
+        titles : list of str, optional (default=`None`)
+            Titles of plots corresponding to each MILWRM domain. If `None`, titles
+            will be numbers 0 through k.
+        loc : str, optional (default = &#39;lower right&#39;)
+            str for legend position
+        bbox_coordinates : Tuple, optional (default = (0,0,1.5,1.5))
+            coordinates for the legend box
+        save_to : str, optional (default=`None`)
+            Path to image file to save plot
+
+        Returns
+        -------
+        Matplotlib object
+        &#34;&#34;&#34;
+        assert (
+            self.kmeans is not None
+        ), &#34;No cluster results found. Run \
+        label_tissue_regions() first.&#34;
+        images = self.image_df[&#34;Img&#34;]
+        use_path = self.use_paths
+        scaler = self.scaler
+        centroids = self.kmeans.cluster_centers_
+        features = self.model_features
+        k = self.k
+        features = self.model_features
+        tissue_IDs = self.tissue_IDs
+        mse_id = estimate_mse_mxif(
+            images, use_path, tissue_IDs, scaler, centroids, features, k
+        )
+        if labels is None:
+            labels = features
+        if titles is None:
+            titles = [&#34;tissue_ID &#34; + str(x) for x in range(self.k)]
+        n_panels = len(mse_id.keys())
+        if ncols is None:
+            ncols = len(titles)
+        if n_panels &lt;= ncols:
+            n_rows, n_cols = 1, n_panels
+        else:
+            n_rows, n_cols = ceil(n_panels / ncols), ncols
+        fig = plt.figure(figsize=(n_cols * figsize[0], n_rows * figsize[1]))
+        left, bottom = 0.1 / n_cols, 0.1 / n_rows
+        gs = gridspec.GridSpec(
+            nrows=n_rows,
+            ncols=n_cols,
+            left=left,
+            bottom=bottom,
+            right=1 - (n_cols - 1) * left - 0.01 / n_cols,
+            top=1 - (n_rows - 1) * bottom - 0.1 / n_rows,
+        )
+        for i in mse_id.keys():
+            plt.subplot(gs[i])
+            df = pd.DataFrame.from_dict(mse_id[i]).T
+            plt.boxplot(df, positions=range(len(mse_id[i])), showfliers=False)
+            for col in df:
+                for k in range(len(self.model_features)):
+                    dots = plt.scatter(
+                        col, df[col][k], s=k + 1, label=labels[k] if col == 0 else &#34;&#34;
+                    )
+                    offsets = dots.get_offsets()
+                    jittered_offsets = offsets
+                    # only jitter in the x-direction
+                    jittered_offsets[:, 0] += np.random.uniform(
+                        -0.3, 0.3, offsets.shape[0]
+                    )
+                    dots.set_offsets(jittered_offsets)
+            plt.xlabel(&#34;images&#34;)
+            plt.ylabel(&#34;mean square error&#34;)
+            plt.title(titles[i])
+        plt.legend(loc=loc, bbox_to_anchor=bbox_coordinates)
+        if save_to:
+            plt.savefig(fname=save_to, transparent=True, dpi=300)
+        return fig
+
+    def plot_tissue_ID_proportions_mxif(
+        self, figsize=(5, 5), color=&#34;rainbow&#34;, save_to=None
+    ):
+        &#34;&#34;&#34;
+        Plot proportion of each tissue ID within each slide
+
+        Parameters
+        ----------
+        figsize : tuple of float, optional (default=(5,5))
+            Size of matplotlib figure
+        color : str, optional (default = `rainbow`)
+        save_to : str, optional (default=`None`)
+            Path to image file to save plot
+
+        Returns
+        -------
+        `gridspec.GridSpec` if `save_to` is `None`, else saves plot to file
+        &#34;&#34;&#34;
+        df_count = pd.DataFrame()
+        for i in range(len(self.tissue_IDs)):
+            unique, counts = np.unique(self.tissue_IDs[i], return_counts=True)
+            df = pd.DataFrame(counts[: self.k], columns=[i])
+            df_count = pd.concat([df_count, df], axis=1)
+        df_count = df_count / df_count.sum()
+        ax = df_count.T.plot.bar(stacked=True, cmap=color)
+        ax.legend(loc=&#34;best&#34;, bbox_to_anchor=(1, 1))
+        ax.set_xlabel(&#34;images&#34;)
+        ax.set_ylabel(&#34;tissue ID proportion&#34;)
+        if save_to is not None:
+            ax.figure.savefig(save_to)
+        else:
+            return ax
+
+    def make_umap(self, frac=None, color_map=&#34;rainbow&#34;, save_to=None):
+        &#34;&#34;&#34;
+        plot umap for the cluster data
+
+        Parameters
+        ----------
+        frac : None or float
+            if None entire cluster data is used for the computation of umap
+            else that percentage of cluster data is used.
+        color_map : str
+            str for cmap used for plotting. Default cmap is rainbow
+        save_to : str or None
+            Path to image file to save results. if `None`, show figure.
+
+        Returns
+        -------
+        Matplotlib object
+        &#34;&#34;&#34;
+        cluster_data = self.cluster_data
+        centroids = self.kmeans.cluster_centers_
+        batch_labels = self.merged_batch_labels
+        kmeans_labels = self.kmeans.labels_
+        k = self.k
+        # perform umap on the cluster data
+        umap_centroid_data, standard_embedding_1 = perform_umap(
+            cluster_data=cluster_data,
+            centroids=centroids,
+            batch_labels=batch_labels,
+            kmeans_labels=kmeans_labels,
+            frac=frac,
+        )
+        # defining a size of datapoints for scatter plot and tick labels
+        size = [0.01] * len(umap_centroid_data.index)
+        size[-k:] = [10] * k
+        ticks = np.unique(np.array(umap_centroid_data[&#34;Kmeans_labels&#34;]))
+        tick_label = list(np.unique(np.array(umap_centroid_data[&#34;Kmeans_labels&#34;])))
+        tick_label[-1] = &#34;centroids&#34;
+        # plotting a fig with two subplots
+        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(20, 10))
+        # defining color_map
+        disc_cmap_1 = plt.cm.get_cmap(
+            color_map, len(np.unique(np.array(umap_centroid_data.index)))
+        )
+        disc_cmap_2 = plt.cm.get_cmap(
+            color_map, len(np.unique(np.array(umap_centroid_data[&#34;Kmeans_labels&#34;])))
+        )
+        plot_1 = ax1.scatter(
+            standard_embedding_1[:, 0],
+            standard_embedding_1[:, 1],
+            s=0.01,
+            c=umap_centroid_data.index,
+            cmap=disc_cmap_1,
+        )
+        ax1.set_title(&#34;Umap with batch labels&#34;)
+        cbar_1 = plt.colorbar(plot_1, ax=ax1)
+        plot_2 = ax2.scatter(
+            standard_embedding_1[:, 0],
+            standard_embedding_1[:, 1],
+            s=size,
+            c=umap_centroid_data[&#34;Kmeans_labels&#34;],
+            cmap=disc_cmap_2,
+        )
+        ax2.set_title(&#34;Umap with tissue IDs&#34;)
+        cbar_2 = plt.colorbar(plot_2, ax=ax2, ticks=ticks)
+        cbar_2.ax.set_yticklabels(tick_label)
+        if save_to:
+            plt.savefig(fname=save_to, transparent=True, bbox_inches=&#34;tight&#34;, dpi=300)
+        return fig
 
     def show_marker_overlay(
         self,
@@ -2551,6 +3217,8 @@ tissue domains</dd>
         image_cp = self[image_index].copy()
         # re-scaling to set pixel value range between 0 to 1
         image_cp.scale()
+        # defining cmap for discrete color bar
+        cmap = plt.cm.get_cmap(cmap, self.k)
         # calculate gridspec dimensions
         if len(channels) + 1 &lt;= ncols:
             n_rows, n_cols = 1, len(channels) + 1
@@ -2571,7 +3239,7 @@ tissue domains</dd>
         ax.tick_params(labelbottom=False, labelleft=False)
         sns.despine(bottom=True, left=True)
         # colorbar scale for tissue_IDs
-        _ = plt.colorbar(im, shrink=0.7)
+        _ = plt.colorbar(im, ticks=range(self.k), shrink=0.7)
         # add plots to axes
         i = 1
         for channel in channels:
@@ -2606,6 +3274,60 @@ tissue domains</dd>
 </ul>
 <h3>Methods</h3>
 <dl>
+<dt id="MILWRM.mxif_labeler.confidence_score_images"><code class="name flex">
+<span>def <span class="ident">confidence_score_images</span></span>(<span>self)</span>
+</code></dt>
+<dd>
+<div class="desc"><p>estimate confidence score for each image</p>
+<h2 id="parameters">Parameters</h2>
+<h2 id="returns">Returns</h2>
+<dl>
+<dt><code>self.confidence_IDs and self.confidence_score_df is added containing </code></dt>
+<dd>&nbsp;</dd>
+<dt><code>confidence score for each tissue ID assignment and mean confidence score for </code></dt>
+<dd>&nbsp;</dd>
+<dt><code>each tissue ID within each image</code></dt>
+<dd>&nbsp;</dd>
+</dl></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def confidence_score_images(self):
+    &#34;&#34;&#34;
+    estimate confidence score for each image
+
+    Parameters
+    ----------
+
+    Returns
+    -------
+    self.confidence_IDs and self.confidence_score_df is added containing 
+    confidence score for each tissue ID assignment and mean confidence score for 
+    each tissue ID within each image
+    &#34;&#34;&#34;
+    scaler = self.scaler
+    centroids = self.kmeans.cluster_centers_
+    features = self.model_features
+    tissue_IDs = self.tissue_IDs
+    use_path = self.use_paths
+    # confidence score estimation for each image
+    confidence_IDs = []
+    confidence_score_df = pd.DataFrame()
+    for i, image in enumerate(self.image_df[&#34;Img&#34;]):
+        cID, scores_dict = estimate_confidence_score_mxif(
+            image, use_path, scaler, centroids, features, tissue_IDs[i]
+        )
+        confidence_IDs.append(cID)
+        df = pd.DataFrame(scores_dict.values(), columns=[i])
+        confidence_score_df = pd.concat(
+            [confidence_score_df, df.T], ignore_index=True
+        )
+    # adding confidence_IDs and confidence_score_df to tissue labeller object
+    self.confidence_IDs = confidence_IDs
+    self.confidence_score_df = confidence_score_df</code></pre>
+</details>
+</dd>
 <dt id="MILWRM.mxif_labeler.label_tissue_regions"><code class="name flex">
 <span>def <span class="ident">label_tissue_regions</span></span>(<span>self, k=None, alpha=0.05, plot_out=True, random_state=18, n_jobs=-1)</span>
 </code></dt>
@@ -2661,11 +3383,16 @@ model. Parameters are also captured as attributes for posterity.</p></div>
     final tissue region IDs. `self.kmeans` contains trained `sklearn` clustering
     model. Parameters are also captured as attributes for posterity.
     &#34;&#34;&#34;
+    # save the hyperparams as object attributes
+    use_path = self.use_paths
     # find optimal k with parent class
     if k is None:
         print(&#34;Determining optimal cluster number k via scaled inertia&#34;)
         self.find_optimal_k(
-            alpha=alpha, plot_out=plot_out, random_state=random_state, n_jobs=n_jobs
+            alpha=alpha,
+            plot_out=plot_out,
+            random_state=random_state,
+            n_jobs=n_jobs,
         )
     # call k-means model from parent class
     self.find_tissue_regions(k=k, random_state=random_state)
@@ -2673,133 +3400,464 @@ model. Parameters are also captured as attributes for posterity.</p></div>
     print(&#34;Creating tissue_ID images for image objects...&#34;)
     self.tissue_IDs = Parallel(n_jobs=n_jobs, verbose=10)(
         delayed(add_tissue_ID_single_sample_mxif)(
-            image,
-            self.model_features,
-            self.kmeans,
-            self.mean_z_norm,
-            self.std_z_norm,
+            image, use_path, self.model_features, self.kmeans, self.scaler
         )
-        for image in itertools.chain.from_iterable(self.images.values())
+        for image in self.image_df[&#34;Img&#34;]
     )</code></pre>
 </details>
 </dd>
-<dt id="MILWRM.mxif_labeler.prep_cluster_data"><code class="name flex">
-<span>def <span class="ident">prep_cluster_data</span></span>(<span>self, features, downsample_factor=8, sigma=2, fract=0.2, n_jobs=-1)</span>
+<dt id="MILWRM.mxif_labeler.make_umap"><code class="name flex">
+<span>def <span class="ident">make_umap</span></span>(<span>self, frac=None, color_map='rainbow', save_to=None)</span>
 </code></dt>
 <dd>
-<div class="desc"><p>Prepare master dataframe for tissue-level clustering</p>
+<div class="desc"><p>plot umap for the cluster data</p>
+<h2 id="parameters">Parameters</h2>
+<dl>
+<dt><strong><code>frac</code></strong> :&ensp;<code>None</code> or <code>float</code></dt>
+<dd>if None entire cluster data is used for the computation of umap
+else that percentage of cluster data is used.</dd>
+<dt><strong><code>color_map</code></strong> :&ensp;<code>str</code></dt>
+<dd>str for cmap used for plotting. Default cmap is rainbow</dd>
+<dt><strong><code>save_to</code></strong> :&ensp;<code>str</code> or <code>None</code></dt>
+<dd>Path to image file to save results. if <code>None</code>, show figure.</dd>
+</dl>
+<h2 id="returns">Returns</h2>
+<dl>
+<dt><code>Matplotlib object</code></dt>
+<dd>&nbsp;</dd>
+</dl></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def make_umap(self, frac=None, color_map=&#34;rainbow&#34;, save_to=None):
+    &#34;&#34;&#34;
+    plot umap for the cluster data
+
+    Parameters
+    ----------
+    frac : None or float
+        if None entire cluster data is used for the computation of umap
+        else that percentage of cluster data is used.
+    color_map : str
+        str for cmap used for plotting. Default cmap is rainbow
+    save_to : str or None
+        Path to image file to save results. if `None`, show figure.
+
+    Returns
+    -------
+    Matplotlib object
+    &#34;&#34;&#34;
+    cluster_data = self.cluster_data
+    centroids = self.kmeans.cluster_centers_
+    batch_labels = self.merged_batch_labels
+    kmeans_labels = self.kmeans.labels_
+    k = self.k
+    # perform umap on the cluster data
+    umap_centroid_data, standard_embedding_1 = perform_umap(
+        cluster_data=cluster_data,
+        centroids=centroids,
+        batch_labels=batch_labels,
+        kmeans_labels=kmeans_labels,
+        frac=frac,
+    )
+    # defining a size of datapoints for scatter plot and tick labels
+    size = [0.01] * len(umap_centroid_data.index)
+    size[-k:] = [10] * k
+    ticks = np.unique(np.array(umap_centroid_data[&#34;Kmeans_labels&#34;]))
+    tick_label = list(np.unique(np.array(umap_centroid_data[&#34;Kmeans_labels&#34;])))
+    tick_label[-1] = &#34;centroids&#34;
+    # plotting a fig with two subplots
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(20, 10))
+    # defining color_map
+    disc_cmap_1 = plt.cm.get_cmap(
+        color_map, len(np.unique(np.array(umap_centroid_data.index)))
+    )
+    disc_cmap_2 = plt.cm.get_cmap(
+        color_map, len(np.unique(np.array(umap_centroid_data[&#34;Kmeans_labels&#34;])))
+    )
+    plot_1 = ax1.scatter(
+        standard_embedding_1[:, 0],
+        standard_embedding_1[:, 1],
+        s=0.01,
+        c=umap_centroid_data.index,
+        cmap=disc_cmap_1,
+    )
+    ax1.set_title(&#34;Umap with batch labels&#34;)
+    cbar_1 = plt.colorbar(plot_1, ax=ax1)
+    plot_2 = ax2.scatter(
+        standard_embedding_1[:, 0],
+        standard_embedding_1[:, 1],
+        s=size,
+        c=umap_centroid_data[&#34;Kmeans_labels&#34;],
+        cmap=disc_cmap_2,
+    )
+    ax2.set_title(&#34;Umap with tissue IDs&#34;)
+    cbar_2 = plt.colorbar(plot_2, ax=ax2, ticks=ticks)
+    cbar_2.ax.set_yticklabels(tick_label)
+    if save_to:
+        plt.savefig(fname=save_to, transparent=True, bbox_inches=&#34;tight&#34;, dpi=300)
+    return fig</code></pre>
+</details>
+</dd>
+<dt id="MILWRM.mxif_labeler.plot_mse_mxif"><code class="name flex">
+<span>def <span class="ident">plot_mse_mxif</span></span>(<span>self, figsize=(5, 5), ncols=None, labels=None, titles=None, loc='lower right', bbox_coordinates=(0, 0, 1.5, 1.5), save_to=None)</span>
+</code></dt>
+<dd>
+<div class="desc"><p>estimate mean square error within each tissue ID</p>
+<h2 id="parameters">Parameters</h2>
+<dl>
+<dt><strong><code>fig_size</code></strong> :&ensp;<code>Tuple</code></dt>
+<dd>size for the bar plot</dd>
+<dt><strong><code>ncols</code></strong> :&ensp;<code>int</code>, optional <code>(default=</code>None<code>)</code></dt>
+<dd>Number of columns for gridspec. If <code>None</code>, uses number of tissue domains k.</dd>
+<dt><strong><code>labels</code></strong> :&ensp;<code>list</code> of <code>str</code>, optional <code>(default=</code>None<code>)</code></dt>
+<dd>Labels corresponding to each MILWRM training feature. If <code>None</code>, features</dd>
+<dt><strong><code>titles</code></strong> :&ensp;<code>list</code> of <code>str</code>, optional <code>(default=</code>None<code>)</code></dt>
+<dd>Titles of plots corresponding to each MILWRM domain. If <code>None</code>, titles
+will be numbers 0 through k.</dd>
+<dt><strong><code>loc</code></strong> :&ensp;<code>str</code>, optional <code>(default = 'lower right')</code></dt>
+<dd>str for legend position</dd>
+<dt><strong><code>bbox_coordinates</code></strong> :&ensp;<code>Tuple</code>, optional <code>(default = (0,0,1.5,1.5))</code></dt>
+<dd>coordinates for the legend box</dd>
+<dt><strong><code>save_to</code></strong> :&ensp;<code>str</code>, optional <code>(default=</code>None<code>)</code></dt>
+<dd>Path to image file to save plot</dd>
+</dl>
+<h2 id="returns">Returns</h2>
+<dl>
+<dt><code>Matplotlib object</code></dt>
+<dd>&nbsp;</dd>
+</dl></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def plot_mse_mxif(
+    self,
+    figsize=(5, 5),
+    ncols=None,
+    labels=None,
+    titles=None,
+    loc=&#34;lower right&#34;,
+    bbox_coordinates=(0, 0, 1.5, 1.5),
+    save_to=None,
+):
+    &#34;&#34;&#34;
+    estimate mean square error within each tissue ID
+
+    Parameters
+    ----------
+    fig_size : Tuple
+        size for the bar plot
+    ncols : int, optional (default=`None`)
+        Number of columns for gridspec. If `None`, uses number of tissue domains k.
+    labels : list of str, optional (default=`None`)
+        Labels corresponding to each MILWRM training feature. If `None`, features
+    titles : list of str, optional (default=`None`)
+        Titles of plots corresponding to each MILWRM domain. If `None`, titles
+        will be numbers 0 through k.
+    loc : str, optional (default = &#39;lower right&#39;)
+        str for legend position
+    bbox_coordinates : Tuple, optional (default = (0,0,1.5,1.5))
+        coordinates for the legend box
+    save_to : str, optional (default=`None`)
+        Path to image file to save plot
+
+    Returns
+    -------
+    Matplotlib object
+    &#34;&#34;&#34;
+    assert (
+        self.kmeans is not None
+    ), &#34;No cluster results found. Run \
+    label_tissue_regions() first.&#34;
+    images = self.image_df[&#34;Img&#34;]
+    use_path = self.use_paths
+    scaler = self.scaler
+    centroids = self.kmeans.cluster_centers_
+    features = self.model_features
+    k = self.k
+    features = self.model_features
+    tissue_IDs = self.tissue_IDs
+    mse_id = estimate_mse_mxif(
+        images, use_path, tissue_IDs, scaler, centroids, features, k
+    )
+    if labels is None:
+        labels = features
+    if titles is None:
+        titles = [&#34;tissue_ID &#34; + str(x) for x in range(self.k)]
+    n_panels = len(mse_id.keys())
+    if ncols is None:
+        ncols = len(titles)
+    if n_panels &lt;= ncols:
+        n_rows, n_cols = 1, n_panels
+    else:
+        n_rows, n_cols = ceil(n_panels / ncols), ncols
+    fig = plt.figure(figsize=(n_cols * figsize[0], n_rows * figsize[1]))
+    left, bottom = 0.1 / n_cols, 0.1 / n_rows
+    gs = gridspec.GridSpec(
+        nrows=n_rows,
+        ncols=n_cols,
+        left=left,
+        bottom=bottom,
+        right=1 - (n_cols - 1) * left - 0.01 / n_cols,
+        top=1 - (n_rows - 1) * bottom - 0.1 / n_rows,
+    )
+    for i in mse_id.keys():
+        plt.subplot(gs[i])
+        df = pd.DataFrame.from_dict(mse_id[i]).T
+        plt.boxplot(df, positions=range(len(mse_id[i])), showfliers=False)
+        for col in df:
+            for k in range(len(self.model_features)):
+                dots = plt.scatter(
+                    col, df[col][k], s=k + 1, label=labels[k] if col == 0 else &#34;&#34;
+                )
+                offsets = dots.get_offsets()
+                jittered_offsets = offsets
+                # only jitter in the x-direction
+                jittered_offsets[:, 0] += np.random.uniform(
+                    -0.3, 0.3, offsets.shape[0]
+                )
+                dots.set_offsets(jittered_offsets)
+        plt.xlabel(&#34;images&#34;)
+        plt.ylabel(&#34;mean square error&#34;)
+        plt.title(titles[i])
+    plt.legend(loc=loc, bbox_to_anchor=bbox_coordinates)
+    if save_to:
+        plt.savefig(fname=save_to, transparent=True, dpi=300)
+    return fig</code></pre>
+</details>
+</dd>
+<dt id="MILWRM.mxif_labeler.plot_percentage_variance_explained"><code class="name flex">
+<span>def <span class="ident">plot_percentage_variance_explained</span></span>(<span>self, fig_size=(5, 5), R_square=False, save_to=None)</span>
+</code></dt>
+<dd>
+<div class="desc"><p>plot percentage variance_explained or not explained by clustering</p>
+<h2 id="parameters">Parameters</h2>
+<dl>
+<dt><strong><code>fig_size</code></strong> :&ensp;<code>Tuple</code></dt>
+<dd>size for the bar plot</dd>
+<dt><strong><code>R_square</code></strong> :&ensp;<code>Boolean</code></dt>
+<dd>Decides if R_square is plotted or S_square</dd>
+<dt><strong><code>save_to</code></strong> :&ensp;<code>str</code> or <code>None</code></dt>
+<dd>Path to image file to save results. If <code>None</code>, show figure.</dd>
+</dl>
+<h2 id="returns">Returns</h2>
+<dl>
+<dt><code>Matplotlib object</code></dt>
+<dd>&nbsp;</dd>
+</dl></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def plot_percentage_variance_explained(
+    self, fig_size=(5, 5), R_square=False, save_to=None
+):
+    &#34;&#34;&#34;
+    plot percentage variance_explained or not explained by clustering
+
+    Parameters
+    ----------
+    fig_size : Tuple
+        size for the bar plot
+    R_square : Boolean
+        Decides if R_square is plotted or S_square
+    save_to : str or None
+        Path to image file to save results. If `None`, show figure.
+
+    Returns
+    -------
+    Matplotlib object
+    &#34;&#34;&#34;
+    scaler = self.scaler
+    centroids = self.kmeans.cluster_centers_
+    features = self.model_features
+    use_path = self.use_paths
+    S_squre_for_each_image = []
+    R_squre_for_each_image = []
+    for image, tissue_ID in zip(self.image_df[&#34;Img&#34;], self.tissue_IDs):
+        S_square = estimate_percentage_variance_mxif(
+            image, use_path, scaler, centroids, features, tissue_ID
+        )
+        S_squre_for_each_image.append(S_square)
+        R_squre_for_each_image.append(100 - S_square)
+
+    if R_square == True:
+        fig = plt.figure(figsize=fig_size)
+        plt.bar(range(len(R_squre_for_each_image)), R_squre_for_each_image)
+        plt.xlabel(&#34;images&#34;)
+        plt.ylabel(&#34;percentage variance not explained by Kmeans&#34;)
+
+    else:
+        fig = plt.figure(figsize=fig_size)
+        plt.bar(range(len(S_squre_for_each_image)), S_squre_for_each_image)
+        plt.xlabel(&#34;images&#34;)
+        plt.ylabel(&#34;percentage variance explained by Kmeans&#34;)
+
+    if save_to:
+        plt.savefig(fname=save_to, transparent=True, bbox_inches=&#34;tight&#34;, dpi=300)
+    return fig</code></pre>
+</details>
+</dd>
+<dt id="MILWRM.mxif_labeler.plot_tissue_ID_proportions_mxif"><code class="name flex">
+<span>def <span class="ident">plot_tissue_ID_proportions_mxif</span></span>(<span>self, figsize=(5, 5), color='rainbow', save_to=None)</span>
+</code></dt>
+<dd>
+<div class="desc"><p>Plot proportion of each tissue ID within each slide</p>
+<h2 id="parameters">Parameters</h2>
+<dl>
+<dt><strong><code>figsize</code></strong> :&ensp;<code>tuple</code> of <code>float</code>, optional <code>(default=(5,5))</code></dt>
+<dd>Size of matplotlib figure</dd>
+<dt><strong><code>color</code></strong> :&ensp;<code>str</code>, optional <code>(default =</code>rainbow<code>)</code></dt>
+<dd>&nbsp;</dd>
+<dt><strong><code>save_to</code></strong> :&ensp;<code>str</code>, optional <code>(default=</code>None<code>)</code></dt>
+<dd>Path to image file to save plot</dd>
+</dl>
+<h2 id="returns">Returns</h2>
+<p><code>gridspec.GridSpec</code> if <code>save_to</code> is <code>None</code>, else saves plot to file</p></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def plot_tissue_ID_proportions_mxif(
+    self, figsize=(5, 5), color=&#34;rainbow&#34;, save_to=None
+):
+    &#34;&#34;&#34;
+    Plot proportion of each tissue ID within each slide
+
+    Parameters
+    ----------
+    figsize : tuple of float, optional (default=(5,5))
+        Size of matplotlib figure
+    color : str, optional (default = `rainbow`)
+    save_to : str, optional (default=`None`)
+        Path to image file to save plot
+
+    Returns
+    -------
+    `gridspec.GridSpec` if `save_to` is `None`, else saves plot to file
+    &#34;&#34;&#34;
+    df_count = pd.DataFrame()
+    for i in range(len(self.tissue_IDs)):
+        unique, counts = np.unique(self.tissue_IDs[i], return_counts=True)
+        df = pd.DataFrame(counts[: self.k], columns=[i])
+        df_count = pd.concat([df_count, df], axis=1)
+    df_count = df_count / df_count.sum()
+    ax = df_count.T.plot.bar(stacked=True, cmap=color)
+    ax.legend(loc=&#34;best&#34;, bbox_to_anchor=(1, 1))
+    ax.set_xlabel(&#34;images&#34;)
+    ax.set_ylabel(&#34;tissue ID proportion&#34;)
+    if save_to is not None:
+        ax.figure.savefig(save_to)
+    else:
+        return ax</code></pre>
+</details>
+</dd>
+<dt id="MILWRM.mxif_labeler.prep_cluster_data"><code class="name flex">
+<span>def <span class="ident">prep_cluster_data</span></span>(<span>self, features, filter_name='gaussian', sigma=2, fract=0.2, path_save=None)</span>
+</code></dt>
+<dd>
+<div class="desc"><p>Prepare master array for tissue level clustering</p>
 <h2 id="parameters">Parameters</h2>
 <dl>
 <dt><strong><code>features</code></strong> :&ensp;<code>list</code> of <code>int</code> or <code>str</code></dt>
 <dd>Indices or names of MxIF channels to use for tissue labeling</dd>
-<dt><strong><code>downsample_factor</code></strong> :&ensp;<code>int</code></dt>
-<dd>Factor by which to downsample images from their original resolution</dd>
+<dt><strong><code>filter_name</code></strong> :&ensp;<code>str</code></dt>
+<dd>Name of the filter to use - gaussian, median or bilateral</dd>
 <dt><strong><code>sigma</code></strong> :&ensp;<code>float</code>, optional <code>(default=2)</code></dt>
 <dd>Standard deviation of Gaussian kernel for blurring</dd>
 <dt><strong><code>fract</code></strong> :&ensp;<code>float</code>, optional <code>(default=0.2)</code></dt>
 <dd>Fraction of cluster data from each image to randomly select for model
 building</dd>
-<dt><strong><code>n_jobs</code></strong> :&ensp;<code>int</code>, optional <code>(default=-1)</code></dt>
-<dd>Number of cores to parallelize over. Default all available cores.</dd>
+<dt><strong><code>path_save</code></strong> :&ensp;<code>str (default = None)</code></dt>
+<dd>Path to save final preprocessed files, if self.use_path is True
+default path_save will raise Exception</dd>
 </dl>
 <h2 id="returns">Returns</h2>
-<p>Does not return anything. <code>self.images</code> are downsampled and blurred according
-to user parameters. <code>self.cluster_data</code> becomes master <code>np.array</code> for cluster
-training. Parameters are also captured as attributes for posterity.</p></div>
+<p>Does not return anything. <code>self.images</code> are normalized, blurred and scaled
+according to user parameters. <code>self.cluster_data</code> becomes master <code>np.array</code>
+for cluster training. Parameters are also captured as attributes for posterity.</p></div>
 <details class="source">
 <summary>
 <span>Expand source code</span>
 </summary>
 <pre><code class="python">def prep_cluster_data(
-    self, features, downsample_factor=8, sigma=2, fract=0.2, n_jobs=-1
+    self, features, filter_name=&#34;gaussian&#34;, sigma=2, fract=0.2, path_save=None
 ):
     &#34;&#34;&#34;
-    Prepare master dataframe for tissue-level clustering
+    Prepare master array for tissue level clustering
 
     Parameters
     ----------
     features : list of int or str
         Indices or names of MxIF channels to use for tissue labeling
-    downsample_factor : int
-        Factor by which to downsample images from their original resolution
+    filter_name : str
+        Name of the filter to use - gaussian, median or bilateral
     sigma : float, optional (default=2)
         Standard deviation of Gaussian kernel for blurring
     fract : float, optional (default=0.2)
         Fraction of cluster data from each image to randomly select for model
         building
-    n_jobs : int, optional (default=-1)
-        Number of cores to parallelize over. Default all available cores.
+    path_save : str (default = None)
+        Path to save final preprocessed files, if self.use_path is True
+        default path_save will raise Exception
 
     Returns
     -------
-    Does not return anything. `self.images` are downsampled and blurred according
-    to user parameters. `self.cluster_data` becomes master `np.array` for cluster
-    training. Parameters are also captured as attributes for posterity.
+    Does not return anything. `self.images` are normalized, blurred and scaled 
+    according to user parameters. `self.cluster_data` becomes master `np.array` 
+    for cluster training. Parameters are also captured as attributes for posterity.
+
     &#34;&#34;&#34;
     if self.cluster_data is not None:
         print(&#34;WARNING: overwriting existing cluster data&#34;)
         self.cluster_data = None
     # save the hyperparams as object attributes
     self.model_features = features
-    self.downsample_factor = downsample_factor
-    self.sigma = sigma
-    # extracting batch names in a list
-    batch_names = list(
-        itertools.chain.from_iterable(
-            [[k] * len(v) for k, v in self.images.items()]
+    use_path = self.use_paths
+    # calculate the batch wise means
+    mean_for_each_batch = {}
+    for batch in self.image_df[&#34;batch_names&#34;].unique():
+        list_mean_estimators = list(
+            self.image_df[self.image_df[&#34;batch_names&#34;] == batch][&#34;mean estimators&#34;]
         )
-    )
-    # downsampling, scaling and smoothening the images in parallel
-    print(
-        &#34;Downsampling, and blurring {} features from {} images...&#34;.format(
-            len(features),
-            len(batch_names),
+        mean_estimator_batch = sum(map(np.array, list_mean_estimators))
+        pixels = sum(
+            self.image_df[self.image_df[&#34;batch_names&#34;] == batch][&#34;pixels&#34;]
         )
-    )
-    out = Parallel(n_jobs=n_jobs, verbose=10, prefer=&#34;threads&#34;)(
-        delayed(prep_data_single_sample_mxif)(
-            image, features, downsample_factor, sigma, batch
+        mean_for_each_batch[batch] = mean_estimator_batch / pixels
+    # log_normalize, apply blurring filter, minmax scale each channel and subsample
+    subsampled_data = []
+    path_to_blurred_npz = []
+    for image, batch in zip(self.image_df[&#34;Img&#34;], self.image_df[&#34;batch_names&#34;]):
+        tmp = prep_data_single_sample_mxif(
+            image,
+            use_path=use_path,
+            mean=mean_for_each_batch[batch],
+            filter_name=filter_name,
+            sigma=sigma,
+            features=self.model_features,
+            fract=fract,
+            path_save=path_save,
         )
-        for image, batch in zip(
-            itertools.chain.from_iterable(self.images.values()), batch_names
-        )
-    )
-    # unpack results from parallel process
-    df = pd.DataFrame(out, columns=[&#34;Batch&#34;, &#34;Image mean&#34;, &#34;pixel counts&#34;])
-    # calculate mean for each batch of images
-    df[&#34;mean estimator&#34;] = df[&#34;Image mean&#34;] * df[&#34;pixel counts&#34;]
-    mean_batches = {}
-    for key in self.images.keys():
-        means = df[df[&#34;Batch&#34;] == key][&#34;mean estimator&#34;].sum()
-        pixels = df[df[&#34;Batch&#34;] == key][&#34;pixel counts&#34;].sum()
-        mean_batches[key] = means / pixels
-    # creating a list of the mean for each batch
-    tmp_means = [
-        [x] * len(v) for x, v in zip(mean_batches.values(), self.images.values())
-    ]
-    means = list(itertools.chain(*tmp_means))
-    # performing log normalization on images in parallel
-    subsample_data = []
-    subsample_data.append(
-        Parallel(n_jobs=n_jobs, verbose=10, prefer=&#34;threads&#34;)(
-            delayed(image.log_normalize)(
-                fract, features, pseudoval=1, mean=mean, mask=True
-            )
-            for image, mean in zip(
-                itertools.chain.from_iterable(self.images.values()), means
-            )
-        )
-    )
-    tmp_subsample_data = list(itertools.chain(*subsample_data))
-    # concatenate blurred features into cluster_data df for cluster training
-    cluster_data = np.row_stack(tmp_subsample_data)
-    self.cluster_data = cluster_data
-    unscaled_data = cluster_data
-    # perform z-normalization on cluster data
-    self.mean_z_norm = unscaled_data.mean(axis=0)
-    self.std_z_norm = unscaled_data.std(axis=0)
-    self.cluster_data = (unscaled_data - self.mean_z_norm) / self.std_z_norm
-    print(&#34;Collected clustering data of shape: {}&#34;.format(self.cluster_data.shape))</code></pre>
+        if self.use_paths == True:
+            subsampled_data.append(tmp[0])
+            path_to_blurred_npz.append(tmp[1])
+        else:
+            subsampled_data.append(tmp)
+    batch_labels = [
+        [x] * len(subsampled_data[x]) for x in range(len(subsampled_data))
+    ]  # batch labels for umap
+    self.merged_batch_labels = list(itertools.chain(*batch_labels))
+    if self.use_paths == True:
+        self.image_df[&#34;Img&#34;] = path_to_blurred_npz
+    cluster_data = np.row_stack(subsampled_data)
+    # perform z-score normalization on cluster_Data
+    scaler = StandardScaler()
+    self.scaler = scaler.fit(cluster_data)
+    scaled_data = scaler.transform(cluster_data)
+    self.cluster_data = scaled_data</code></pre>
 </details>
 </dd>
 <dt id="MILWRM.mxif_labeler.show_marker_overlay"><code class="name flex">
@@ -2891,6 +3949,8 @@ image)</dd>
     image_cp = self[image_index].copy()
     # re-scaling to set pixel value range between 0 to 1
     image_cp.scale()
+    # defining cmap for discrete color bar
+    cmap = plt.cm.get_cmap(cmap, self.k)
     # calculate gridspec dimensions
     if len(channels) + 1 &lt;= ncols:
         n_rows, n_cols = 1, len(channels) + 1
@@ -2911,7 +3971,7 @@ image)</dd>
     ax.tick_params(labelbottom=False, labelleft=False)
     sns.despine(bottom=True, left=True)
     # colorbar scale for tissue_IDs
-    _ = plt.colorbar(im, shrink=0.7)
+    _ = plt.colorbar(im, ticks=range(self.k), shrink=0.7)
     # add plots to axes
     i = 1
     for channel in channels:
@@ -2997,6 +4057,7 @@ image)</dd>
             adatas = [adatas]
         print(&#34;Initiating ST labeler with {} anndata objects&#34;.format(len(adatas)))
         self.adatas = adatas
+        self.raw = adatas.copy()
 
     def prep_cluster_data(
         self,
@@ -3005,6 +4066,8 @@ image)</dd>
         blur_pix=2,
         histo=False,
         fluor_channels=None,
+        spatial_graph_key=None,
+        n_rings=1,
         n_jobs=-1,
     ):
         &#34;&#34;&#34;
@@ -3030,6 +4093,14 @@ image)</dd>
             Channels from fluorescent image to use for model training (e.g. [1,3] for
             channels 1 and 3 of Visium fluorescent imaging data). If `None`, do not
             use imaging data for training.
+        spatial_graph_key : str, optional (default=`None`)
+            Key in `adata.obsp` containing spatial graph connectivities (i.e.
+            `&#34;spatial_connectivities&#34;`). If `None`, compute new spatial graph using
+            `n_rings` in `squidpy`.
+        n_rings : int, optional (default=1)
+            Number of hexagonal rings around each spatial transcriptomics spot to blur
+            features by for capturing regional information. Assumes 10X Genomics Visium
+            platform.
         n_jobs : int, optional (default=-1)
             Number of cores to parallelize over. Default all available cores.
 
@@ -3060,16 +4131,28 @@ image)</dd>
         )
         cluster_data = Parallel(n_jobs=n_jobs, verbose=10)(
             delayed(prep_data_single_sample_st)(
-                adata, adata_i, use_rep, self.features, blur_pix, histo, fluor_channels
+                adata,
+                adata_i,
+                use_rep,
+                self.features,
+                histo,
+                fluor_channels,
+                spatial_graph_key,
+                n_rings,
             )
             for adata_i, adata in enumerate(self.adatas)
         )
+        batch_labels = [
+            [x] * len(cluster_data[x]) for x in range(len(cluster_data))
+        ]  # batch labels for umap
+        self.merged_batch_labels = list(itertools.chain(*batch_labels))
         # concatenate blurred features into cluster_data df for cluster training
-        self.cluster_data = pd.concat(cluster_data)
-        # perform min-max scaling on final cluster data
-        mms = MinMaxScaler()
-        unscaled_data = self.cluster_data.values
-        self.cluster_data = mms.fit_transform(unscaled_data)
+        subsampled_data = pd.concat(cluster_data)
+        # perform z-scaling on final cluster data
+        scaler = StandardScaler()
+        self.scaler = scaler.fit(subsampled_data)
+        scaled_data = scaler.transform(subsampled_data)
+        self.cluster_data = scaled_data
         print(&#34;Collected clustering data of shape: {}&#34;.format(self.cluster_data.shape))
 
     def label_tissue_regions(
@@ -3120,6 +4203,310 @@ image)</dd>
             )
             start += self.adatas[i].n_obs
 
+    def plot_gene_loadings(
+        self,
+        PC_loadings,
+        n_genes=10,
+        ncols=None,
+        titles=None,
+        fig_size=(5, 5),
+        save_to=None,
+    ):
+        &#34;&#34;&#34;
+        Plot MILWRM loadings in gene space specifically for MILWRM done with PCs
+
+        Parameters
+        ----------
+        PC_loadings : numpy.ndarray
+            numpy.ndarray containing PC loadings shape format (genes, components)
+        n_genes : int, optional (default=10)
+            number of genes to plot
+        ncols : int, optional (default=`None`)
+            Number of columns for gridspec. If `None`, uses number of tissue domains k.
+        titles : list of str, optional (default=`None`)
+            Titles of plots corresponding to each MILWRM domain. If `None`, titles
+            will be numbers 0 through k.
+        figsize : tuple of float, optional (default=(5,5))
+            Size of matplotlib figure
+        save_to : str, optional (default=`None`)
+            Path to image file to save plot
+
+        Returns
+        -------
+        Matplotlib object and PC loadings in gene space set as self.gene_loadings_df
+        &#34;&#34;&#34;
+        assert (
+            PC_loadings.shape[0] == self.adatas[0].n_vars
+        ), f&#34;loadings matrix does not, \
+        contain enough genes, there should be {self.adatas[0].n_vars} genes&#34;
+        assert (
+            PC_loadings.shape[1] &gt;= self.kmeans.cluster_centers_.shape[1]
+        ), f&#34;loadings matrix \
+        does not contain enough components, there should be atleast {self.adatas[0].n_vars} components&#34;
+        if titles is None:
+            titles = [&#34;tissue_ID &#34; + str(x) for x in range(self.k)]
+        centroids = self.kmeans.cluster_centers_
+        temp = PC_loadings.T
+        loadings = temp[range(self.kmeans.cluster_centers_.shape[1])]
+        gene_loadings = np.matmul(centroids, loadings)
+        gene_loadings_df = pd.DataFrame(gene_loadings)
+        gene_loadings_df = gene_loadings_df.T
+        gene_loadings_df[&#34;genes&#34;] = self.adatas[0].var_names
+        self.gene_loadings_df = gene_loadings_df
+        n_panels = self.k
+        if ncols is None:
+            ncols = self.k
+        if n_panels &lt;= ncols:
+            n_rows, n_cols = 1, n_panels
+        else:
+            n_rows, n_cols = ceil(n_panels / ncols), ncols
+        fig = plt.figure(figsize=((ncols * n_cols, ncols * n_rows)))
+        left, bottom = 0.1 / n_cols, 0.1 / n_rows
+        gs = gridspec.GridSpec(
+            nrows=n_rows,
+            ncols=n_cols,
+            left=left,
+            bottom=bottom,
+            right=1 - (n_cols - 1) * left - 0.01 / n_cols,
+            top=1 - (n_rows - 1) * bottom - 0.1 / n_rows,
+        )
+        for i in range(self.k):
+            df = (
+                gene_loadings_df[[i, &#34;genes&#34;]]
+                .sort_values(i, axis=0, ascending=False)[:n_genes]
+                .reset_index(drop=True)
+            )
+            plt.subplot(gs[i])
+            df_rev = df.sort_values(i).reset_index(drop=True)
+            for j, score in enumerate((df_rev[i])):
+                plt.text(
+                    x=score,
+                    y=j + 0.1,
+                    s=df_rev.loc[j, &#34;genes&#34;],
+                    color=&#34;black&#34;,
+                    verticalalignment=&#34;center&#34;,
+                    horizontalalignment=&#34;right&#34;,
+                    fontsize=&#34;medium&#34;,
+                    fontstyle=&#34;italic&#34;,
+                )
+                plt.ylim([0, j + 1])
+                plt.xlim([0, score + 0.5])
+                plt.tick_params(
+                    axis=&#34;y&#34;,  # changes apply to the y-axis
+                    which=&#34;both&#34;,  # both major and minor ticks are affected
+                    left=False,
+                    right=False,
+                    labelleft=False,
+                )
+                plt.title(titles[i])
+        if save_to is not None:
+            print(&#34;Saving feature loadings to {}&#34;.format(save_to))
+            plt.savefig(save_to)
+        else:
+            return gs
+
+    def plot_percentage_variance_explained(
+        self, fig_size=(5, 5), R_square=False, save_to=None
+    ):
+        &#34;&#34;&#34;
+        plot percentage variance_explained or not explained by clustering
+
+        Parameters
+        ----------
+        figsize : tuple of float, optional (default=(5,5))
+            Size of matplotlib figure
+        R_square : Boolean
+            Decides if R_square is plotted or S_square
+        save_to : str or None
+            Path to image file to save results. If `None`, show figure.
+
+        Returns
+        -------
+        Matplotlib object
+        &#34;&#34;&#34;
+        centroids = self.kmeans.cluster_centers_
+        adatas = self.adatas
+        cluster_data = self.cluster_data
+        S_squre_for_each_st = []
+        R_squre_for_each_st = []
+        i_slice = 0
+        j_slice = 0
+        for adata in adatas:
+            j_slice = j_slice + adata.n_obs
+            sub_cluster_data = cluster_data[i_slice:j_slice]
+            S_square = estimate_percentage_variance_st(
+                sub_cluster_data, adata, centroids
+            )
+            S_squre_for_each_st.append(S_square)
+            R_squre_for_each_st.append(100 - S_square)
+            i_slice = i_slice + adata.n_obs
+
+        if R_square == True:
+            fig = plt.figure(figsize=fig_size)
+            plt.bar(range(len(R_squre_for_each_st)), R_squre_for_each_st)
+            plt.xlabel(&#34;slides&#34;)
+            plt.ylabel(&#34;percentage variance not explained by Kmeans&#34;)
+
+        else:
+            fig = plt.figure(figsize=fig_size)
+            plt.bar(range(len(S_squre_for_each_st)), S_squre_for_each_st)
+            plt.xlabel(&#34;slides&#34;)
+            plt.ylabel(&#34;percentage variance explained by Kmeans&#34;)
+
+        if save_to:
+            plt.savefig(fname=save_to, transparent=True, bbox_inches=&#34;tight&#34;, dpi=300)
+        return fig
+
+    def confidence_score(self):
+        &#34;&#34;&#34;
+        estimate confidence score for each visium slide
+
+        Parameters
+        ----------
+
+        Returns
+        -------
+        self.confidence_IDs and self.confidence_score_df are added containing 
+        confidence score for each tissue ID assignment and mean confidence score for 
+        each tissue ID within each visium slide
+        &#34;&#34;&#34;
+        i_slice = 0
+        j_slice = 0
+        confidence_score_df = pd.DataFrame()
+        adatas = self.adatas
+        cluster_data = self.cluster_data
+        centroids = self.kmeans.cluster_centers_
+        for i, adata in enumerate(adatas):
+            j_slice = j_slice + adata.n_obs
+            data = cluster_data[i_slice:j_slice]
+            scores_dict = estimate_confidence_score_st(data, adata, centroids)
+            df = pd.DataFrame(scores_dict.values(), columns=[i])
+            confidence_score_df = pd.concat([confidence_score_df, df], axis=1)
+            i_slice = i_slice + adata.n_obs
+        self.confidence_score_df = confidence_score_df
+
+    def plot_mse_st(
+        self,
+        figsize=(5, 5),
+        ncols=None,
+        labels=None,
+        titles=None,
+        loc=&#34;lower right&#34;,
+        bbox_coordinates=(0, 0, 1.5, 1.5),
+        save_to=None,
+    ):
+        &#34;&#34;&#34;
+        estimate mean square error within each tissue ID
+
+        Parameters
+        ----------
+        fig_size : Tuple
+            size for the bar plot
+        ncols : int, optional (default=`None`)
+            Number of columns for gridspec. If `None`, uses number of tissue domains k.
+        labels : list of str, optional (default=`None`)
+            Labels corresponding to each MILWRM training feature. If `None`, features
+        titles : list of str, optional (default=`None`)
+            Titles of plots corresponding to each MILWRM domain. If `None`, titles
+            will be numbers 0 through k.
+        loc : str, optional (default = &#39;lower right&#39;)
+            str for legend position
+        bbox_coordinates : Tuple, optional (default = (0,0,1.5,1.5))
+            coordinates for the legend box
+        save_to : str, optional (default=`None`)
+            Path to image file to save plot
+
+        Returns
+        -------
+        Matplotlib object
+        &#34;&#34;&#34;
+        assert (
+            self.kmeans is not None
+        ), &#34;No cluster results found. Run \
+        label_tissue_regions() first.&#34;
+        cluster_data = self.cluster_data
+        adatas = self.adatas
+        k = self.k
+        features = self.features
+        centroids = self.kmeans.cluster_centers_
+        mse_id = estimate_mse_st(cluster_data, adatas, centroids, k)
+        if titles is None:
+            titles = [&#34;tissue_ID &#34; + str(x) for x in range(self.k)]
+        if labels is None:
+            labels = range(len(features))
+        n_panels = len(mse_id.keys())
+        if ncols is None:
+            ncols = len(titles)
+        if n_panels &lt;= ncols:
+            n_rows, n_cols = 1, n_panels
+        else:
+            n_rows, n_cols = ceil(n_panels / ncols), ncols
+        fig = plt.figure(figsize=(n_cols * figsize[0], n_rows * figsize[1]))
+        left, bottom = 0.1 / n_cols, 0.1 / n_rows
+        gs = gridspec.GridSpec(
+            nrows=n_rows,
+            ncols=n_cols,
+            left=left,
+            bottom=bottom,
+            right=1 - (n_cols - 1) * left - 0.01 / n_cols,
+            top=1 - (n_rows - 1) * bottom - 0.1 / n_rows,
+        )
+        for i in mse_id.keys():
+            plt.subplot(gs[i])
+            df = pd.DataFrame.from_dict(mse_id[i]).T
+            plt.boxplot(df, positions=range(len(mse_id[i])), showfliers=False)
+            for col in df:
+                for k in features:
+                    dots = plt.scatter(
+                        col, df[col][k], s=k + 1, label=labels[k] if col == 0 else &#34;&#34;
+                    )
+                    offsets = dots.get_offsets()
+                    jittered_offsets = offsets
+                    # only jitter in the x-direction
+                    jittered_offsets[:, 0] += np.random.uniform(
+                        -0.3, 0.3, offsets.shape[0]
+                    )
+                    dots.set_offsets(jittered_offsets)
+            plt.xlabel(&#34;slides&#34;)
+            plt.ylabel(&#34;mean square error&#34;)
+            plt.title(titles[i])
+        plt.legend(loc=loc, bbox_to_anchor=bbox_coordinates)
+        if save_to:
+            plt.savefig(fname=save_to, transparent=True, dpi=300)
+        return fig
+
+    def plot_tissue_ID_proportions_st(
+        self, figsize=(5, 5), color=&#34;rainbow&#34;, save_to=None
+    ):
+        &#34;&#34;&#34;
+        Plot proportion of each tissue ID within each slide
+
+        Parameters
+        ----------
+        figsize : tuple of float, optional (default=(5,5))
+            Size of matplotlib figure
+        color : str, optional (default = `rainbow`)
+        save_to : str, optional (default=`None`)
+            Path to image file to save plot
+
+        Returns
+        -------
+        `gridspec.GridSpec` if `save_to` is `None`, else saves plot to file
+        &#34;&#34;&#34;
+        df_count = pd.DataFrame()
+        for i, adata in enumerate(self.adatas):
+            df = adata.obs[&#34;tissue_ID&#34;].value_counts(normalize=True, sort=False)
+            df_count = pd.concat([df_count, df], axis=1)
+        df_count = df_count.T.reset_index(drop=True)
+        ax = df_count.plot.bar(stacked=True, cmap=color)
+        ax.legend(loc=&#34;best&#34;, bbox_to_anchor=(1, 1))
+        ax.set_xlabel(&#34;slides&#34;)
+        ax.set_ylabel(&#34;tissue ID proportion&#34;)
+        if save_to is not None:
+            ax.figure.savefig(save_to)
+        else:
+            return ax
+
     def show_feature_overlay(
         self,
         adata_index,
@@ -3168,7 +4555,9 @@ image)</dd>
         assert pita.ndim &gt; 1, &#34;Pita does not have enough dimensions: {} given&#34;.format(
             pita.ndim
         )
-        assert pita.ndim &lt; 4, &#34;Pita has too many dimensions: {} given&#34;.format(pita.ndim)
+        assert pita.ndim &lt; 4, &#34;Pita has too many dimensions: {} given&#34;.format(
+            pita.ndim
+        )
         # create tissue_ID pita for plotting
         tIDs = assemble_pita(
             self.adatas[adata_index],
@@ -3303,6 +4692,54 @@ image)</dd>
 </ul>
 <h3>Methods</h3>
 <dl>
+<dt id="MILWRM.st_labeler.confidence_score"><code class="name flex">
+<span>def <span class="ident">confidence_score</span></span>(<span>self)</span>
+</code></dt>
+<dd>
+<div class="desc"><p>estimate confidence score for each visium slide</p>
+<h2 id="parameters">Parameters</h2>
+<h2 id="returns">Returns</h2>
+<dl>
+<dt><code>self.confidence_IDs and self.confidence_score_df are added containing </code></dt>
+<dd>&nbsp;</dd>
+<dt><code>confidence score for each tissue ID assignment and mean confidence score for </code></dt>
+<dd>&nbsp;</dd>
+<dt><code>each tissue ID within each visium slide</code></dt>
+<dd>&nbsp;</dd>
+</dl></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def confidence_score(self):
+    &#34;&#34;&#34;
+    estimate confidence score for each visium slide
+
+    Parameters
+    ----------
+
+    Returns
+    -------
+    self.confidence_IDs and self.confidence_score_df are added containing 
+    confidence score for each tissue ID assignment and mean confidence score for 
+    each tissue ID within each visium slide
+    &#34;&#34;&#34;
+    i_slice = 0
+    j_slice = 0
+    confidence_score_df = pd.DataFrame()
+    adatas = self.adatas
+    cluster_data = self.cluster_data
+    centroids = self.kmeans.cluster_centers_
+    for i, adata in enumerate(adatas):
+        j_slice = j_slice + adata.n_obs
+        data = cluster_data[i_slice:j_slice]
+        scores_dict = estimate_confidence_score_st(data, adata, centroids)
+        df = pd.DataFrame(scores_dict.values(), columns=[i])
+        confidence_score_df = pd.concat([confidence_score_df, df], axis=1)
+        i_slice = i_slice + adata.n_obs
+    self.confidence_score_df = confidence_score_df</code></pre>
+</details>
+</dd>
 <dt id="MILWRM.st_labeler.label_tissue_regions"><code class="name flex">
 <span>def <span class="ident">label_tissue_regions</span></span>(<span>self, k=None, alpha=0.05, plot_out=True, random_state=18, n_jobs=-1)</span>
 </code></dt>
@@ -3379,8 +4816,393 @@ Parameters are also captured as attributes for posterity.</p></div>
         start += self.adatas[i].n_obs</code></pre>
 </details>
 </dd>
+<dt id="MILWRM.st_labeler.plot_gene_loadings"><code class="name flex">
+<span>def <span class="ident">plot_gene_loadings</span></span>(<span>self, PC_loadings, n_genes=10, ncols=None, titles=None, fig_size=(5, 5), save_to=None)</span>
+</code></dt>
+<dd>
+<div class="desc"><p>Plot MILWRM loadings in gene space specifically for MILWRM done with PCs</p>
+<h2 id="parameters">Parameters</h2>
+<dl>
+<dt><strong><code>PC_loadings</code></strong> :&ensp;<code>numpy.ndarray</code></dt>
+<dd>numpy.ndarray containing PC loadings shape format (genes, components)</dd>
+<dt><strong><code>n_genes</code></strong> :&ensp;<code>int</code>, optional <code>(default=10)</code></dt>
+<dd>number of genes to plot</dd>
+<dt><strong><code>ncols</code></strong> :&ensp;<code>int</code>, optional <code>(default=</code>None<code>)</code></dt>
+<dd>Number of columns for gridspec. If <code>None</code>, uses number of tissue domains k.</dd>
+<dt><strong><code>titles</code></strong> :&ensp;<code>list</code> of <code>str</code>, optional <code>(default=</code>None<code>)</code></dt>
+<dd>Titles of plots corresponding to each MILWRM domain. If <code>None</code>, titles
+will be numbers 0 through k.</dd>
+<dt><strong><code>figsize</code></strong> :&ensp;<code>tuple</code> of <code>float</code>, optional <code>(default=(5,5))</code></dt>
+<dd>Size of matplotlib figure</dd>
+<dt><strong><code>save_to</code></strong> :&ensp;<code>str</code>, optional <code>(default=</code>None<code>)</code></dt>
+<dd>Path to image file to save plot</dd>
+</dl>
+<h2 id="returns">Returns</h2>
+<dl>
+<dt><code>Matplotlib object and PC loadings in gene space set as self.gene_loadings_df</code></dt>
+<dd>&nbsp;</dd>
+</dl></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def plot_gene_loadings(
+    self,
+    PC_loadings,
+    n_genes=10,
+    ncols=None,
+    titles=None,
+    fig_size=(5, 5),
+    save_to=None,
+):
+    &#34;&#34;&#34;
+    Plot MILWRM loadings in gene space specifically for MILWRM done with PCs
+
+    Parameters
+    ----------
+    PC_loadings : numpy.ndarray
+        numpy.ndarray containing PC loadings shape format (genes, components)
+    n_genes : int, optional (default=10)
+        number of genes to plot
+    ncols : int, optional (default=`None`)
+        Number of columns for gridspec. If `None`, uses number of tissue domains k.
+    titles : list of str, optional (default=`None`)
+        Titles of plots corresponding to each MILWRM domain. If `None`, titles
+        will be numbers 0 through k.
+    figsize : tuple of float, optional (default=(5,5))
+        Size of matplotlib figure
+    save_to : str, optional (default=`None`)
+        Path to image file to save plot
+
+    Returns
+    -------
+    Matplotlib object and PC loadings in gene space set as self.gene_loadings_df
+    &#34;&#34;&#34;
+    assert (
+        PC_loadings.shape[0] == self.adatas[0].n_vars
+    ), f&#34;loadings matrix does not, \
+    contain enough genes, there should be {self.adatas[0].n_vars} genes&#34;
+    assert (
+        PC_loadings.shape[1] &gt;= self.kmeans.cluster_centers_.shape[1]
+    ), f&#34;loadings matrix \
+    does not contain enough components, there should be atleast {self.adatas[0].n_vars} components&#34;
+    if titles is None:
+        titles = [&#34;tissue_ID &#34; + str(x) for x in range(self.k)]
+    centroids = self.kmeans.cluster_centers_
+    temp = PC_loadings.T
+    loadings = temp[range(self.kmeans.cluster_centers_.shape[1])]
+    gene_loadings = np.matmul(centroids, loadings)
+    gene_loadings_df = pd.DataFrame(gene_loadings)
+    gene_loadings_df = gene_loadings_df.T
+    gene_loadings_df[&#34;genes&#34;] = self.adatas[0].var_names
+    self.gene_loadings_df = gene_loadings_df
+    n_panels = self.k
+    if ncols is None:
+        ncols = self.k
+    if n_panels &lt;= ncols:
+        n_rows, n_cols = 1, n_panels
+    else:
+        n_rows, n_cols = ceil(n_panels / ncols), ncols
+    fig = plt.figure(figsize=((ncols * n_cols, ncols * n_rows)))
+    left, bottom = 0.1 / n_cols, 0.1 / n_rows
+    gs = gridspec.GridSpec(
+        nrows=n_rows,
+        ncols=n_cols,
+        left=left,
+        bottom=bottom,
+        right=1 - (n_cols - 1) * left - 0.01 / n_cols,
+        top=1 - (n_rows - 1) * bottom - 0.1 / n_rows,
+    )
+    for i in range(self.k):
+        df = (
+            gene_loadings_df[[i, &#34;genes&#34;]]
+            .sort_values(i, axis=0, ascending=False)[:n_genes]
+            .reset_index(drop=True)
+        )
+        plt.subplot(gs[i])
+        df_rev = df.sort_values(i).reset_index(drop=True)
+        for j, score in enumerate((df_rev[i])):
+            plt.text(
+                x=score,
+                y=j + 0.1,
+                s=df_rev.loc[j, &#34;genes&#34;],
+                color=&#34;black&#34;,
+                verticalalignment=&#34;center&#34;,
+                horizontalalignment=&#34;right&#34;,
+                fontsize=&#34;medium&#34;,
+                fontstyle=&#34;italic&#34;,
+            )
+            plt.ylim([0, j + 1])
+            plt.xlim([0, score + 0.5])
+            plt.tick_params(
+                axis=&#34;y&#34;,  # changes apply to the y-axis
+                which=&#34;both&#34;,  # both major and minor ticks are affected
+                left=False,
+                right=False,
+                labelleft=False,
+            )
+            plt.title(titles[i])
+    if save_to is not None:
+        print(&#34;Saving feature loadings to {}&#34;.format(save_to))
+        plt.savefig(save_to)
+    else:
+        return gs</code></pre>
+</details>
+</dd>
+<dt id="MILWRM.st_labeler.plot_mse_st"><code class="name flex">
+<span>def <span class="ident">plot_mse_st</span></span>(<span>self, figsize=(5, 5), ncols=None, labels=None, titles=None, loc='lower right', bbox_coordinates=(0, 0, 1.5, 1.5), save_to=None)</span>
+</code></dt>
+<dd>
+<div class="desc"><p>estimate mean square error within each tissue ID</p>
+<h2 id="parameters">Parameters</h2>
+<dl>
+<dt><strong><code>fig_size</code></strong> :&ensp;<code>Tuple</code></dt>
+<dd>size for the bar plot</dd>
+<dt><strong><code>ncols</code></strong> :&ensp;<code>int</code>, optional <code>(default=</code>None<code>)</code></dt>
+<dd>Number of columns for gridspec. If <code>None</code>, uses number of tissue domains k.</dd>
+<dt><strong><code>labels</code></strong> :&ensp;<code>list</code> of <code>str</code>, optional <code>(default=</code>None<code>)</code></dt>
+<dd>Labels corresponding to each MILWRM training feature. If <code>None</code>, features</dd>
+<dt><strong><code>titles</code></strong> :&ensp;<code>list</code> of <code>str</code>, optional <code>(default=</code>None<code>)</code></dt>
+<dd>Titles of plots corresponding to each MILWRM domain. If <code>None</code>, titles
+will be numbers 0 through k.</dd>
+<dt><strong><code>loc</code></strong> :&ensp;<code>str</code>, optional <code>(default = 'lower right')</code></dt>
+<dd>str for legend position</dd>
+<dt><strong><code>bbox_coordinates</code></strong> :&ensp;<code>Tuple</code>, optional <code>(default = (0,0,1.5,1.5))</code></dt>
+<dd>coordinates for the legend box</dd>
+<dt><strong><code>save_to</code></strong> :&ensp;<code>str</code>, optional <code>(default=</code>None<code>)</code></dt>
+<dd>Path to image file to save plot</dd>
+</dl>
+<h2 id="returns">Returns</h2>
+<dl>
+<dt><code>Matplotlib object</code></dt>
+<dd>&nbsp;</dd>
+</dl></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def plot_mse_st(
+    self,
+    figsize=(5, 5),
+    ncols=None,
+    labels=None,
+    titles=None,
+    loc=&#34;lower right&#34;,
+    bbox_coordinates=(0, 0, 1.5, 1.5),
+    save_to=None,
+):
+    &#34;&#34;&#34;
+    estimate mean square error within each tissue ID
+
+    Parameters
+    ----------
+    fig_size : Tuple
+        size for the bar plot
+    ncols : int, optional (default=`None`)
+        Number of columns for gridspec. If `None`, uses number of tissue domains k.
+    labels : list of str, optional (default=`None`)
+        Labels corresponding to each MILWRM training feature. If `None`, features
+    titles : list of str, optional (default=`None`)
+        Titles of plots corresponding to each MILWRM domain. If `None`, titles
+        will be numbers 0 through k.
+    loc : str, optional (default = &#39;lower right&#39;)
+        str for legend position
+    bbox_coordinates : Tuple, optional (default = (0,0,1.5,1.5))
+        coordinates for the legend box
+    save_to : str, optional (default=`None`)
+        Path to image file to save plot
+
+    Returns
+    -------
+    Matplotlib object
+    &#34;&#34;&#34;
+    assert (
+        self.kmeans is not None
+    ), &#34;No cluster results found. Run \
+    label_tissue_regions() first.&#34;
+    cluster_data = self.cluster_data
+    adatas = self.adatas
+    k = self.k
+    features = self.features
+    centroids = self.kmeans.cluster_centers_
+    mse_id = estimate_mse_st(cluster_data, adatas, centroids, k)
+    if titles is None:
+        titles = [&#34;tissue_ID &#34; + str(x) for x in range(self.k)]
+    if labels is None:
+        labels = range(len(features))
+    n_panels = len(mse_id.keys())
+    if ncols is None:
+        ncols = len(titles)
+    if n_panels &lt;= ncols:
+        n_rows, n_cols = 1, n_panels
+    else:
+        n_rows, n_cols = ceil(n_panels / ncols), ncols
+    fig = plt.figure(figsize=(n_cols * figsize[0], n_rows * figsize[1]))
+    left, bottom = 0.1 / n_cols, 0.1 / n_rows
+    gs = gridspec.GridSpec(
+        nrows=n_rows,
+        ncols=n_cols,
+        left=left,
+        bottom=bottom,
+        right=1 - (n_cols - 1) * left - 0.01 / n_cols,
+        top=1 - (n_rows - 1) * bottom - 0.1 / n_rows,
+    )
+    for i in mse_id.keys():
+        plt.subplot(gs[i])
+        df = pd.DataFrame.from_dict(mse_id[i]).T
+        plt.boxplot(df, positions=range(len(mse_id[i])), showfliers=False)
+        for col in df:
+            for k in features:
+                dots = plt.scatter(
+                    col, df[col][k], s=k + 1, label=labels[k] if col == 0 else &#34;&#34;
+                )
+                offsets = dots.get_offsets()
+                jittered_offsets = offsets
+                # only jitter in the x-direction
+                jittered_offsets[:, 0] += np.random.uniform(
+                    -0.3, 0.3, offsets.shape[0]
+                )
+                dots.set_offsets(jittered_offsets)
+        plt.xlabel(&#34;slides&#34;)
+        plt.ylabel(&#34;mean square error&#34;)
+        plt.title(titles[i])
+    plt.legend(loc=loc, bbox_to_anchor=bbox_coordinates)
+    if save_to:
+        plt.savefig(fname=save_to, transparent=True, dpi=300)
+    return fig</code></pre>
+</details>
+</dd>
+<dt id="MILWRM.st_labeler.plot_percentage_variance_explained"><code class="name flex">
+<span>def <span class="ident">plot_percentage_variance_explained</span></span>(<span>self, fig_size=(5, 5), R_square=False, save_to=None)</span>
+</code></dt>
+<dd>
+<div class="desc"><p>plot percentage variance_explained or not explained by clustering</p>
+<h2 id="parameters">Parameters</h2>
+<dl>
+<dt><strong><code>figsize</code></strong> :&ensp;<code>tuple</code> of <code>float</code>, optional <code>(default=(5,5))</code></dt>
+<dd>Size of matplotlib figure</dd>
+<dt><strong><code>R_square</code></strong> :&ensp;<code>Boolean</code></dt>
+<dd>Decides if R_square is plotted or S_square</dd>
+<dt><strong><code>save_to</code></strong> :&ensp;<code>str</code> or <code>None</code></dt>
+<dd>Path to image file to save results. If <code>None</code>, show figure.</dd>
+</dl>
+<h2 id="returns">Returns</h2>
+<dl>
+<dt><code>Matplotlib object</code></dt>
+<dd>&nbsp;</dd>
+</dl></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def plot_percentage_variance_explained(
+    self, fig_size=(5, 5), R_square=False, save_to=None
+):
+    &#34;&#34;&#34;
+    plot percentage variance_explained or not explained by clustering
+
+    Parameters
+    ----------
+    figsize : tuple of float, optional (default=(5,5))
+        Size of matplotlib figure
+    R_square : Boolean
+        Decides if R_square is plotted or S_square
+    save_to : str or None
+        Path to image file to save results. If `None`, show figure.
+
+    Returns
+    -------
+    Matplotlib object
+    &#34;&#34;&#34;
+    centroids = self.kmeans.cluster_centers_
+    adatas = self.adatas
+    cluster_data = self.cluster_data
+    S_squre_for_each_st = []
+    R_squre_for_each_st = []
+    i_slice = 0
+    j_slice = 0
+    for adata in adatas:
+        j_slice = j_slice + adata.n_obs
+        sub_cluster_data = cluster_data[i_slice:j_slice]
+        S_square = estimate_percentage_variance_st(
+            sub_cluster_data, adata, centroids
+        )
+        S_squre_for_each_st.append(S_square)
+        R_squre_for_each_st.append(100 - S_square)
+        i_slice = i_slice + adata.n_obs
+
+    if R_square == True:
+        fig = plt.figure(figsize=fig_size)
+        plt.bar(range(len(R_squre_for_each_st)), R_squre_for_each_st)
+        plt.xlabel(&#34;slides&#34;)
+        plt.ylabel(&#34;percentage variance not explained by Kmeans&#34;)
+
+    else:
+        fig = plt.figure(figsize=fig_size)
+        plt.bar(range(len(S_squre_for_each_st)), S_squre_for_each_st)
+        plt.xlabel(&#34;slides&#34;)
+        plt.ylabel(&#34;percentage variance explained by Kmeans&#34;)
+
+    if save_to:
+        plt.savefig(fname=save_to, transparent=True, bbox_inches=&#34;tight&#34;, dpi=300)
+    return fig</code></pre>
+</details>
+</dd>
+<dt id="MILWRM.st_labeler.plot_tissue_ID_proportions_st"><code class="name flex">
+<span>def <span class="ident">plot_tissue_ID_proportions_st</span></span>(<span>self, figsize=(5, 5), color='rainbow', save_to=None)</span>
+</code></dt>
+<dd>
+<div class="desc"><p>Plot proportion of each tissue ID within each slide</p>
+<h2 id="parameters">Parameters</h2>
+<dl>
+<dt><strong><code>figsize</code></strong> :&ensp;<code>tuple</code> of <code>float</code>, optional <code>(default=(5,5))</code></dt>
+<dd>Size of matplotlib figure</dd>
+<dt><strong><code>color</code></strong> :&ensp;<code>str</code>, optional <code>(default =</code>rainbow<code>)</code></dt>
+<dd>&nbsp;</dd>
+<dt><strong><code>save_to</code></strong> :&ensp;<code>str</code>, optional <code>(default=</code>None<code>)</code></dt>
+<dd>Path to image file to save plot</dd>
+</dl>
+<h2 id="returns">Returns</h2>
+<p><code>gridspec.GridSpec</code> if <code>save_to</code> is <code>None</code>, else saves plot to file</p></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def plot_tissue_ID_proportions_st(
+    self, figsize=(5, 5), color=&#34;rainbow&#34;, save_to=None
+):
+    &#34;&#34;&#34;
+    Plot proportion of each tissue ID within each slide
+
+    Parameters
+    ----------
+    figsize : tuple of float, optional (default=(5,5))
+        Size of matplotlib figure
+    color : str, optional (default = `rainbow`)
+    save_to : str, optional (default=`None`)
+        Path to image file to save plot
+
+    Returns
+    -------
+    `gridspec.GridSpec` if `save_to` is `None`, else saves plot to file
+    &#34;&#34;&#34;
+    df_count = pd.DataFrame()
+    for i, adata in enumerate(self.adatas):
+        df = adata.obs[&#34;tissue_ID&#34;].value_counts(normalize=True, sort=False)
+        df_count = pd.concat([df_count, df], axis=1)
+    df_count = df_count.T.reset_index(drop=True)
+    ax = df_count.plot.bar(stacked=True, cmap=color)
+    ax.legend(loc=&#34;best&#34;, bbox_to_anchor=(1, 1))
+    ax.set_xlabel(&#34;slides&#34;)
+    ax.set_ylabel(&#34;tissue ID proportion&#34;)
+    if save_to is not None:
+        ax.figure.savefig(save_to)
+    else:
+        return ax</code></pre>
+</details>
+</dd>
 <dt id="MILWRM.st_labeler.prep_cluster_data"><code class="name flex">
-<span>def <span class="ident">prep_cluster_data</span></span>(<span>self, use_rep, features=None, blur_pix=2, histo=False, fluor_channels=None, n_jobs=-1)</span>
+<span>def <span class="ident">prep_cluster_data</span></span>(<span>self, use_rep, features=None, blur_pix=2, histo=False, fluor_channels=None, spatial_graph_key=None, n_rings=1, n_jobs=-1)</span>
 </code></dt>
 <dd>
 <div class="desc"><p>Prepare master dataframe for tissue-level clustering</p>
@@ -3404,6 +5226,14 @@ than brightfield, use <code>fluor_channels</code> argument instead.</dd>
 <dd>Channels from fluorescent image to use for model training (e.g. [1,3] for
 channels 1 and 3 of Visium fluorescent imaging data). If <code>None</code>, do not
 use imaging data for training.</dd>
+<dt><strong><code>spatial_graph_key</code></strong> :&ensp;<code>str</code>, optional <code>(default=</code>None<code>)</code></dt>
+<dd>Key in <code>adata.obsp</code> containing spatial graph connectivities (i.e.
+<code>"spatial_connectivities"</code>). If <code>None</code>, compute new spatial graph using
+<code>n_rings</code> in <code>squidpy</code>.</dd>
+<dt><strong><code>n_rings</code></strong> :&ensp;<code>int</code>, optional <code>(default=1)</code></dt>
+<dd>Number of hexagonal rings around each spatial transcriptomics spot to blur
+features by for capturing regional information. Assumes 10X Genomics Visium
+platform.</dd>
 <dt><strong><code>n_jobs</code></strong> :&ensp;<code>int</code>, optional <code>(default=-1)</code></dt>
 <dd>Number of cores to parallelize over. Default all available cores.</dd>
 </dl>
@@ -3422,6 +5252,8 @@ Parameters are also captured as attributes for posterity.</p></div>
     blur_pix=2,
     histo=False,
     fluor_channels=None,
+    spatial_graph_key=None,
+    n_rings=1,
     n_jobs=-1,
 ):
     &#34;&#34;&#34;
@@ -3447,6 +5279,14 @@ Parameters are also captured as attributes for posterity.</p></div>
         Channels from fluorescent image to use for model training (e.g. [1,3] for
         channels 1 and 3 of Visium fluorescent imaging data). If `None`, do not
         use imaging data for training.
+    spatial_graph_key : str, optional (default=`None`)
+        Key in `adata.obsp` containing spatial graph connectivities (i.e.
+        `&#34;spatial_connectivities&#34;`). If `None`, compute new spatial graph using
+        `n_rings` in `squidpy`.
+    n_rings : int, optional (default=1)
+        Number of hexagonal rings around each spatial transcriptomics spot to blur
+        features by for capturing regional information. Assumes 10X Genomics Visium
+        platform.
     n_jobs : int, optional (default=-1)
         Number of cores to parallelize over. Default all available cores.
 
@@ -3477,16 +5317,28 @@ Parameters are also captured as attributes for posterity.</p></div>
     )
     cluster_data = Parallel(n_jobs=n_jobs, verbose=10)(
         delayed(prep_data_single_sample_st)(
-            adata, adata_i, use_rep, self.features, blur_pix, histo, fluor_channels
+            adata,
+            adata_i,
+            use_rep,
+            self.features,
+            histo,
+            fluor_channels,
+            spatial_graph_key,
+            n_rings,
         )
         for adata_i, adata in enumerate(self.adatas)
     )
+    batch_labels = [
+        [x] * len(cluster_data[x]) for x in range(len(cluster_data))
+    ]  # batch labels for umap
+    self.merged_batch_labels = list(itertools.chain(*batch_labels))
     # concatenate blurred features into cluster_data df for cluster training
-    self.cluster_data = pd.concat(cluster_data)
-    # perform min-max scaling on final cluster data
-    mms = MinMaxScaler()
-    unscaled_data = self.cluster_data.values
-    self.cluster_data = mms.fit_transform(unscaled_data)
+    subsampled_data = pd.concat(cluster_data)
+    # perform z-scaling on final cluster data
+    scaler = StandardScaler()
+    self.scaler = scaler.fit(subsampled_data)
+    scaled_data = scaler.transform(subsampled_data)
+    self.cluster_data = scaled_data
     print(&#34;Collected clustering data of shape: {}&#34;.format(self.cluster_data.shape))</code></pre>
 </details>
 </dd>
@@ -3578,7 +5430,9 @@ channel in RGB image. Can also pass list of names e.g. ["NeuN","GFAP",
     assert pita.ndim &gt; 1, &#34;Pita does not have enough dimensions: {} given&#34;.format(
         pita.ndim
     )
-    assert pita.ndim &lt; 4, &#34;Pita has too many dimensions: {} given&#34;.format(pita.ndim)
+    assert pita.ndim &lt; 4, &#34;Pita has too many dimensions: {} given&#34;.format(
+        pita.ndim
+    )
     # create tissue_ID pita for plotting
     tIDs = assemble_pita(
         self.adatas[adata_index],
@@ -3740,6 +5594,7 @@ channel in RGB image. Can also pass list of names e.g. ["NeuN","GFAP",
 <li><h3><a href="#header-functions">Functions</a></h3>
 <ul class="">
 <li><code><a title="MILWRM.assemble_pita" href="#MILWRM.assemble_pita">assemble_pita</a></code></li>
+<li><code><a title="MILWRM.blur_features_st" href="#MILWRM.blur_features_st">blur_features_st</a></code></li>
 <li><code><a title="MILWRM.map_pixels" href="#MILWRM.map_pixels">map_pixels</a></code></li>
 <li><code><a title="MILWRM.show_pita" href="#MILWRM.show_pita">show_pita</a></code></li>
 <li><code><a title="MILWRM.trim_image" href="#MILWRM.trim_image">trim_image</a></code></li>
@@ -3750,8 +5605,11 @@ channel in RGB image. Can also pass list of names e.g. ["NeuN","GFAP",
 <li>
 <h4><code><a title="MILWRM.img" href="#MILWRM.img">img</a></code></h4>
 <ul class="">
+<li><code><a title="MILWRM.img.blurring" href="#MILWRM.img.blurring">blurring</a></code></li>
+<li><code><a title="MILWRM.img.calculate_non_zero_mean" href="#MILWRM.img.calculate_non_zero_mean">calculate_non_zero_mean</a></code></li>
 <li><code><a title="MILWRM.img.clip" href="#MILWRM.img.clip">clip</a></code></li>
 <li><code><a title="MILWRM.img.copy" href="#MILWRM.img.copy">copy</a></code></li>
+<li><code><a title="MILWRM.img.create_tissue_mask" href="#MILWRM.img.create_tissue_mask">create_tissue_mask</a></code></li>
 <li><code><a title="MILWRM.img.downsample" href="#MILWRM.img.downsample">downsample</a></code></li>
 <li><code><a title="MILWRM.img.equalize_hist" href="#MILWRM.img.equalize_hist">equalize_hist</a></code></li>
 <li><code><a title="MILWRM.img.from_npz" href="#MILWRM.img.from_npz">from_npz</a></code></li>
@@ -3760,13 +5618,19 @@ channel in RGB image. Can also pass list of names e.g. ["NeuN","GFAP",
 <li><code><a title="MILWRM.img.plot_image_histogram" href="#MILWRM.img.plot_image_histogram">plot_image_histogram</a></code></li>
 <li><code><a title="MILWRM.img.scale" href="#MILWRM.img.scale">scale</a></code></li>
 <li><code><a title="MILWRM.img.show" href="#MILWRM.img.show">show</a></code></li>
+<li><code><a title="MILWRM.img.subsample_pixels" href="#MILWRM.img.subsample_pixels">subsample_pixels</a></code></li>
 <li><code><a title="MILWRM.img.to_npz" href="#MILWRM.img.to_npz">to_npz</a></code></li>
 </ul>
 </li>
 <li>
 <h4><code><a title="MILWRM.mxif_labeler" href="#MILWRM.mxif_labeler">mxif_labeler</a></code></h4>
 <ul class="">
+<li><code><a title="MILWRM.mxif_labeler.confidence_score_images" href="#MILWRM.mxif_labeler.confidence_score_images">confidence_score_images</a></code></li>
 <li><code><a title="MILWRM.mxif_labeler.label_tissue_regions" href="#MILWRM.mxif_labeler.label_tissue_regions">label_tissue_regions</a></code></li>
+<li><code><a title="MILWRM.mxif_labeler.make_umap" href="#MILWRM.mxif_labeler.make_umap">make_umap</a></code></li>
+<li><code><a title="MILWRM.mxif_labeler.plot_mse_mxif" href="#MILWRM.mxif_labeler.plot_mse_mxif">plot_mse_mxif</a></code></li>
+<li><code><a title="MILWRM.mxif_labeler.plot_percentage_variance_explained" href="#MILWRM.mxif_labeler.plot_percentage_variance_explained">plot_percentage_variance_explained</a></code></li>
+<li><code><a title="MILWRM.mxif_labeler.plot_tissue_ID_proportions_mxif" href="#MILWRM.mxif_labeler.plot_tissue_ID_proportions_mxif">plot_tissue_ID_proportions_mxif</a></code></li>
 <li><code><a title="MILWRM.mxif_labeler.prep_cluster_data" href="#MILWRM.mxif_labeler.prep_cluster_data">prep_cluster_data</a></code></li>
 <li><code><a title="MILWRM.mxif_labeler.show_marker_overlay" href="#MILWRM.mxif_labeler.show_marker_overlay">show_marker_overlay</a></code></li>
 </ul>
@@ -3774,7 +5638,12 @@ channel in RGB image. Can also pass list of names e.g. ["NeuN","GFAP",
 <li>
 <h4><code><a title="MILWRM.st_labeler" href="#MILWRM.st_labeler">st_labeler</a></code></h4>
 <ul class="">
+<li><code><a title="MILWRM.st_labeler.confidence_score" href="#MILWRM.st_labeler.confidence_score">confidence_score</a></code></li>
 <li><code><a title="MILWRM.st_labeler.label_tissue_regions" href="#MILWRM.st_labeler.label_tissue_regions">label_tissue_regions</a></code></li>
+<li><code><a title="MILWRM.st_labeler.plot_gene_loadings" href="#MILWRM.st_labeler.plot_gene_loadings">plot_gene_loadings</a></code></li>
+<li><code><a title="MILWRM.st_labeler.plot_mse_st" href="#MILWRM.st_labeler.plot_mse_st">plot_mse_st</a></code></li>
+<li><code><a title="MILWRM.st_labeler.plot_percentage_variance_explained" href="#MILWRM.st_labeler.plot_percentage_variance_explained">plot_percentage_variance_explained</a></code></li>
+<li><code><a title="MILWRM.st_labeler.plot_tissue_ID_proportions_st" href="#MILWRM.st_labeler.plot_tissue_ID_proportions_st">plot_tissue_ID_proportions_st</a></code></li>
 <li><code><a title="MILWRM.st_labeler.prep_cluster_data" href="#MILWRM.st_labeler.prep_cluster_data">prep_cluster_data</a></code></li>
 <li><code><a title="MILWRM.st_labeler.show_feature_overlay" href="#MILWRM.st_labeler.show_feature_overlay">show_feature_overlay</a></code></li>
 </ul>
@@ -3785,7 +5654,7 @@ channel in RGB image. Can also pass list of names e.g. ["NeuN","GFAP",
 </nav>
 </main>
 <footer id="footer">
-<p>Generated by <a href="https://pdoc3.github.io/pdoc"><cite>pdoc</cite> 0.9.2</a>.</p>
+<p>Generated by <a href="https://pdoc3.github.io/pdoc" title="pdoc: Python API documentation generator"><cite>pdoc</cite> 0.10.0</a>.</p>
 </footer>
 </body>
 </html>

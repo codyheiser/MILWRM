@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1" />
-<meta name="generator" content="pdoc 0.9.2" />
+<meta name="generator" content="pdoc 0.10.0" />
 <title>MILWRM.MxIF API documentation</title>
 <meta name="description" content="Functions and classes for analyzing multiplex imaging data" />
 <link rel="preload stylesheet" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/10up-sanitize.css/11.0.1/sanitize.min.css" integrity="sha256-PK9q560IAAa6WVRRh76LtCaI8pjTJ2z11v0miyNNjrs=" crossorigin>
@@ -36,6 +36,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
 import seaborn as sns
+from sklearn.utils import shuffle
+from sklearn.cluster import KMeans
 
 sns.set_style(&#34;white&#34;)
 plt.rcParams[&#34;font.family&#34;] = &#34;monospace&#34;
@@ -45,6 +47,8 @@ from skimage import exposure
 from skimage.io import imread
 from skimage.measure import block_reduce
 from matplotlib.lines import Line2D
+from skimage import filters
+from skimage.restoration import denoise_bilateral
 
 
 def checktype(obj):
@@ -193,15 +197,12 @@ class img:
 
     def __repr__(self) -&gt; str:
         &#34;&#34;&#34;Representation of contents of img object&#34;&#34;&#34;
-        descr = (
-            &#34;img object with {} of {} and shape {}px x {}px\n&#34;.format(
-                type(self.img),
-                self.img.dtype,
-                self.img.shape[0],
-                self.img.shape[1],
-            )
-            + &#34;{} image channels:\n\t{}&#34;.format(self.n_ch, self.ch)
-        )
+        descr = &#34;img object with {} of {} and shape {}px x {}px\n&#34;.format(
+            type(self.img),
+            self.img.dtype,
+            self.img.shape[0],
+            self.img.shape[1],
+        ) + &#34;{} image channels:\n\t{}&#34;.format(self.n_ch, self.ch)
         if self.mask is not None:
             descr += &#34;\n\ntissue mask {} of {} and shape {}px x {}px&#34;.format(
                 type(self.mask),
@@ -400,7 +401,48 @@ class img:
         &#34;&#34;&#34;
         self.img = CLAHE(self.img, **kwargs)
 
-    def log_normalize(self, fract, features, pseudoval=1, mean=None, mask=True):
+    def blurring(self, filter_name=&#34;gaussian&#34;, sigma=2, **kwargs):
+        &#34;&#34;&#34;
+        Aplying a filter on the images
+
+        Parameters
+        ----------
+        filter : str
+            str to define which type of filter to apply
+
+        sigma : int
+            parameter controlling extent of smoothening
+        &#34;&#34;&#34;
+        if filter_name == &#34;gaussian&#34;:
+            print(&#34;Applying gaussian filter&#34;)
+            self.img = filters.gaussian(
+                self.img,
+                sigma=sigma,
+                channel_axis=2,
+                **kwargs,
+            )
+        elif filter_name == &#34;median&#34;:
+            print(&#34;Applying median filter&#34;)
+            if isinstance(sigma, float):
+                sigma = int(sigma)
+            for i in range(self.img.shape[2]):
+                image_array = self.img[:, :, i]
+                image_array_blurred = filters.median(
+                    image_array,
+                    np.ones(sigma, sigma),
+                )
+                self.img[:, :, i] = image_array_blurred
+        elif filter_name == &#34;bilateral&#34;:
+            print(&#34;Applying biltaral filter&#34;)
+            self.img = denoise_bilateral(
+                self.img, sigma_spatial=sigma, channel_axis=2, **kwargs
+            )
+        else:
+            raise Exception(
+                &#34;filter name should be either gaussian, median or bilateral&#34;
+            )
+
+    def log_normalize(self, pseudoval=1, mean=None, mask=True):
         &#34;&#34;&#34;
         Log-normalizes values for each marker with `log10(arr/arr.mean() + pseudoval)`
 
@@ -417,21 +459,12 @@ class img:
         -------
         Log-normalizes values in each channel of `self.img`
         &#34;&#34;&#34;
-        if isinstance(features, int):  # force features into list if single integer
-            features = [features]
-        if isinstance(features, str):  # force features into int if single string
-            features = [self.ch.index(features)]
-        if checktype(features):  # force features into list of int if list of strings
-            features = [self.ch.index(x) for x in features]
-        if features is None:  # if no features are given, use all of them
-            features = [x for x in range(self.n_ch)]
-        if mean.all():
+        if mean is not None:
             if mask:
                 assert self.mask is not None, &#34;No tissue mask available&#34;
                 for i in range(self.img.shape[2]):
                     fact = mean[i]
                     self.img[:, :, i] = np.log10(self.img[:, :, i] / fact + pseudoval)
-
             else:
                 print(&#34;WARNING: Performing normalization without a tissue mask.&#34;)
                 for i in range(self.img.shape[2]):
@@ -444,13 +477,39 @@ class img:
                 for i in range(self.img.shape[2]):
                     fact = self.img[:, :, i].mean()
                     self.img[:, :, i] = np.log10(self.img[:, :, i] / fact + pseudoval)
-
             else:
                 print(&#34;WARNING: Performing normalization without a tissue mask.&#34;)
                 for i in range(self.img.shape[2]):
                     fact = self.img[:, :, i].mean()
                     self.img[:, :, i] = np.log10(self.img[:, :, i] / fact + pseudoval)
-        # get cluster data for image_i
+
+    def subsample_pixels(self, features, fract=0.2):
+        &#34;&#34;&#34;
+        Sub-samples fraction of pixels from the image randomly for each channel
+
+        Parameters
+        ----------
+        features : list of int or str
+            Indices or names of MxIF channels to use for tissue labeling
+        fract : float, optional (default=0.2)
+            Fraction of cluster data from each image to randomly select
+            for model building
+
+        Returns
+        -------
+        tmp : np.array
+            Clustering data from `image`
+
+        &#34;&#34;&#34;
+        if isinstance(features, int):  # force features into list if single integer
+            features = [features]
+        if isinstance(features, str):  # force features into int if single string
+            features = [self.ch.index(features)]
+        if checktype(features):  # force features into list of int if list of strings
+            features = [self.ch.index(x) for x in features]
+        if features is None:  # if no features are given, use all of them
+            features = [x for x in range(self.n_ch)]
+        # subsample data for given image
         tmp = []
         for i in range(self.img.shape[2]):
             tmp.append(self.img[:, :, i][self.mask != 0])
@@ -480,10 +539,82 @@ class img:
         # downsample mask if mask available
         if self.mask is not None:
             self.mask = block_reduce(
-                self.mask, block_size=(fact, fact), func=np.max, cval=0
+                self.mask, block_size=(fact, fact), func=func, cval=0
             )
         # downsample image
         self.img = block_reduce(self.img, block_size=(fact, fact, 1), func=func, cval=0)
+
+    def calculate_non_zero_mean(self):
+        &#34;&#34;&#34;
+        Calculate mean estimator for the given image array avoiding mask pixels or 
+        pixels with value 0
+
+        Parameters
+        ----------
+
+        Returns
+        -------
+        mean_estimator : list of float
+            List of mean estimator (mean*pixel) values for each channel
+        pixels : int
+            pixel count for the image excluding masked pixels
+        &#34;&#34;&#34;
+        image = self.img
+        pixels = np.count_nonzero(image != 0)
+        mean_estimator = []
+        for i in range(image.shape[2]):
+            ar = image[:, :, i]
+            mean = ar[ar != 0].mean()
+            mean_estimator.append(mean * pixels)
+        return mean_estimator, pixels
+
+    def create_tissue_mask(self, features=None, fract=0.2):
+        &#34;&#34;&#34;
+        Create tissue mask
+
+        Parameters
+        ----------
+        features : list of int or str
+            Indices or names of MxIF channels to use for tissue labeling
+        fract : float, optional (default=0.2)
+            Fraction of cluster data from each image to randomly select
+            for model building
+
+        Returns
+        -------
+        a numpy array as tissue mask set to self.mask
+        &#34;&#34;&#34;
+        # create a copy of the image
+        image_cp = self.copy()
+        # create a temporary tissue mask that covers no region
+        w, h, d = image_cp.img.shape
+        image_cp.mask = np.ones((w, h))
+        # log normalization on image
+        image_cp.log_normalize()
+        # apply gaussian filter
+        image_cp.img = filters.gaussian(image_cp.img, sigma=2, channel_axis=2)
+        # subsample data to build kmeans model
+        subsampled_data = image_cp.subsample_pixels(features, fract=fract)
+        cluster_data = np.row_stack(subsampled_data)
+        # reshape image for prediction
+        image_ar_reshape = image_cp.img.reshape((w * h, d))
+        # build kmeans model with 2 clusters
+        kmeans = KMeans(n_clusters=2, random_state=18).fit(cluster_data)
+        labels = kmeans.predict(image_ar_reshape).astype(float)
+        tID = labels.reshape((w, h))
+        # check if the background is labelled as 0 or 1
+        scores = kmeans.cluster_centers_
+        mean = scores.mean()
+        std = scores.std()
+        z_scores = (scores - mean) / std
+        if z_scores[0].mean() &gt; 0:
+            where_0 = np.where(tID == 0.0)
+            tID[where_0] = 0.5
+            where_1 = np.where(tID == 1.0)
+            tID[where_1] = 0.0
+            where_05 = np.where(tID == 0.5)
+            tID[where_05] = 1.0
+        self.mask = tID
 
     def show(
         self,
@@ -504,10 +635,10 @@ class img:
         channels : tuple of int or None, optional (default=`None`)
             List of channels by index or name to show
         RGB : bool
-            Treat 3- or 4-dimensional array as RGB image. If `False`, plot channels
+            Treat 3- or 4-dimensional array as RGB image. If `False`, plot channels 
             individually.
         cbar : bool
-            Show colorbar for scale of image intensities if plotting individual
+            Show colorbar for scale of image intensities if plotting individual 
             channels.
         mask_out : bool, optional (default=`True`)
             Mask out non-tissue pixels prior to showing
@@ -522,7 +653,7 @@ class img:
 
         Returns
         -------
-        Matplotlib object (if plotting one feature or RGB) or gridspec object (for
+        Matplotlib object (if plotting one feature or RGB) or gridspec object (for 
         multiple features). Saves plot to file if `save_to` is not `None`.
         &#34;&#34;&#34;
         # if only one feature (2D), plot it quickly
@@ -925,15 +1056,12 @@ class img:
 
     def __repr__(self) -&gt; str:
         &#34;&#34;&#34;Representation of contents of img object&#34;&#34;&#34;
-        descr = (
-            &#34;img object with {} of {} and shape {}px x {}px\n&#34;.format(
-                type(self.img),
-                self.img.dtype,
-                self.img.shape[0],
-                self.img.shape[1],
-            )
-            + &#34;{} image channels:\n\t{}&#34;.format(self.n_ch, self.ch)
-        )
+        descr = &#34;img object with {} of {} and shape {}px x {}px\n&#34;.format(
+            type(self.img),
+            self.img.dtype,
+            self.img.shape[0],
+            self.img.shape[1],
+        ) + &#34;{} image channels:\n\t{}&#34;.format(self.n_ch, self.ch)
         if self.mask is not None:
             descr += &#34;\n\ntissue mask {} of {} and shape {}px x {}px&#34;.format(
                 type(self.mask),
@@ -1132,7 +1260,48 @@ class img:
         &#34;&#34;&#34;
         self.img = CLAHE(self.img, **kwargs)
 
-    def log_normalize(self, fract, features, pseudoval=1, mean=None, mask=True):
+    def blurring(self, filter_name=&#34;gaussian&#34;, sigma=2, **kwargs):
+        &#34;&#34;&#34;
+        Aplying a filter on the images
+
+        Parameters
+        ----------
+        filter : str
+            str to define which type of filter to apply
+
+        sigma : int
+            parameter controlling extent of smoothening
+        &#34;&#34;&#34;
+        if filter_name == &#34;gaussian&#34;:
+            print(&#34;Applying gaussian filter&#34;)
+            self.img = filters.gaussian(
+                self.img,
+                sigma=sigma,
+                channel_axis=2,
+                **kwargs,
+            )
+        elif filter_name == &#34;median&#34;:
+            print(&#34;Applying median filter&#34;)
+            if isinstance(sigma, float):
+                sigma = int(sigma)
+            for i in range(self.img.shape[2]):
+                image_array = self.img[:, :, i]
+                image_array_blurred = filters.median(
+                    image_array,
+                    np.ones(sigma, sigma),
+                )
+                self.img[:, :, i] = image_array_blurred
+        elif filter_name == &#34;bilateral&#34;:
+            print(&#34;Applying biltaral filter&#34;)
+            self.img = denoise_bilateral(
+                self.img, sigma_spatial=sigma, channel_axis=2, **kwargs
+            )
+        else:
+            raise Exception(
+                &#34;filter name should be either gaussian, median or bilateral&#34;
+            )
+
+    def log_normalize(self, pseudoval=1, mean=None, mask=True):
         &#34;&#34;&#34;
         Log-normalizes values for each marker with `log10(arr/arr.mean() + pseudoval)`
 
@@ -1149,21 +1318,12 @@ class img:
         -------
         Log-normalizes values in each channel of `self.img`
         &#34;&#34;&#34;
-        if isinstance(features, int):  # force features into list if single integer
-            features = [features]
-        if isinstance(features, str):  # force features into int if single string
-            features = [self.ch.index(features)]
-        if checktype(features):  # force features into list of int if list of strings
-            features = [self.ch.index(x) for x in features]
-        if features is None:  # if no features are given, use all of them
-            features = [x for x in range(self.n_ch)]
-        if mean.all():
+        if mean is not None:
             if mask:
                 assert self.mask is not None, &#34;No tissue mask available&#34;
                 for i in range(self.img.shape[2]):
                     fact = mean[i]
                     self.img[:, :, i] = np.log10(self.img[:, :, i] / fact + pseudoval)
-
             else:
                 print(&#34;WARNING: Performing normalization without a tissue mask.&#34;)
                 for i in range(self.img.shape[2]):
@@ -1176,13 +1336,39 @@ class img:
                 for i in range(self.img.shape[2]):
                     fact = self.img[:, :, i].mean()
                     self.img[:, :, i] = np.log10(self.img[:, :, i] / fact + pseudoval)
-
             else:
                 print(&#34;WARNING: Performing normalization without a tissue mask.&#34;)
                 for i in range(self.img.shape[2]):
                     fact = self.img[:, :, i].mean()
                     self.img[:, :, i] = np.log10(self.img[:, :, i] / fact + pseudoval)
-        # get cluster data for image_i
+
+    def subsample_pixels(self, features, fract=0.2):
+        &#34;&#34;&#34;
+        Sub-samples fraction of pixels from the image randomly for each channel
+
+        Parameters
+        ----------
+        features : list of int or str
+            Indices or names of MxIF channels to use for tissue labeling
+        fract : float, optional (default=0.2)
+            Fraction of cluster data from each image to randomly select
+            for model building
+
+        Returns
+        -------
+        tmp : np.array
+            Clustering data from `image`
+
+        &#34;&#34;&#34;
+        if isinstance(features, int):  # force features into list if single integer
+            features = [features]
+        if isinstance(features, str):  # force features into int if single string
+            features = [self.ch.index(features)]
+        if checktype(features):  # force features into list of int if list of strings
+            features = [self.ch.index(x) for x in features]
+        if features is None:  # if no features are given, use all of them
+            features = [x for x in range(self.n_ch)]
+        # subsample data for given image
         tmp = []
         for i in range(self.img.shape[2]):
             tmp.append(self.img[:, :, i][self.mask != 0])
@@ -1212,10 +1398,82 @@ class img:
         # downsample mask if mask available
         if self.mask is not None:
             self.mask = block_reduce(
-                self.mask, block_size=(fact, fact), func=np.max, cval=0
+                self.mask, block_size=(fact, fact), func=func, cval=0
             )
         # downsample image
         self.img = block_reduce(self.img, block_size=(fact, fact, 1), func=func, cval=0)
+
+    def calculate_non_zero_mean(self):
+        &#34;&#34;&#34;
+        Calculate mean estimator for the given image array avoiding mask pixels or 
+        pixels with value 0
+
+        Parameters
+        ----------
+
+        Returns
+        -------
+        mean_estimator : list of float
+            List of mean estimator (mean*pixel) values for each channel
+        pixels : int
+            pixel count for the image excluding masked pixels
+        &#34;&#34;&#34;
+        image = self.img
+        pixels = np.count_nonzero(image != 0)
+        mean_estimator = []
+        for i in range(image.shape[2]):
+            ar = image[:, :, i]
+            mean = ar[ar != 0].mean()
+            mean_estimator.append(mean * pixels)
+        return mean_estimator, pixels
+
+    def create_tissue_mask(self, features=None, fract=0.2):
+        &#34;&#34;&#34;
+        Create tissue mask
+
+        Parameters
+        ----------
+        features : list of int or str
+            Indices or names of MxIF channels to use for tissue labeling
+        fract : float, optional (default=0.2)
+            Fraction of cluster data from each image to randomly select
+            for model building
+
+        Returns
+        -------
+        a numpy array as tissue mask set to self.mask
+        &#34;&#34;&#34;
+        # create a copy of the image
+        image_cp = self.copy()
+        # create a temporary tissue mask that covers no region
+        w, h, d = image_cp.img.shape
+        image_cp.mask = np.ones((w, h))
+        # log normalization on image
+        image_cp.log_normalize()
+        # apply gaussian filter
+        image_cp.img = filters.gaussian(image_cp.img, sigma=2, channel_axis=2)
+        # subsample data to build kmeans model
+        subsampled_data = image_cp.subsample_pixels(features, fract=fract)
+        cluster_data = np.row_stack(subsampled_data)
+        # reshape image for prediction
+        image_ar_reshape = image_cp.img.reshape((w * h, d))
+        # build kmeans model with 2 clusters
+        kmeans = KMeans(n_clusters=2, random_state=18).fit(cluster_data)
+        labels = kmeans.predict(image_ar_reshape).astype(float)
+        tID = labels.reshape((w, h))
+        # check if the background is labelled as 0 or 1
+        scores = kmeans.cluster_centers_
+        mean = scores.mean()
+        std = scores.std()
+        z_scores = (scores - mean) / std
+        if z_scores[0].mean() &gt; 0:
+            where_0 = np.where(tID == 0.0)
+            tID[where_0] = 0.5
+            where_1 = np.where(tID == 1.0)
+            tID[where_1] = 0.0
+            where_05 = np.where(tID == 0.5)
+            tID[where_05] = 1.0
+        self.mask = tID
 
     def show(
         self,
@@ -1236,10 +1494,10 @@ class img:
         channels : tuple of int or None, optional (default=`None`)
             List of channels by index or name to show
         RGB : bool
-            Treat 3- or 4-dimensional array as RGB image. If `False`, plot channels
+            Treat 3- or 4-dimensional array as RGB image. If `False`, plot channels 
             individually.
         cbar : bool
-            Show colorbar for scale of image intensities if plotting individual
+            Show colorbar for scale of image intensities if plotting individual 
             channels.
         mask_out : bool, optional (default=`True`)
             Mask out non-tissue pixels prior to showing
@@ -1254,7 +1512,7 @@ class img:
 
         Returns
         -------
-        Matplotlib object (if plotting one feature or RGB) or gridspec object (for
+        Matplotlib object (if plotting one feature or RGB) or gridspec object (for 
         multiple features). Saves plot to file if `save_to` is not `None`.
         &#34;&#34;&#34;
         # if only one feature (2D), plot it quickly
@@ -1552,6 +1810,107 @@ def from_tiffs(cls, tiffdir, channels, common_strings=None, mask=None):
 </dl>
 <h3>Methods</h3>
 <dl>
+<dt id="MILWRM.MxIF.img.blurring"><code class="name flex">
+<span>def <span class="ident">blurring</span></span>(<span>self, filter_name='gaussian', sigma=2, **kwargs)</span>
+</code></dt>
+<dd>
+<div class="desc"><p>Aplying a filter on the images</p>
+<h2 id="parameters">Parameters</h2>
+<dl>
+<dt><strong><code>filter</code></strong> :&ensp;<code>str</code></dt>
+<dd>str to define which type of filter to apply</dd>
+<dt><strong><code>sigma</code></strong> :&ensp;<code>int</code></dt>
+<dd>parameter controlling extent of smoothening</dd>
+</dl></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def blurring(self, filter_name=&#34;gaussian&#34;, sigma=2, **kwargs):
+    &#34;&#34;&#34;
+    Aplying a filter on the images
+
+    Parameters
+    ----------
+    filter : str
+        str to define which type of filter to apply
+
+    sigma : int
+        parameter controlling extent of smoothening
+    &#34;&#34;&#34;
+    if filter_name == &#34;gaussian&#34;:
+        print(&#34;Applying gaussian filter&#34;)
+        self.img = filters.gaussian(
+            self.img,
+            sigma=sigma,
+            channel_axis=2,
+            **kwargs,
+        )
+    elif filter_name == &#34;median&#34;:
+        print(&#34;Applying median filter&#34;)
+        if isinstance(sigma, float):
+            sigma = int(sigma)
+        for i in range(self.img.shape[2]):
+            image_array = self.img[:, :, i]
+            image_array_blurred = filters.median(
+                image_array,
+                np.ones(sigma, sigma),
+            )
+            self.img[:, :, i] = image_array_blurred
+    elif filter_name == &#34;bilateral&#34;:
+        print(&#34;Applying biltaral filter&#34;)
+        self.img = denoise_bilateral(
+            self.img, sigma_spatial=sigma, channel_axis=2, **kwargs
+        )
+    else:
+        raise Exception(
+            &#34;filter name should be either gaussian, median or bilateral&#34;
+        )</code></pre>
+</details>
+</dd>
+<dt id="MILWRM.MxIF.img.calculate_non_zero_mean"><code class="name flex">
+<span>def <span class="ident">calculate_non_zero_mean</span></span>(<span>self)</span>
+</code></dt>
+<dd>
+<div class="desc"><p>Calculate mean estimator for the given image array avoiding mask pixels or
+pixels with value 0</p>
+<h2 id="parameters">Parameters</h2>
+<h2 id="returns">Returns</h2>
+<dl>
+<dt><strong><code>mean_estimator</code></strong> :&ensp;<code>list</code> of <code>float</code></dt>
+<dd>List of mean estimator (mean*pixel) values for each channel</dd>
+<dt><strong><code>pixels</code></strong> :&ensp;<code>int</code></dt>
+<dd>pixel count for the image excluding masked pixels</dd>
+</dl></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def calculate_non_zero_mean(self):
+    &#34;&#34;&#34;
+    Calculate mean estimator for the given image array avoiding mask pixels or 
+    pixels with value 0
+
+    Parameters
+    ----------
+
+    Returns
+    -------
+    mean_estimator : list of float
+        List of mean estimator (mean*pixel) values for each channel
+    pixels : int
+        pixel count for the image excluding masked pixels
+    &#34;&#34;&#34;
+    image = self.img
+    pixels = np.count_nonzero(image != 0)
+    mean_estimator = []
+    for i in range(image.shape[2]):
+        ar = image[:, :, i]
+        mean = ar[ar != 0].mean()
+        mean_estimator.append(mean * pixels)
+    return mean_estimator, pixels</code></pre>
+</details>
+</dd>
 <dt id="MILWRM.MxIF.img.clip"><code class="name flex">
 <span>def <span class="ident">clip</span></span>(<span>self, **kwargs)</span>
 </code></dt>
@@ -1605,6 +1964,77 @@ def from_tiffs(cls, tiffdir, channels, common_strings=None, mask=None):
     return img(img_arr=new[&#34;img&#34;], channels=new[&#34;ch&#34;], mask=new[&#34;mask&#34;])</code></pre>
 </details>
 </dd>
+<dt id="MILWRM.MxIF.img.create_tissue_mask"><code class="name flex">
+<span>def <span class="ident">create_tissue_mask</span></span>(<span>self, features=None, fract=0.2)</span>
+</code></dt>
+<dd>
+<div class="desc"><p>Create tissue mask</p>
+<h2 id="parameters">Parameters</h2>
+<dl>
+<dt><strong><code>features</code></strong> :&ensp;<code>list</code> of <code>int</code> or <code>str</code></dt>
+<dd>Indices or names of MxIF channels to use for tissue labeling</dd>
+<dt><strong><code>fract</code></strong> :&ensp;<code>float</code>, optional <code>(default=0.2)</code></dt>
+<dd>Fraction of cluster data from each image to randomly select
+for model building</dd>
+</dl>
+<h2 id="returns">Returns</h2>
+<dl>
+<dt><code>a numpy array as tissue mask set to self.mask</code></dt>
+<dd>&nbsp;</dd>
+</dl></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def create_tissue_mask(self, features=None, fract=0.2):
+    &#34;&#34;&#34;
+    Create tissue mask
+
+    Parameters
+    ----------
+    features : list of int or str
+        Indices or names of MxIF channels to use for tissue labeling
+    fract : float, optional (default=0.2)
+        Fraction of cluster data from each image to randomly select
+        for model building
+
+    Returns
+    -------
+    a numpy array as tissue mask set to self.mask
+    &#34;&#34;&#34;
+    # create a copy of the image
+    image_cp = self.copy()
+    # create a temporary tissue mask that covers no region
+    w, h, d = image_cp.img.shape
+    image_cp.mask = np.ones((w, h))
+    # log normalization on image
+    image_cp.log_normalize()
+    # apply gaussian filter
+    image_cp.img = filters.gaussian(image_cp.img, sigma=2, channel_axis=2)
+    # subsample data to build kmeans model
+    subsampled_data = image_cp.subsample_pixels(features, fract=fract)
+    cluster_data = np.row_stack(subsampled_data)
+    # reshape image for prediction
+    image_ar_reshape = image_cp.img.reshape((w * h, d))
+    # build kmeans model with 2 clusters
+    kmeans = KMeans(n_clusters=2, random_state=18).fit(cluster_data)
+    labels = kmeans.predict(image_ar_reshape).astype(float)
+    tID = labels.reshape((w, h))
+    # check if the background is labelled as 0 or 1
+    scores = kmeans.cluster_centers_
+    mean = scores.mean()
+    std = scores.std()
+    z_scores = (scores - mean) / std
+    if z_scores[0].mean() &gt; 0:
+        where_0 = np.where(tID == 0.0)
+        tID[where_0] = 0.5
+        where_1 = np.where(tID == 1.0)
+        tID[where_1] = 0.0
+        where_05 = np.where(tID == 0.5)
+        tID[where_05] = 1.0
+    self.mask = tID</code></pre>
+</details>
+</dd>
 <dt id="MILWRM.MxIF.img.downsample"><code class="name flex">
 <span>def <span class="ident">downsample</span></span>(<span>self, fact, func=&lt;function mean&gt;)</span>
 </code></dt>
@@ -1648,7 +2078,7 @@ each pixel</p>
     # downsample mask if mask available
     if self.mask is not None:
         self.mask = block_reduce(
-            self.mask, block_size=(fact, fact), func=np.max, cval=0
+            self.mask, block_size=(fact, fact), func=func, cval=0
         )
     # downsample image
     self.img = block_reduce(self.img, block_size=(fact, fact, 1), func=func, cval=0)</code></pre>
@@ -1687,7 +2117,7 @@ each pixel</p>
 </details>
 </dd>
 <dt id="MILWRM.MxIF.img.log_normalize"><code class="name flex">
-<span>def <span class="ident">log_normalize</span></span>(<span>self, fract, features, pseudoval=1, mean=None, mask=True)</span>
+<span>def <span class="ident">log_normalize</span></span>(<span>self, pseudoval=1, mean=None, mask=True)</span>
 </code></dt>
 <dd>
 <div class="desc"><p>Log-normalizes values for each marker with <code>log10(arr/arr.mean() + pseudoval)</code></p>
@@ -1706,7 +2136,7 @@ with zeros</dd>
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">def log_normalize(self, fract, features, pseudoval=1, mean=None, mask=True):
+<pre><code class="python">def log_normalize(self, pseudoval=1, mean=None, mask=True):
     &#34;&#34;&#34;
     Log-normalizes values for each marker with `log10(arr/arr.mean() + pseudoval)`
 
@@ -1723,21 +2153,12 @@ with zeros</dd>
     -------
     Log-normalizes values in each channel of `self.img`
     &#34;&#34;&#34;
-    if isinstance(features, int):  # force features into list if single integer
-        features = [features]
-    if isinstance(features, str):  # force features into int if single string
-        features = [self.ch.index(features)]
-    if checktype(features):  # force features into list of int if list of strings
-        features = [self.ch.index(x) for x in features]
-    if features is None:  # if no features are given, use all of them
-        features = [x for x in range(self.n_ch)]
-    if mean.all():
+    if mean is not None:
         if mask:
             assert self.mask is not None, &#34;No tissue mask available&#34;
             for i in range(self.img.shape[2]):
                 fact = mean[i]
                 self.img[:, :, i] = np.log10(self.img[:, :, i] / fact + pseudoval)
-
         else:
             print(&#34;WARNING: Performing normalization without a tissue mask.&#34;)
             for i in range(self.img.shape[2]):
@@ -1750,21 +2171,11 @@ with zeros</dd>
             for i in range(self.img.shape[2]):
                 fact = self.img[:, :, i].mean()
                 self.img[:, :, i] = np.log10(self.img[:, :, i] / fact + pseudoval)
-
         else:
             print(&#34;WARNING: Performing normalization without a tissue mask.&#34;)
             for i in range(self.img.shape[2]):
                 fact = self.img[:, :, i].mean()
-                self.img[:, :, i] = np.log10(self.img[:, :, i] / fact + pseudoval)
-    # get cluster data for image_i
-    tmp = []
-    for i in range(self.img.shape[2]):
-        tmp.append(self.img[:, :, i][self.mask != 0])
-    tmp = np.column_stack(tmp)
-    # select cluster data
-    i = np.random.choice(tmp.shape[0], int(tmp.shape[0] * fract))
-    tmp = tmp[np.ix_(i, features)]
-    return tmp</code></pre>
+                self.img[:, :, i] = np.log10(self.img[:, :, i] / fact + pseudoval)</code></pre>
 </details>
 </dd>
 <dt id="MILWRM.MxIF.img.plot_image_histogram"><code class="name flex">
@@ -1894,7 +2305,7 @@ channels.</dd>
 </dl>
 <h2 id="returns">Returns</h2>
 <dl>
-<dt><code>Matplotlib object (if plotting one feature</code> or <code>RGB)</code> or <code>gridspec object (for</code></dt>
+<dt><code>Matplotlib object (if plotting one feature</code> or <code>RGB)</code> or <code>gridspec object (for </code></dt>
 <dd>&nbsp;</dd>
 </dl>
 <p>multiple features). Saves plot to file if <code>save_to</code> is not <code>None</code>.</p></div>
@@ -1921,10 +2332,10 @@ channels.</dd>
     channels : tuple of int or None, optional (default=`None`)
         List of channels by index or name to show
     RGB : bool
-        Treat 3- or 4-dimensional array as RGB image. If `False`, plot channels
+        Treat 3- or 4-dimensional array as RGB image. If `False`, plot channels 
         individually.
     cbar : bool
-        Show colorbar for scale of image intensities if plotting individual
+        Show colorbar for scale of image intensities if plotting individual 
         channels.
     mask_out : bool, optional (default=`True`)
         Mask out non-tissue pixels prior to showing
@@ -1939,7 +2350,7 @@ channels.</dd>
 
     Returns
     -------
-    Matplotlib object (if plotting one feature or RGB) or gridspec object (for
+    Matplotlib object (if plotting one feature or RGB) or gridspec object (for 
     multiple features). Saves plot to file if `save_to` is not `None`.
     &#34;&#34;&#34;
     # if only one feature (2D), plot it quickly
@@ -2045,6 +2456,65 @@ channels.</dd>
     return fig</code></pre>
 </details>
 </dd>
+<dt id="MILWRM.MxIF.img.subsample_pixels"><code class="name flex">
+<span>def <span class="ident">subsample_pixels</span></span>(<span>self, features, fract=0.2)</span>
+</code></dt>
+<dd>
+<div class="desc"><p>Sub-samples fraction of pixels from the image randomly for each channel</p>
+<h2 id="parameters">Parameters</h2>
+<dl>
+<dt><strong><code>features</code></strong> :&ensp;<code>list</code> of <code>int</code> or <code>str</code></dt>
+<dd>Indices or names of MxIF channels to use for tissue labeling</dd>
+<dt><strong><code>fract</code></strong> :&ensp;<code>float</code>, optional <code>(default=0.2)</code></dt>
+<dd>Fraction of cluster data from each image to randomly select
+for model building</dd>
+</dl>
+<h2 id="returns">Returns</h2>
+<dl>
+<dt><strong><code>tmp</code></strong> :&ensp;<code>np.array</code></dt>
+<dd>Clustering data from <code>image</code></dd>
+</dl></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def subsample_pixels(self, features, fract=0.2):
+    &#34;&#34;&#34;
+    Sub-samples fraction of pixels from the image randomly for each channel
+
+    Parameters
+    ----------
+    features : list of int or str
+        Indices or names of MxIF channels to use for tissue labeling
+    fract : float, optional (default=0.2)
+        Fraction of cluster data from each image to randomly select
+        for model building
+
+    Returns
+    -------
+    tmp : np.array
+        Clustering data from `image`
+
+    &#34;&#34;&#34;
+    if isinstance(features, int):  # force features into list if single integer
+        features = [features]
+    if isinstance(features, str):  # force features into int if single string
+        features = [self.ch.index(features)]
+    if checktype(features):  # force features into list of int if list of strings
+        features = [self.ch.index(x) for x in features]
+    if features is None:  # if no features are given, use all of them
+        features = [x for x in range(self.n_ch)]
+    # subsample data for given image
+    tmp = []
+    for i in range(self.img.shape[2]):
+        tmp.append(self.img[:, :, i][self.mask != 0])
+    tmp = np.column_stack(tmp)
+    # select cluster data
+    i = np.random.choice(tmp.shape[0], int(tmp.shape[0] * fract))
+    tmp = tmp[np.ix_(i, features)]
+    return tmp</code></pre>
+</details>
+</dd>
 <dt id="MILWRM.MxIF.img.to_npz"><code class="name flex">
 <span>def <span class="ident">to_npz</span></span>(<span>self, file)</span>
 </code></dt>
@@ -2110,8 +2580,11 @@ channels.</dd>
 <li>
 <h4><code><a title="MILWRM.MxIF.img" href="#MILWRM.MxIF.img">img</a></code></h4>
 <ul class="">
+<li><code><a title="MILWRM.MxIF.img.blurring" href="#MILWRM.MxIF.img.blurring">blurring</a></code></li>
+<li><code><a title="MILWRM.MxIF.img.calculate_non_zero_mean" href="#MILWRM.MxIF.img.calculate_non_zero_mean">calculate_non_zero_mean</a></code></li>
 <li><code><a title="MILWRM.MxIF.img.clip" href="#MILWRM.MxIF.img.clip">clip</a></code></li>
 <li><code><a title="MILWRM.MxIF.img.copy" href="#MILWRM.MxIF.img.copy">copy</a></code></li>
+<li><code><a title="MILWRM.MxIF.img.create_tissue_mask" href="#MILWRM.MxIF.img.create_tissue_mask">create_tissue_mask</a></code></li>
 <li><code><a title="MILWRM.MxIF.img.downsample" href="#MILWRM.MxIF.img.downsample">downsample</a></code></li>
 <li><code><a title="MILWRM.MxIF.img.equalize_hist" href="#MILWRM.MxIF.img.equalize_hist">equalize_hist</a></code></li>
 <li><code><a title="MILWRM.MxIF.img.from_npz" href="#MILWRM.MxIF.img.from_npz">from_npz</a></code></li>
@@ -2120,6 +2593,7 @@ channels.</dd>
 <li><code><a title="MILWRM.MxIF.img.plot_image_histogram" href="#MILWRM.MxIF.img.plot_image_histogram">plot_image_histogram</a></code></li>
 <li><code><a title="MILWRM.MxIF.img.scale" href="#MILWRM.MxIF.img.scale">scale</a></code></li>
 <li><code><a title="MILWRM.MxIF.img.show" href="#MILWRM.MxIF.img.show">show</a></code></li>
+<li><code><a title="MILWRM.MxIF.img.subsample_pixels" href="#MILWRM.MxIF.img.subsample_pixels">subsample_pixels</a></code></li>
 <li><code><a title="MILWRM.MxIF.img.to_npz" href="#MILWRM.MxIF.img.to_npz">to_npz</a></code></li>
 </ul>
 </li>
@@ -2129,7 +2603,7 @@ channels.</dd>
 </nav>
 </main>
 <footer id="footer">
-<p>Generated by <a href="https://pdoc3.github.io/pdoc"><cite>pdoc</cite> 0.9.2</a>.</p>
+<p>Generated by <a href="https://pdoc3.github.io/pdoc" title="pdoc: Python API documentation generator"><cite>pdoc</cite> 0.10.0</a>.</p>
 </footer>
 </body>
 </html>

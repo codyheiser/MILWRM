@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1" />
-<meta name="generator" content="pdoc 0.9.2" />
+<meta name="generator" content="pdoc 0.10.0" />
 <title>MILWRM.ST API documentation</title>
 <meta name="description" content="Functions and classes for manipulating 10X Visium spatial transcriptomic (ST) and
 histological imaging data" />
@@ -40,6 +40,7 @@ import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
 import seaborn as sns
 import scanpy as sc
+import squidpy as sq
 
 sc.set_figure_params(dpi=100, dpi_save=400)
 sns.set_style(&#34;white&#34;)
@@ -50,6 +51,61 @@ from matplotlib.lines import Line2D
 from scipy.spatial import cKDTree
 from scipy.interpolate import interpnd, griddata
 from sklearn.metrics.pairwise import euclidean_distances
+
+
+def blur_features_st(adata, tmp, spatial_graph_key=None, n_rings=1):
+    &#34;&#34;&#34;
+    Blur values in an `AnnData` object using spatial nearest neighbors
+
+    Parameters
+    ----------
+    adata : anndata.AnnData
+        AnnData object containing Visium data
+    tmp : pd.DataFrame
+        containing feature columns from adata.obs that will be blurred
+    spatial_graph_key : str, optional (default=`None`)
+        Key in `adata.obsp` containing spatial graph connectivities (i.e. 
+        `&#34;spatial_connectivities&#34;`). If `None`, compute new spatial graph using 
+        `n_rings` in `squidpy`.
+    n_rings : int, optional (default=1)
+        Number of hexagonal rings around each spatial transcriptomics spot to blur 
+        features by for capturing regional information. Assumes 10X Genomics Visium 
+        platform.
+
+    Returns
+    -------
+    adata.obs is edited in place with new blurred columns
+    &#34;&#34;&#34;
+    if spatial_graph_key is not None:
+        # use existing spatial graph
+        assert (
+            spatial_graph_key in adata.obsp.keys()
+        ), &#34;Spatial connectivities key &#39;{}&#39; not found.&#34;.format(spatial_graph_key)
+    else:
+        # create spatial graph
+        print(&#34;Computing spatial graph with {} hexagonal rings&#34;.format(n_rings))
+        sq.gr.spatial_neighbors(adata, coord_type=&#34;grid&#34;, n_rings=n_rings)
+        spatial_graph_key = &#34;spatial_connectivities&#34;  # set key to expected output
+    tmp2 = tmp.copy()  # copy of temporary dataframe for dropping blurred features into
+    cols = tmp.columns  # get column names
+    # perform blurring by nearest spot neighbors
+    for x in range(len(tmp)):
+        vals = tmp.iloc[
+            list(
+                np.argwhere(
+                    adata.obsp[spatial_graph_key][
+                        x,
+                    ]
+                )[:, 1]
+            )
+            + [x],
+            :,
+        ].mean()
+        tmp2.iloc[x, :] = vals.values
+    # add blurred features to anndata object
+    adata.obs[[x for x in cols]] = tmp.loc[:, cols].values
+    adata.obs[[&#34;blur_&#34; + x for x in cols]] = tmp2.loc[:, cols].values
+    return tmp2.loc[:, cols]
 
 
 def bin_threshold(mat, threshmin=None, threshmax=0.5):
@@ -63,7 +119,7 @@ def bin_threshold(mat, threshmin=None, threshmax=0.5):
     threshmin : float or None
         Minimum value on [0,1] to assign binary IDs from probabilities.
     thresmax : float
-        Maximum value on [0,1] to assign binary IDs from probabilities. Values higher
+        Maximum value on [0,1] to assign binary IDs from probabilities. Values higher 
         than threshmax -&gt; 1. Values lower than thresmax -&gt; 0.
 
     Returns
@@ -93,7 +149,7 @@ def map_pixels(adata, filter_label=&#34;in_tissue&#34;, img_key=&#34;hires&#34;,
     adata : AnnData.anndata
         The data
     filter_label : str or None
-        adata.obs column key that contains binary labels for filtering barcodes. If
+        adata.obs column key that contains binary labels for filtering barcodes. If 
         None, do not filter.
     img_key : str
         adata.uns key containing the image to use for mapping
@@ -103,7 +159,7 @@ def map_pixels(adata, filter_label=&#34;in_tissue&#34;, img_key=&#34;hires&#34;,
     adata : AnnData.anndata
         with the following attributes:
         adata.uns[&#34;pixel_map_df&#34;] : pd.DataFrame
-            Long-form dataframe of Visium spot barcode IDs, pixel coordinates, and
+            Long-form dataframe of Visium spot barcode IDs, pixel coordinates, and 
             .obs metadata
         adata.uns[&#34;pixel_map&#34;] : np.array
             Pixel space array of Visium spot barcode IDs
@@ -252,7 +308,10 @@ def map_pixels(adata, filter_label=&#34;in_tissue&#34;, img_key=&#34;hires&#34;,
     # map barcodes to pixel coordinates
     pixel_coords = np.column_stack((grid_x.ravel(order=&#34;C&#34;), grid_y.ravel(order=&#34;C&#34;)))
     barcode_list = griddata(
-        np.multiply(a_frame.obsm[&#34;spatial&#34;], a_frame.uns[&#34;pixel_map_params&#34;][&#34;scalef&#34;]),
+        np.multiply(
+            a_frame.obsm[&#34;spatial&#34;],
+            a_frame.uns[&#34;pixel_map_params&#34;][&#34;scalef&#34;]
+        ),
         a_frame.obs_names,
         (pixel_coords[:, 0], pixel_coords[:, 1]),
         method=&#34;nearest&#34;,
@@ -302,10 +361,10 @@ def trim_image(
     distance_trim : bool
         Manually trim pixels by distance to nearest Visium spot center
     threshold : int or None
-        Number of pixels from nearest Visium spot center to call barcode ID. Ignored
+        Number of pixels from nearest Visium spot center to call barcode ID. Ignored 
         if `distance_trim==False`.
     channels : list of str or None
-        Names of image channels in axis order. If None, channels are named &#34;ch_0&#34;,
+        Names of image channels in axis order. If None, channels are named &#34;ch_0&#34;, 
         &#34;ch_1&#34;, etc.
     plot_out : bool
         Plot final trimmed image
@@ -480,8 +539,8 @@ def assemble_pita(
     adata : AnnData.anndata
         the data
     features : list of int or str
-        Names or indices of features to cast onto spot image. If `None`, cast all
-        features. If `plot_out`, first feature in list will be plotted. If not
+        Names or indices of features to cast onto spot image. If `None`, cast all 
+        features. If `plot_out`, first feature in list will be plotted. If not 
         specified and `plot_out`, first feature (index 0) will be plotted.
     use_rep : str
         Key from `adata.obsm` to use for plotting. If `None`, use `adata.X`.
@@ -490,7 +549,7 @@ def assemble_pita(
     plot_out : bool
         Show resulting image?
     histo : str or `None`, optional (default=`None`)
-        Histology image to show along with pita in gridspec (i.e. &#34;hires&#34;,
+        Histology image to show along with pita in gridspec (i.e. &#34;hires&#34;, 
         &#34;hires_trim&#34;, &#34;lowres&#34;). If `None` or if `plot_out`==`False`, ignore.
     verbose : bool, optional (default=`True`)
         Print updates to console
@@ -574,10 +633,11 @@ def assemble_pita(
     for col in mapper.columns:
         if pd.api.types.is_categorical_dtype(mapper[col]):
             cat_max = len(mapper[col].cat.categories)
+            categories = mapper[col].cat.categories  # save original categories
             mapper[col] = mapper[col].replace(
                 {v: k for k, v in dict(enumerate(mapper[col].cat.categories)).items()}
             )
-            discrete_cols[mapper.columns.get_loc(col)] = cat_max
+            discrete_cols[mapper.columns.get_loc(col)] = (cat_max, categories)
     # if no categorical columns, pass None to discrete_cols
     if bool(discrete_cols) is False:
         discrete_cols = None
@@ -620,7 +680,7 @@ def assemble_pita(
         )
     if verbose:
         print(&#34;Done!&#34;)
-    return assembled
+    return assembled, discrete_cols
 
 
 def plot_single_image(
@@ -673,12 +733,13 @@ def plot_single_image_discrete(
     image,
     ax,
     max_val,
+    ticklabels=None,
     label=&#34;&#34;,
     cmap=&#34;plasma&#34;,
     **kwargs,
 ):
     &#34;&#34;&#34;
-    Plot a discrete (categorical) pixel image containing integer values (i.e. MILWRM
+    Plot a discrete (categorical) pixel image containing integer values (i.e. MILWRM 
     domains)
 
     Parameters
@@ -688,8 +749,11 @@ def plot_single_image_discrete(
     ax : matplotlib.axes.Axes
         Matplotlib axes to plot `image` to
     max_val : int
-        Maximum integer value for categories (i.e. 4 for categories [0,1,2,3,4]).
+        Maximum integer value for categories (i.e. 4 for categories [0,1,2,3,4]). 
         Categories are expected to be zero-indexed integers.
+    ticklabels : list of str, optional (default=`None`)
+        Ordered list of categories for labeling discrete colorbar ticks. If `None`, 
+        number categories 0 - `max_val`.
     label : str, optional (default=&#34;&#34;)
         What to title the image plot
     cmap : str, optional (default=&#34;plasma&#34;)
@@ -717,9 +781,12 @@ def plot_single_image_discrete(
         fontweight=&#34;bold&#34;,
         fontsize=16,
     )
-    _ = plt.colorbar(im, shrink=0.7, ticks=range(int(max_val)))
+    cbar = plt.colorbar(im, shrink=0.7, ticks=range(int(max_val)))
     # move edges of colorbar by 0.5
     im.set_clim(vmin=-0.5, vmax=max_val - 0.5)
+    # add custom ticklabels based on categories
+    if ticklabels is not None:
+        cbar.set_ticklabels(ticklabels)
 
 
 def plot_single_image_rgb(
@@ -806,16 +873,16 @@ def show_pita(
     features : list of int, optional (default=`None`)
         List of features by index to show in plot. If `None`, use all features.
     discrete_features : dict, optional (default=`None`)
-        Dictionary of feature indices (keys) containing discrete (categorical) values
-        (i.e. MILWRM domain). Values are `max_value` to pass to
-        `plot_single_image_discrete` for each discrete feature. If `None`, treat all
-        features as continuous.
+        Dictionary of feature indices (keys) containing discrete (categorical) values 
+        (i.e. MILWRM domain). Values are tuple of `max_value` to pass to 
+        `plot_single_image_discrete` for each discrete feature, and the ordered list 
+        of categories for legend plotting. If `None`, treat all features as continuous.
     RGB : bool, optional (default=`False`)
         Treat 3-dimensional array as RGB image
     histo : np.array or `None`, optional (default=`None`)
         Histology image to show along with pita in gridspec. If `None`, ignore.
     label : str, optional (default=&#34;feature&#34;)
-        What to title each panel of the gridspec (i.e. &#34;PC&#34; or &#34;usage&#34;) or each
+        What to title each panel of the gridspec (i.e. &#34;PC&#34; or &#34;usage&#34;) or each 
         channel in RGB image. Can also pass list of names e.g. [&#34;NeuN&#34;,&#34;GFAP&#34;,
         &#34;DAPI&#34;] corresponding to channels.
     ncols : int, optional (default=4)
@@ -831,7 +898,7 @@ def show_pita(
 
     Returns
     -------
-    Matplotlib object (if plotting one feature or RGB) or gridspec object (for
+    Matplotlib object (if plotting one feature or RGB) or gridspec object (for 
     multiple features). Saves plot to file if `save_to` is not `None`.
     &#34;&#34;&#34;
     assert pita.ndim &gt; 1, &#34;Pita does not have enough dimensions: {} given&#34;.format(
@@ -846,7 +913,8 @@ def show_pita(
                 image=pita,
                 ax=ax,
                 # use first value in dict as max
-                max_val=list(discrete_features.values())[0],
+                max_val=list(discrete_features.values())[0][0],
+                ticklabels=list(discrete_features.values())[0][1],
                 label=label[0] if isinstance(label, list) else label,
                 cmap=cmap,
                 **kwargs,
@@ -883,7 +951,8 @@ def show_pita(
                 image=pita,
                 ax=ax,
                 # use first value in dict as max
-                max_val=list(discrete_features.values())[0],
+                max_val=list(discrete_features.values())[0][0],
+                ticklabels=list(discrete_features.values())[0][1],
                 label=label[0] if isinstance(label, list) else label,
                 cmap=cmap,
                 **kwargs,
@@ -1023,7 +1092,8 @@ def show_pita(
                     image=pita[:, :, feature],
                     ax=ax,
                     # use corresponding value in dict as max
-                    max_val=discrete_features[feature],
+                    max_val=discrete_features[feature][0],
+                    ticklabels=discrete_features[feature][1],
                     label=labels[i],
                     cmap=cmap,
                     **kwargs,
@@ -1112,8 +1182,8 @@ specified and <code>plot_out</code>, first feature (index 0) will be plotted.</d
     adata : AnnData.anndata
         the data
     features : list of int or str
-        Names or indices of features to cast onto spot image. If `None`, cast all
-        features. If `plot_out`, first feature in list will be plotted. If not
+        Names or indices of features to cast onto spot image. If `None`, cast all 
+        features. If `plot_out`, first feature in list will be plotted. If not 
         specified and `plot_out`, first feature (index 0) will be plotted.
     use_rep : str
         Key from `adata.obsm` to use for plotting. If `None`, use `adata.X`.
@@ -1122,7 +1192,7 @@ specified and <code>plot_out</code>, first feature (index 0) will be plotted.</d
     plot_out : bool
         Show resulting image?
     histo : str or `None`, optional (default=`None`)
-        Histology image to show along with pita in gridspec (i.e. &#34;hires&#34;,
+        Histology image to show along with pita in gridspec (i.e. &#34;hires&#34;, 
         &#34;hires_trim&#34;, &#34;lowres&#34;). If `None` or if `plot_out`==`False`, ignore.
     verbose : bool, optional (default=`True`)
         Print updates to console
@@ -1206,10 +1276,11 @@ specified and <code>plot_out</code>, first feature (index 0) will be plotted.</d
     for col in mapper.columns:
         if pd.api.types.is_categorical_dtype(mapper[col]):
             cat_max = len(mapper[col].cat.categories)
+            categories = mapper[col].cat.categories  # save original categories
             mapper[col] = mapper[col].replace(
                 {v: k for k, v in dict(enumerate(mapper[col].cat.categories)).items()}
             )
-            discrete_cols[mapper.columns.get_loc(col)] = cat_max
+            discrete_cols[mapper.columns.get_loc(col)] = (cat_max, categories)
     # if no categorical columns, pass None to discrete_cols
     if bool(discrete_cols) is False:
         discrete_cols = None
@@ -1252,7 +1323,7 @@ specified and <code>plot_out</code>, first feature (index 0) will be plotted.</d
         )
     if verbose:
         print(&#34;Done!&#34;)
-    return assembled</code></pre>
+    return assembled, discrete_cols</code></pre>
 </details>
 </dd>
 <dt id="MILWRM.ST.bin_threshold"><code class="name flex">
@@ -1290,7 +1361,7 @@ than threshmax -&gt; 1. Values lower than thresmax -&gt; 0.</dd>
     threshmin : float or None
         Minimum value on [0,1] to assign binary IDs from probabilities.
     thresmax : float
-        Maximum value on [0,1] to assign binary IDs from probabilities. Values higher
+        Maximum value on [0,1] to assign binary IDs from probabilities. Values higher 
         than threshmax -&gt; 1. Values lower than thresmax -&gt; 0.
 
     Returns
@@ -1309,6 +1380,90 @@ than threshmax -&gt; 1. Values lower than thresmax -&gt; 0.</dd>
     a[mask] = 1
     a[~mask] = 0
     return a</code></pre>
+</details>
+</dd>
+<dt id="MILWRM.ST.blur_features_st"><code class="name flex">
+<span>def <span class="ident">blur_features_st</span></span>(<span>adata, tmp, spatial_graph_key=None, n_rings=1)</span>
+</code></dt>
+<dd>
+<div class="desc"><p>Blur values in an <code>AnnData</code> object using spatial nearest neighbors</p>
+<h2 id="parameters">Parameters</h2>
+<dl>
+<dt><strong><code>adata</code></strong> :&ensp;<code>anndata.AnnData</code></dt>
+<dd>AnnData object containing Visium data</dd>
+<dt><strong><code>tmp</code></strong> :&ensp;<code>pd.DataFrame</code></dt>
+<dd>containing feature columns from adata.obs that will be blurred</dd>
+<dt><strong><code>spatial_graph_key</code></strong> :&ensp;<code>str</code>, optional <code>(default=</code>None<code>)</code></dt>
+<dd>Key in <code>adata.obsp</code> containing spatial graph connectivities (i.e.
+<code>"spatial_connectivities"</code>). If <code>None</code>, compute new spatial graph using
+<code>n_rings</code> in <code>squidpy</code>.</dd>
+<dt><strong><code>n_rings</code></strong> :&ensp;<code>int</code>, optional <code>(default=1)</code></dt>
+<dd>Number of hexagonal rings around each spatial transcriptomics spot to blur
+features by for capturing regional information. Assumes 10X Genomics Visium
+platform.</dd>
+</dl>
+<h2 id="returns">Returns</h2>
+<dl>
+<dt><code>adata.obs is edited in place with new blurred columns</code></dt>
+<dd>&nbsp;</dd>
+</dl></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def blur_features_st(adata, tmp, spatial_graph_key=None, n_rings=1):
+    &#34;&#34;&#34;
+    Blur values in an `AnnData` object using spatial nearest neighbors
+
+    Parameters
+    ----------
+    adata : anndata.AnnData
+        AnnData object containing Visium data
+    tmp : pd.DataFrame
+        containing feature columns from adata.obs that will be blurred
+    spatial_graph_key : str, optional (default=`None`)
+        Key in `adata.obsp` containing spatial graph connectivities (i.e. 
+        `&#34;spatial_connectivities&#34;`). If `None`, compute new spatial graph using 
+        `n_rings` in `squidpy`.
+    n_rings : int, optional (default=1)
+        Number of hexagonal rings around each spatial transcriptomics spot to blur 
+        features by for capturing regional information. Assumes 10X Genomics Visium 
+        platform.
+
+    Returns
+    -------
+    adata.obs is edited in place with new blurred columns
+    &#34;&#34;&#34;
+    if spatial_graph_key is not None:
+        # use existing spatial graph
+        assert (
+            spatial_graph_key in adata.obsp.keys()
+        ), &#34;Spatial connectivities key &#39;{}&#39; not found.&#34;.format(spatial_graph_key)
+    else:
+        # create spatial graph
+        print(&#34;Computing spatial graph with {} hexagonal rings&#34;.format(n_rings))
+        sq.gr.spatial_neighbors(adata, coord_type=&#34;grid&#34;, n_rings=n_rings)
+        spatial_graph_key = &#34;spatial_connectivities&#34;  # set key to expected output
+    tmp2 = tmp.copy()  # copy of temporary dataframe for dropping blurred features into
+    cols = tmp.columns  # get column names
+    # perform blurring by nearest spot neighbors
+    for x in range(len(tmp)):
+        vals = tmp.iloc[
+            list(
+                np.argwhere(
+                    adata.obsp[spatial_graph_key][
+                        x,
+                    ]
+                )[:, 1]
+            )
+            + [x],
+            :,
+        ].mean()
+        tmp2.iloc[x, :] = vals.values
+    # add blurred features to anndata object
+    adata.obs[[x for x in cols]] = tmp.loc[:, cols].values
+    adata.obs[[&#34;blur_&#34; + x for x in cols]] = tmp2.loc[:, cols].values
+    return tmp2.loc[:, cols]</code></pre>
 </details>
 </dd>
 <dt id="MILWRM.ST.map_pixels"><code class="name flex">
@@ -1349,7 +1504,7 @@ Pixel space array of Visium spot barcode IDs</dd>
     adata : AnnData.anndata
         The data
     filter_label : str or None
-        adata.obs column key that contains binary labels for filtering barcodes. If
+        adata.obs column key that contains binary labels for filtering barcodes. If 
         None, do not filter.
     img_key : str
         adata.uns key containing the image to use for mapping
@@ -1359,7 +1514,7 @@ Pixel space array of Visium spot barcode IDs</dd>
     adata : AnnData.anndata
         with the following attributes:
         adata.uns[&#34;pixel_map_df&#34;] : pd.DataFrame
-            Long-form dataframe of Visium spot barcode IDs, pixel coordinates, and
+            Long-form dataframe of Visium spot barcode IDs, pixel coordinates, and 
             .obs metadata
         adata.uns[&#34;pixel_map&#34;] : np.array
             Pixel space array of Visium spot barcode IDs
@@ -1508,7 +1663,10 @@ Pixel space array of Visium spot barcode IDs</dd>
     # map barcodes to pixel coordinates
     pixel_coords = np.column_stack((grid_x.ravel(order=&#34;C&#34;), grid_y.ravel(order=&#34;C&#34;)))
     barcode_list = griddata(
-        np.multiply(a_frame.obsm[&#34;spatial&#34;], a_frame.uns[&#34;pixel_map_params&#34;][&#34;scalef&#34;]),
+        np.multiply(
+            a_frame.obsm[&#34;spatial&#34;],
+            a_frame.uns[&#34;pixel_map_params&#34;][&#34;scalef&#34;]
+        ),
         a_frame.obs_names,
         (pixel_coords[:, 0], pixel_coords[:, 1]),
         method=&#34;nearest&#34;,
@@ -1619,7 +1777,7 @@ Pixel space array of Visium spot barcode IDs</dd>
 </details>
 </dd>
 <dt id="MILWRM.ST.plot_single_image_discrete"><code class="name flex">
-<span>def <span class="ident">plot_single_image_discrete</span></span>(<span>image, ax, max_val, label='', cmap='plasma', **kwargs)</span>
+<span>def <span class="ident">plot_single_image_discrete</span></span>(<span>image, ax, max_val, ticklabels=None, label='', cmap='plasma', **kwargs)</span>
 </code></dt>
 <dd>
 <div class="desc"><p>Plot a discrete (categorical) pixel image containing integer values (i.e. MILWRM
@@ -1633,6 +1791,9 @@ domains)</p>
 <dt><strong><code>max_val</code></strong> :&ensp;<code>int</code></dt>
 <dd>Maximum integer value for categories (i.e. 4 for categories [0,1,2,3,4]).
 Categories are expected to be zero-indexed integers.</dd>
+<dt><strong><code>ticklabels</code></strong> :&ensp;<code>list</code> of <code>str</code>, optional <code>(default=</code>None<code>)</code></dt>
+<dd>Ordered list of categories for labeling discrete colorbar ticks. If <code>None</code>,
+number categories 0 - <code>max_val</code>.</dd>
 <dt><strong><code>label</code></strong> :&ensp;<code>str</code>, optional <code>(default="")</code></dt>
 <dd>What to title the image plot</dd>
 <dt><strong><code>cmap</code></strong> :&ensp;<code>str</code>, optional <code>(default="plasma")</code></dt>
@@ -1653,12 +1814,13 @@ Categories are expected to be zero-indexed integers.</dd>
     image,
     ax,
     max_val,
+    ticklabels=None,
     label=&#34;&#34;,
     cmap=&#34;plasma&#34;,
     **kwargs,
 ):
     &#34;&#34;&#34;
-    Plot a discrete (categorical) pixel image containing integer values (i.e. MILWRM
+    Plot a discrete (categorical) pixel image containing integer values (i.e. MILWRM 
     domains)
 
     Parameters
@@ -1668,8 +1830,11 @@ Categories are expected to be zero-indexed integers.</dd>
     ax : matplotlib.axes.Axes
         Matplotlib axes to plot `image` to
     max_val : int
-        Maximum integer value for categories (i.e. 4 for categories [0,1,2,3,4]).
+        Maximum integer value for categories (i.e. 4 for categories [0,1,2,3,4]). 
         Categories are expected to be zero-indexed integers.
+    ticklabels : list of str, optional (default=`None`)
+        Ordered list of categories for labeling discrete colorbar ticks. If `None`, 
+        number categories 0 - `max_val`.
     label : str, optional (default=&#34;&#34;)
         What to title the image plot
     cmap : str, optional (default=&#34;plasma&#34;)
@@ -1697,9 +1862,12 @@ Categories are expected to be zero-indexed integers.</dd>
         fontweight=&#34;bold&#34;,
         fontsize=16,
     )
-    _ = plt.colorbar(im, shrink=0.7, ticks=range(int(max_val)))
+    cbar = plt.colorbar(im, shrink=0.7, ticks=range(int(max_val)))
     # move edges of colorbar by 0.5
-    im.set_clim(vmin=-0.5, vmax=max_val - 0.5)</code></pre>
+    im.set_clim(vmin=-0.5, vmax=max_val - 0.5)
+    # add custom ticklabels based on categories
+    if ticklabels is not None:
+        cbar.set_ticklabels(ticklabels)</code></pre>
 </details>
 </dd>
 <dt id="MILWRM.ST.plot_single_image_rgb"><code class="name flex">
@@ -1803,9 +1971,9 @@ Categories are expected to be zero-indexed integers.</dd>
 <dd>List of features by index to show in plot. If <code>None</code>, use all features.</dd>
 <dt><strong><code>discrete_features</code></strong> :&ensp;<code>dict</code>, optional <code>(default=</code>None<code>)</code></dt>
 <dd>Dictionary of feature indices (keys) containing discrete (categorical) values
-(i.e. MILWRM domain). Values are <code>max_value</code> to pass to
-<code><a title="MILWRM.ST.plot_single_image_discrete" href="#MILWRM.ST.plot_single_image_discrete">plot_single_image_discrete()</a></code> for each discrete feature. If <code>None</code>, treat all
-features as continuous.</dd>
+(i.e. MILWRM domain). Values are tuple of <code>max_value</code> to pass to
+<code><a title="MILWRM.ST.plot_single_image_discrete" href="#MILWRM.ST.plot_single_image_discrete">plot_single_image_discrete()</a></code> for each discrete feature, and the ordered list
+of categories for legend plotting. If <code>None</code>, treat all features as continuous.</dd>
 <dt><strong><code>RGB</code></strong> :&ensp;<code>bool</code>, optional <code>(default=</code>False<code>)</code></dt>
 <dd>Treat 3-dimensional array as RGB image</dd>
 <dt><strong><code>histo</code></strong> :&ensp;<code>np.array</code> or <code>None</code>, optional <code>(default=</code>None<code>)</code></dt>
@@ -1827,7 +1995,7 @@ channel in RGB image. Can also pass list of names e.g. ["NeuN","GFAP",
 </dl>
 <h2 id="returns">Returns</h2>
 <dl>
-<dt><code>Matplotlib object (if plotting one feature</code> or <code>RGB)</code> or <code>gridspec object (for</code></dt>
+<dt><code>Matplotlib object (if plotting one feature</code> or <code>RGB)</code> or <code>gridspec object (for </code></dt>
 <dd>&nbsp;</dd>
 </dl>
 <p>multiple features). Saves plot to file if <code>save_to</code> is not <code>None</code>.</p></div>
@@ -1858,16 +2026,16 @@ channel in RGB image. Can also pass list of names e.g. ["NeuN","GFAP",
     features : list of int, optional (default=`None`)
         List of features by index to show in plot. If `None`, use all features.
     discrete_features : dict, optional (default=`None`)
-        Dictionary of feature indices (keys) containing discrete (categorical) values
-        (i.e. MILWRM domain). Values are `max_value` to pass to
-        `plot_single_image_discrete` for each discrete feature. If `None`, treat all
-        features as continuous.
+        Dictionary of feature indices (keys) containing discrete (categorical) values 
+        (i.e. MILWRM domain). Values are tuple of `max_value` to pass to 
+        `plot_single_image_discrete` for each discrete feature, and the ordered list 
+        of categories for legend plotting. If `None`, treat all features as continuous.
     RGB : bool, optional (default=`False`)
         Treat 3-dimensional array as RGB image
     histo : np.array or `None`, optional (default=`None`)
         Histology image to show along with pita in gridspec. If `None`, ignore.
     label : str, optional (default=&#34;feature&#34;)
-        What to title each panel of the gridspec (i.e. &#34;PC&#34; or &#34;usage&#34;) or each
+        What to title each panel of the gridspec (i.e. &#34;PC&#34; or &#34;usage&#34;) or each 
         channel in RGB image. Can also pass list of names e.g. [&#34;NeuN&#34;,&#34;GFAP&#34;,
         &#34;DAPI&#34;] corresponding to channels.
     ncols : int, optional (default=4)
@@ -1883,7 +2051,7 @@ channel in RGB image. Can also pass list of names e.g. ["NeuN","GFAP",
 
     Returns
     -------
-    Matplotlib object (if plotting one feature or RGB) or gridspec object (for
+    Matplotlib object (if plotting one feature or RGB) or gridspec object (for 
     multiple features). Saves plot to file if `save_to` is not `None`.
     &#34;&#34;&#34;
     assert pita.ndim &gt; 1, &#34;Pita does not have enough dimensions: {} given&#34;.format(
@@ -1898,7 +2066,8 @@ channel in RGB image. Can also pass list of names e.g. ["NeuN","GFAP",
                 image=pita,
                 ax=ax,
                 # use first value in dict as max
-                max_val=list(discrete_features.values())[0],
+                max_val=list(discrete_features.values())[0][0],
+                ticklabels=list(discrete_features.values())[0][1],
                 label=label[0] if isinstance(label, list) else label,
                 cmap=cmap,
                 **kwargs,
@@ -1935,7 +2104,8 @@ channel in RGB image. Can also pass list of names e.g. ["NeuN","GFAP",
                 image=pita,
                 ax=ax,
                 # use first value in dict as max
-                max_val=list(discrete_features.values())[0],
+                max_val=list(discrete_features.values())[0][0],
+                ticklabels=list(discrete_features.values())[0][1],
                 label=label[0] if isinstance(label, list) else label,
                 cmap=cmap,
                 **kwargs,
@@ -2075,7 +2245,8 @@ channel in RGB image. Can also pass list of names e.g. ["NeuN","GFAP",
                     image=pita[:, :, feature],
                     ax=ax,
                     # use corresponding value in dict as max
-                    max_val=discrete_features[feature],
+                    max_val=discrete_features[feature][0],
+                    ticklabels=discrete_features[feature][1],
                     label=labels[i],
                     cmap=cmap,
                     **kwargs,
@@ -2149,10 +2320,10 @@ if <code>distance_trim==False</code>.</dd>
     distance_trim : bool
         Manually trim pixels by distance to nearest Visium spot center
     threshold : int or None
-        Number of pixels from nearest Visium spot center to call barcode ID. Ignored
+        Number of pixels from nearest Visium spot center to call barcode ID. Ignored 
         if `distance_trim==False`.
     channels : list of str or None
-        Names of image channels in axis order. If None, channels are named &#34;ch_0&#34;,
+        Names of image channels in axis order. If None, channels are named &#34;ch_0&#34;, 
         &#34;ch_1&#34;, etc.
     plot_out : bool
         Plot final trimmed image
@@ -2329,6 +2500,7 @@ if <code>distance_trim==False</code>.</dd>
 <ul class="">
 <li><code><a title="MILWRM.ST.assemble_pita" href="#MILWRM.ST.assemble_pita">assemble_pita</a></code></li>
 <li><code><a title="MILWRM.ST.bin_threshold" href="#MILWRM.ST.bin_threshold">bin_threshold</a></code></li>
+<li><code><a title="MILWRM.ST.blur_features_st" href="#MILWRM.ST.blur_features_st">blur_features_st</a></code></li>
 <li><code><a title="MILWRM.ST.map_pixels" href="#MILWRM.ST.map_pixels">map_pixels</a></code></li>
 <li><code><a title="MILWRM.ST.plot_single_image" href="#MILWRM.ST.plot_single_image">plot_single_image</a></code></li>
 <li><code><a title="MILWRM.ST.plot_single_image_discrete" href="#MILWRM.ST.plot_single_image_discrete">plot_single_image_discrete</a></code></li>
@@ -2341,7 +2513,7 @@ if <code>distance_trim==False</code>.</dd>
 </nav>
 </main>
 <footer id="footer">
-<p>Generated by <a href="https://pdoc3.github.io/pdoc"><cite>pdoc</cite> 0.9.2</a>.</p>
+<p>Generated by <a href="https://pdoc3.github.io/pdoc" title="pdoc: Python API documentation generator"><cite>pdoc</cite> 0.10.0</a>.</p>
 </footer>
 </body>
 </html>
