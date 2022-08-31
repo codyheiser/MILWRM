@@ -1338,7 +1338,7 @@ class st_labeler(tissue_labeler):
             df = adata.obs['tissue_ID'].value_counts(normalize = True, sort = False)
             df_count = pd.concat([df_count, df], axis = 1)
         df_count = df_count.T.reset_index(drop = True)
-        ax = df_count.plot.bar(stacked = True, cmap = color)
+        ax = df_count.plot.bar(stacked = True, cmap = color, figsize = figsize)
         ax.legend(loc = 'best', bbox_to_anchor = (1,1))
         ax.set_xlabel("slides")
         ax.set_ylabel("tissue ID proportion")
@@ -1854,7 +1854,7 @@ class mxif_labeler(tissue_labeler):
             df = pd.DataFrame(counts[:self.k], columns = [i])
             df_count = pd.concat([df_count,df], axis = 1)
         df_count = df_count/df_count.sum()
-        ax = df_count.T.plot.bar(stacked = True, cmap = color)
+        ax = df_count.T.plot.bar(stacked = True, cmap = color, figsize = figsize)
         ax.legend(loc = 'best', bbox_to_anchor = (1,1))
         ax.set_xlabel("images")
         ax.set_ylabel("tissue ID proportion")
@@ -1863,7 +1863,7 @@ class mxif_labeler(tissue_labeler):
         else:
             return ax        
 
-    def make_umap(self, frac = None, color_map = 'rainbow', save_to = None):
+    def make_umap(self, frac = None, color_map = 'rainbow', save_to = None, alpha = 0.8):
         """
         plot umap for the cluster data
 
@@ -1898,12 +1898,13 @@ class mxif_labeler(tissue_labeler):
         # plotting a fig with two subplots
         fig, (ax1, ax2) = plt.subplots(1, 2, figsize = (20,10))
         # defining color_map
+        # TODO : add alpha here 
         disc_cmap_1 = plt.cm.get_cmap(color_map, len(np.unique(np.array(umap_centroid_data.index))))
         disc_cmap_2 = plt.cm.get_cmap(color_map, len(np.unique(np.array(umap_centroid_data['Kmeans_labels']))))
-        plot_1 = ax1.scatter(standard_embedding_1[:, 0], standard_embedding_1[:, 1],s = 0.01,c = umap_centroid_data.index, cmap=disc_cmap_1)
+        plot_1 = ax1.scatter(standard_embedding_1[:, 0], standard_embedding_1[:, 1],s = 0.01,c = umap_centroid_data.index, cmap=disc_cmap_1, alpha = alpha)
         ax1.set_title("Umap with batch labels")
         cbar_1 = plt.colorbar(plot_1, ax = ax1)
-        plot_2 = ax2.scatter(standard_embedding_1[:, 0], standard_embedding_1[:, 1],s = size,c = umap_centroid_data['Kmeans_labels'], cmap=disc_cmap_2)
+        plot_2 = ax2.scatter(standard_embedding_1[:, 0], standard_embedding_1[:, 1],s = size,c = umap_centroid_data['Kmeans_labels'], cmap=disc_cmap_2, alpha = alpha)
         ax2.set_title("Umap with tissue IDs")
         cbar_2 = plt.colorbar(plot_2, ax = ax2, ticks = ticks)
         cbar_2.ax.set_yticklabels(tick_label)
