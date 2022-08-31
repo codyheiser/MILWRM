@@ -162,7 +162,9 @@ def prep_data_single_sample_st(
             "image_means"
         ][:, fluor_channels]
     # blur the features extracted in tmp
-    tmp2 = blur_features_st(adata, tmp, spatial_graph_key=spatial_graph_key, n_rings=n_rings)
+    tmp2 = blur_features_st(
+        adata, tmp, spatial_graph_key=spatial_graph_key, n_rings=n_rings
+    )
     return tmp2
 
 
@@ -177,7 +179,7 @@ def prep_data_single_sample_mxif(
     image : MILWRM.MxIF.img or str
         np.array containing MxIF data or path to the compressed npz file
     use_path : Boolean
-        True if image is given as a path to the compressed npz file, False if image is 
+        True if image is given as a path to the compressed npz file, False if image is
         given as MILWRM.MxIF.img object
     mean : numpy array
         Containing mean for each channel for that batch
@@ -240,7 +242,7 @@ def add_tissue_ID_single_sample_mxif(image, use_path, features, kmeans, scaler):
     image : MILWRM.MxIF.img or str
         np.array containing MxIF data or path to the compressed npz file
     use_path : Boolean
-        True if image is given as a path to the compressed npz file, False if image is 
+        True if image is given as a path to the compressed npz file, False if image is
         given as MILWRM.MxIF.img object
     features : list of int or str
         Indices or names of MxIF channels to use for tissue labeling
@@ -285,7 +287,7 @@ def estimate_percentage_variance_mxif(
     image : MILWRM.MxIF.img or str
         np.array containing MxIF data or path to the compressed npz file
     use_path : Boolean
-        True if image is given as a path to the compressed npz file, False if image is 
+        True if image is given as a path to the compressed npz file, False if image is
         given as MILWRM.MxIF.img object
     scaler : standardscaler() object
         standard scaler used for cluster data normalization
@@ -361,7 +363,7 @@ def perform_umap(cluster_data, centroids, batch_labels, kmeans_labels, frac):
     """
     df = pd.DataFrame(cluster_data, batch_labels)
     df["Kmeans_labels"] = kmeans_labels
-    # if cluster_data is too big randomly subsample a fraction of it otherwise use the 
+    # if cluster_data is too big randomly subsample a fraction of it otherwise use the
     # entire data
     if frac:
         umap_data = pd.DataFrame()
@@ -401,7 +403,7 @@ def estimate_confidence_score_mxif(
     image : MILWRM.MxIF.img or str
         np.array containing MxIF data or path to the compressed npz file
     use_path : Boolean
-        True if image is given as a path to the compressed npz file, False if image is 
+        True if image is given as a path to the compressed npz file, False if image is
         given as MILWRM.MxIF.img object
     scaler : standardscaler() object
         standard scaler used for cluster data normalization
@@ -469,7 +471,7 @@ def estimate_mse_mxif(images, use_path, tissue_IDs, scaler, centroids, features,
     images : list
         list of MILWRM.MxIF.img objects or path to images (str)
     use_path : Boolean
-        True if image is given as a path to the compressed npz file, False if image is 
+        True if image is given as a path to the compressed npz file, False if image is
         given as MILWRM.MxIF.img object
     tissue_IDs : list
         list of predicted tissue_ID for each image
@@ -598,7 +600,7 @@ def estimate_confidence_score_st(sub_cluster_data, adata, centroids):
             cs = dist[j]
             score.append(ck / cs)
         confidence_score[i] = 1 / sum(score)
-    # initializing a pandas DataFrame to add confidence scores to respective tissue ID 
+    # initializing a pandas DataFrame to add confidence scores to respective tissue ID
     # indices
     score_df = pd.DataFrame(adata.obs["tissue_ID"])
     score_df["index"] = list(range(len(score_df["tissue_ID"])))
@@ -1273,8 +1275,8 @@ class st_labeler(tissue_labeler):
 
         Returns
         -------
-        self.confidence_IDs and self.confidence_score_df are added containing 
-        confidence score for each tissue ID assignment and mean confidence score for 
+        self.confidence_IDs and self.confidence_score_df are added containing
+        confidence score for each tissue ID assignment and mean confidence score for
         each tissue ID within each visium slide
         """
         i_slice = 0
@@ -1405,7 +1407,7 @@ class st_labeler(tissue_labeler):
             df = adata.obs["tissue_ID"].value_counts(normalize=True, sort=False)
             df_count = pd.concat([df_count, df], axis=1)
         df_count = df_count.T.reset_index(drop=True)
-        ax = df_count.plot.bar(stacked=True, cmap=color)
+        ax = df_count.plot.bar(stacked=True, cmap=color, figsize=figsize)
         ax.legend(loc="best", bbox_to_anchor=(1, 1))
         ax.set_xlabel("slides")
         ax.set_ylabel("tissue ID proportion")
@@ -1462,9 +1464,7 @@ class st_labeler(tissue_labeler):
         assert pita.ndim > 1, "Pita does not have enough dimensions: {} given".format(
             pita.ndim
         )
-        assert pita.ndim < 4, "Pita has too many dimensions: {} given".format(
-            pita.ndim
-        )
+        assert pita.ndim < 4, "Pita has too many dimensions: {} given".format(pita.ndim)
         # create tissue_ID pita for plotting
         tIDs = assemble_pita(
             self.adatas[adata_index],
@@ -1606,8 +1606,8 @@ class mxif_labeler(tissue_labeler):
         Parameters
         ----------
         image_df : pd.DataFrame object
-            Containing MILWRM.MxIF.img objects or str path to compressed npz files, 
-            batch names, mean estimator and pixel count for each image in the 
+            Containing MILWRM.MxIF.img objects or str path to compressed npz files,
+            batch names, mean estimator and pixel count for each image in the
             following column order ['Img', 'batch_names', 'mean estimators', 'pixels']
 
         Returns
@@ -1657,8 +1657,8 @@ class mxif_labeler(tissue_labeler):
 
         Returns
         -------
-        Does not return anything. `self.images` are normalized, blurred and scaled 
-        according to user parameters. `self.cluster_data` becomes master `np.array` 
+        Does not return anything. `self.images` are normalized, blurred and scaled
+        according to user parameters. `self.cluster_data` becomes master `np.array`
         for cluster training. Parameters are also captured as attributes for posterity.
 
         """
@@ -1675,9 +1675,7 @@ class mxif_labeler(tissue_labeler):
                 self.image_df[self.image_df["batch_names"] == batch]["mean estimators"]
             )
             mean_estimator_batch = sum(map(np.array, list_mean_estimators))
-            pixels = sum(
-                self.image_df[self.image_df["batch_names"] == batch]["pixels"]
-            )
+            pixels = sum(self.image_df[self.image_df["batch_names"] == batch]["pixels"])
             mean_for_each_batch[batch] = mean_estimator_batch / pixels
         # log_normalize, apply blurring filter, minmax scale each channel and subsample
         subsampled_data = []
@@ -1817,8 +1815,8 @@ class mxif_labeler(tissue_labeler):
 
         Returns
         -------
-        self.confidence_IDs and self.confidence_score_df is added containing 
-        confidence score for each tissue ID assignment and mean confidence score for 
+        self.confidence_IDs and self.confidence_score_df is added containing
+        confidence score for each tissue ID assignment and mean confidence score for
         each tissue ID within each image
         """
         scaler = self.scaler
@@ -1961,7 +1959,7 @@ class mxif_labeler(tissue_labeler):
             df = pd.DataFrame(counts[: self.k], columns=[i])
             df_count = pd.concat([df_count, df], axis=1)
         df_count = df_count / df_count.sum()
-        ax = df_count.T.plot.bar(stacked=True, cmap=color)
+        ax = df_count.T.plot.bar(stacked=True, cmap=color, figsize=figsize)
         ax.legend(loc="best", bbox_to_anchor=(1, 1))
         ax.set_xlabel("images")
         ax.set_ylabel("tissue ID proportion")
@@ -1970,7 +1968,7 @@ class mxif_labeler(tissue_labeler):
         else:
             return ax
 
-    def make_umap(self, frac=None, color_map="rainbow", save_to=None):
+    def make_umap(self, frac=None, color_map="rainbow", save_to=None, alpha=0.8):
         """
         plot umap for the cluster data
 
@@ -2010,6 +2008,7 @@ class mxif_labeler(tissue_labeler):
         # plotting a fig with two subplots
         fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(20, 10))
         # defining color_map
+        # TODO : add alpha here
         disc_cmap_1 = plt.cm.get_cmap(
             color_map, len(np.unique(np.array(umap_centroid_data.index)))
         )
@@ -2022,6 +2021,7 @@ class mxif_labeler(tissue_labeler):
             s=0.01,
             c=umap_centroid_data.index,
             cmap=disc_cmap_1,
+            alpha=alpha,
         )
         ax1.set_title("Umap with batch labels")
         cbar_1 = plt.colorbar(plot_1, ax=ax1)
@@ -2031,6 +2031,7 @@ class mxif_labeler(tissue_labeler):
             s=size,
             c=umap_centroid_data["Kmeans_labels"],
             cmap=disc_cmap_2,
+            alpha=alpha,
         )
         ax2.set_title("Umap with tissue IDs")
         cbar_2 = plt.colorbar(plot_2, ax=ax2, ticks=ticks)
