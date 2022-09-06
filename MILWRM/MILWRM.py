@@ -11,6 +11,7 @@ import numpy as np
 import pandas as pd
 import itertools
 import seaborn as sns
+import matplotlib.cm as cm
 import umap
 
 sns.set_style("white")
@@ -1199,7 +1200,7 @@ class st_labeler(tissue_labeler):
                     fontstyle="italic",
                 )
                 plt.ylim([0, j + 1])
-                plt.xlim([0, score + 0.5])
+                plt.xlim([0, df.max().values[0] + 0.1])
                 plt.tick_params(
                     axis="y",  # changes apply to the y-axis
                     which="both",  # both major and minor ticks are affected
@@ -1208,6 +1209,7 @@ class st_labeler(tissue_labeler):
                     labelleft=False,
                 )
                 plt.title(titles[i])
+        gs.tight_layout(fig)
         if save_to is not None:
             print("Saving feature loadings to {}".format(save_to))
             plt.savefig(save_to)
@@ -1339,10 +1341,11 @@ class st_labeler(tissue_labeler):
         features = self.features
         centroids = self.kmeans.cluster_centers_
         mse_id = estimate_mse_st(cluster_data, adatas, centroids, k)
+        colors = cm.rainbow(np.linspace(0, 1, len(adatas)))
         if titles is None:
             titles = ["tissue_ID " + str(x) for x in range(self.k)]
         if labels is None:
-            labels = range(len(features))
+            labels = range(len(adatas))
         n_panels = len(mse_id.keys())
         if ncols is None:
             ncols = len(titles)
@@ -1362,12 +1365,14 @@ class st_labeler(tissue_labeler):
         )
         for i in mse_id.keys():
             plt.subplot(gs[i])
-            df = pd.DataFrame.from_dict(mse_id[i]).T
-            plt.boxplot(df, positions=range(len(mse_id[i])), showfliers=False)
+            df = pd.DataFrame.from_dict(mse_id[i])
+            plt.boxplot(df, positions=features, showfliers=False)
             for col in df:
-                for k in features:
+                for k in range(len(df[col])):
                     dots = plt.scatter(
-                        col, df[col][k], s=k + 1, label=labels[k] if col == 0 else ""
+                        col, df[col][k], s=k+1,
+                        color =  colors[k],
+                        label=labels[k] if col == 0 else ""
                     )
                     offsets = dots.get_offsets()
                     jittered_offsets = offsets
@@ -1376,10 +1381,11 @@ class st_labeler(tissue_labeler):
                         -0.3, 0.3, offsets.shape[0]
                     )
                     dots.set_offsets(jittered_offsets)
-            plt.xlabel("slides")
+            plt.xlabel("PCs")
             plt.ylabel("mean square error")
             plt.title(titles[i])
         plt.legend(loc=loc, bbox_to_anchor=bbox_coordinates)
+        gs.tight_layout(fig)
         if save_to:
             plt.savefig(fname=save_to, transparent=True, dpi=300)
         return fig
@@ -1891,7 +1897,7 @@ class mxif_labeler(tissue_labeler):
             images, use_path, tissue_IDs, scaler, centroids, features, k
         )
         if labels is None:
-            labels = features
+            labels = range(len(images))
         if titles is None:
             titles = ["tissue_ID " + str(x) for x in range(self.k)]
         n_panels = len(mse_id.keys())
@@ -1901,6 +1907,7 @@ class mxif_labeler(tissue_labeler):
             n_rows, n_cols = 1, n_panels
         else:
             n_rows, n_cols = ceil(n_panels / ncols), ncols
+        colors = plt.cm.tab20(np.linspace(0,1,len(images)))
         fig = plt.figure(figsize=(n_cols * figsize[0], n_rows * figsize[1]))
         left, bottom = 0.1 / n_cols, 0.1 / n_rows
         gs = gridspec.GridSpec(
@@ -1913,12 +1920,16 @@ class mxif_labeler(tissue_labeler):
         )
         for i in mse_id.keys():
             plt.subplot(gs[i])
-            df = pd.DataFrame.from_dict(mse_id[i]).T
-            plt.boxplot(df, positions=range(len(mse_id[i])), showfliers=False)
+            df = pd.DataFrame.from_dict(mse_id[i])
+            plt.boxplot(df, positions=range(len(features)), showfliers=False)
+            plt.xticks(ticks = range(len(feature)), 
+            labels =  tl.model_features, rotation = 60, fontsize = 8)
             for col in df:
-                for k in range(len(self.model_features)):
+                for k in range(len(images)):
                     dots = plt.scatter(
-                        col, df[col][k], s=k + 1, label=labels[k] if col == 0 else ""
+                        col, df[col][k], s=k+1,
+                        color = colors[k],
+                        label=labels[k] if col == 0 else ""
                     )
                     offsets = dots.get_offsets()
                     jittered_offsets = offsets
@@ -1927,10 +1938,11 @@ class mxif_labeler(tissue_labeler):
                         -0.3, 0.3, offsets.shape[0]
                     )
                     dots.set_offsets(jittered_offsets)
-            plt.xlabel("images")
+            plt.xlabel("marker")
             plt.ylabel("mean square error")
             plt.title(titles[i])
         plt.legend(loc=loc, bbox_to_anchor=bbox_coordinates)
+        gs.tight_layout(fig)
         if save_to:
             plt.savefig(fname=save_to, transparent=True, dpi=300)
         return fig
