@@ -4,6 +4,7 @@ Classes for assigning tissue domain IDs to multiplex immunofluorescence (MxIF) o
 Visium spatial transcriptomic (ST) and histological imaging data
 """
 import os
+from re import sub
 from tkinter import E
 import matplotlib.gridspec as gridspec
 import matplotlib.pyplot as plt
@@ -324,12 +325,9 @@ def estimate_percentage_variance_mxif(
     # init a numpy array of image shape to store the distance from pixels to centroids
     dc = np.zeros(scaled_img_ar.shape)
     for i in range(centroids.shape[0]):
-        dc[tissue_ID == i] = (scaled_img_ar[tissue_ID == i] - centroids[i]) ** 2
+        dc[tissue_ID == i] = (abs(scaled_img_ar[tissue_ID == i]) - abs(centroids[i])) ** 2
     # estimating the difference between pixels and the image mean
-    dm = (scaled_img_ar - scaled_img_ar.mean(axis=0)) ** 2
-    # getting sum across channels
-    dc = np.sum(dc, axis=1)
-    dm = np.sum(dm, axis=1)
+    dm = (abs(scaled_img_ar) - abs(scaled_img_ar.mean(axis=0))) ** 2
     # taking ratio of sum of differences for all points from centroids and data mean
     S_square = np.sum(dc) / np.sum(dm)
     S_square_pct = S_square * 100
@@ -393,11 +391,9 @@ def estimate_confidence_score_mxif(
     image, use_path, scaler, centroids, features, tissue_ID
 ):
     """
-    Estimate confidence score for each image and tissue ID
-
-    Adapted from
-    https://towardsdatascience.com/confidence-in-k-means-d7d3a13ca856
-
+    Estimate confidence score for the assigned tissue_IDs in MxIF slide by
+    taking difference between distance to the second closest centroid and the 
+    assigned centroid divided by distance to the second closest centroid.
 
     Parameters
     ----------
@@ -433,34 +429,26 @@ def estimate_confidence_score_mxif(
         features = [image.ch.index(x) for x in features]
     if features is None:  # if no features are given, use all of them
         features = [x for x in range(image.n_ch)]
-    dist = {}
-    w, h, d = image.img[:, :, features].shape
-    img_ar = image.img[:, :, features].reshape((w * h), d)
+    w,h,d = image.img[:,:,features].shape
+    img_ar = image.img[:,:,features].reshape((w*h),d)
     scaled_img_ar = scaler.transform(img_ar)
-    # estimating distance for each pixel from every cluster centroid
-    for i, centroid in enumerate(centroids):
-        dist_cp = (scaled_img_ar - centroid) ** 2
-        dist[i] = np.sum(dist_cp, axis=1)
-    confidence_score = {}
-    # estimating confidence score by taking a ratio of distance from
-    # i cluster to all of the clusters and then taking an inverse of the summation
-    for i in dist.keys():
-        ck = dist[i]
-        score = []
-        for j in dist.keys():
-            cs = dist[j]
-            score.append(ck / cs)
-        confidence_score[i] = 1 / sum(score)
-    # initializing an empty array for confidence score for each pixel
-    Conf_ID = np.empty((w, h))
+    img_sc = scaled_img_ar.reshape((w,h,d))
+    # initializing an empty numpy array to store distance to each centroid along axis = 2
+    dist_ar = np.zeros((w,h,len(centroids)))
+    for i,centroid in enumerate(centroids):
+        dist = (abs(img_sc) - abs(centroid))**2
+        dist_cp = np.sum(dist, axis = 2)
+        dist_ar[:,:,i] = dist_ar[:,:,i] + dist_cp
+    # sorting the numpy array according to distance from centroids
+    new_dist_ar = np.sort(dist_ar, axis = 2)
+    # estimating new confidence score
+    cID = (abs(new_dist_ar[:,:,1]) - abs(new_dist_ar[:,:,0]))/new_dist_ar[:,:,1]
+    cID[image.mask == 0] = np.nan
+    # estimating average confidence score in that image
     mean_conf_score = {}
-    for i, cID in confidence_score.items():
-        cID = cID.reshape((w, h))
-        cID[image.mask == 0] = np.nan
-        Conf_ID[image.mask == 0] = np.nan
-        Conf_ID[tissue_ID == i] = cID[tissue_ID == i]
-        mean_conf_score[i] = Conf_ID[tissue_ID == i].mean()
-    return Conf_ID, mean_conf_score
+    for i in range(len(centroids)):
+        mean_conf_score[i] = np.mean(cID[tissue_ID == 1])
+    return cID, mean_conf_score
 
 
 def estimate_mse_mxif(images, use_path, tissue_IDs, scaler, centroids, features, k):
@@ -550,26 +538,23 @@ def estimate_percentage_variance_st(sub_cluster_data, adata, centroids):
     df["index"] = list(range(adata.n_obs))
     for i in ids:
         # estimating euclidean distance from the data point to closest centroid
-        diff = (sub_cluster_data[df[df["tissue_ID"] == i]["index"]] - centroids[i]) ** 2
+        diff = (abs(sub_cluster_data[df[df["tissue_ID"] == i]["index"]]) - abs(centroids[i])) ** 2
         dc.append(diff)
     dc = np.row_stack(dc)
     # estimating euclidean distance from each data point to the mean of the data
     dm = (sub_cluster_data - sub_cluster_data.mean(axis=0)) ** 2
     # getting sum across features
-    dc_sum = np.sum(dc, axis=1)
-    dm_sum = np.sum(dm, axis=1)
     # taking ratio of sum of distances for all data points from centroids and data mean
-    S = dc_sum / dm_sum
+    S = np.sum(dc)/np.sum(dm)
     S_square_pct = S * 100
     return S_square_pct
 
 
 def estimate_confidence_score_st(sub_cluster_data, adata, centroids):
     """
-    Estimate confidence score for the assigned tissue_IDs in a visium slide
-
-    Adapted from
-    https://towardsdatascience.com/confidence-in-k-means-d7d3a13ca856
+    Estimate confidence score for the assigned tissue_IDs in a visium slide by
+    taking difference between distance to the second closest centroid and the 
+    assigned centroid divided by distance to the second closest centroid.
 
     Parameters
     ----------
@@ -586,36 +571,26 @@ def estimate_confidence_score_st(sub_cluster_data, adata, centroids):
     mean_conf_score : dict
         mean confidence score for each tissue ID (keys for the dictionary)
     """
-    dist = {}
-    # estimating distance for each pixel from every cluster centroid
-    for i, centroid in enumerate(centroids):
-        dist_cp = (sub_cluster_data - centroid) ** 2
-        dist[i] = np.sum(dist_cp, axis=1)
-    confidence_score = {}
-    # estimating confidence score by taking a ratio of distance from
-    # i cluster to all of the clusters and then taking an inverse of the summation
-    for i in dist.keys():
-        ck = dist[i]
-        score = []
-        for j in dist.keys():
-            cs = dist[j]
-            score.append(ck / cs)
-        confidence_score[i] = 1 / sum(score)
-    # initializing a pandas DataFrame to add confidence scores to respective tissue ID
-    # indices
-    score_df = pd.DataFrame(adata.obs["tissue_ID"])
-    score_df["index"] = list(range(len(score_df["tissue_ID"])))
-    score_df["score"] = list(range(len(score_df["tissue_ID"])))
+    # initializing zeros array to store distances
+    dist_mx = np.zeros((sub_cluster_data.shape[0], len(centroids)))
+    # calculating distance to each centroid
+    for i,centroid in enumerate(centroids):
+        dist_cp = (abs(sub_cluster_data) - abs(centroid))**2
+        dist = np.sum(dist_cp, axis = 1)
+        dist_mx[:,i] = dist_mx[:,i] + dist
+    # sorting distances according to distance from centroids
+    new_dist_ar = np.sort(dist_mx, axis = 1)
+    # using assigned and second closest centroid to estimate confidence score
+    cID = (abs(new_dist_ar[:,1]) - abs(new_dist_ar[:,0]))/new_dist_ar[:,1]
+    adata.obs["confidence_score"] = cID
+    score_df = pd.DataFrame(cID, columns = ['score'])
+    score_df['tissue_ID'] = adata.obs["tissue_ID"].values
     mean_conf_score = {}
-    for i, cID in confidence_score.items():
-        score_df.loc[score_df["tissue_ID"] == i, "score"] = cID[
-            score_df[score_df["tissue_ID"] == i]["index"]
-        ]
-        if (score_df["tissue_ID"] == i).any():
-            mean_conf_score[i] = score_df[score_df["tissue_ID"] == i]["score"].mean()
+    for i in range(len(centroids)):
+        if (adata.obs["tissue_ID"]==i).any():
+            mean_conf_score[i] = score_df[score_df["tissue_ID"]==i]["score"].mean()
         else:
             mean_conf_score[i] = np.nan
-    adata.obs["confidence_score"] = score_df["score"].astype("float64")
     return mean_conf_score
 
 
@@ -652,7 +627,7 @@ def estimate_mse_st(cluster_data, adatas, centroids, k):
                 i_slice:j_slice
             ]  # slicing cluster data for sub_cluster_data for that visium slide
             x = (
-                data[df[df["tissue_ID"] == i]["index"]] - centroids[i]
+                abs(data[df[df["tissue_ID"] == i]["index"]]) - abs(centroids[i])
             ) ** 2  # difference between each data point and centroids
             if len(x) == 0:
                 diff.append(np.zeros(mse.shape))
@@ -1800,13 +1775,13 @@ class mxif_labeler(tissue_labeler):
             fig = plt.figure(figsize=fig_size)
             plt.bar(range(len(R_squre_for_each_image)), R_squre_for_each_image)
             plt.xlabel("images")
-            plt.ylabel("percentage variance not explained by Kmeans")
+            plt.ylabel("percentage variance explained by Kmeans")
 
         else:
             fig = plt.figure(figsize=fig_size)
             plt.bar(range(len(S_squre_for_each_image)), S_squre_for_each_image)
             plt.xlabel("images")
-            plt.ylabel("percentage variance explained by Kmeans")
+            plt.ylabel("percentage variance not explained by Kmeans")
 
         if save_to:
             plt.savefig(fname=save_to, transparent=True, bbox_inches="tight", dpi=300)
@@ -1851,6 +1826,7 @@ class mxif_labeler(tissue_labeler):
         figsize=(5, 5),
         ncols=None,
         labels=None,
+        legend_cols = 2,
         titles=None,
         loc="lower right",
         bbox_coordinates=(0, 0, 1.5, 1.5),
@@ -1867,6 +1843,8 @@ class mxif_labeler(tissue_labeler):
             Number of columns for gridspec. If `None`, uses number of tissue domains k.
         labels : list of str, optional (default=`None`)
             Labels corresponding to each MILWRM training feature. If `None`, features
+        legend_cols : int, optional (default = `2`)
+            n_cols for legend
         titles : list of str, optional (default=`None`)
             Titles of plots corresponding to each MILWRM domain. If `None`, titles
             will be numbers 0 through k.
@@ -1922,8 +1900,8 @@ class mxif_labeler(tissue_labeler):
             plt.subplot(gs[i])
             df = pd.DataFrame.from_dict(mse_id[i])
             plt.boxplot(df, positions=range(len(features)), showfliers=False)
-            plt.xticks(ticks = range(len(feature)), 
-            labels =  tl.model_features, rotation = 60, fontsize = 8)
+            plt.xticks(ticks = range(len(features)), 
+            labels =  self.model_features, rotation = 60, fontsize = 8)
             for col in df:
                 for k in range(len(images)):
                     dots = plt.scatter(
@@ -1941,7 +1919,7 @@ class mxif_labeler(tissue_labeler):
             plt.xlabel("marker")
             plt.ylabel("mean square error")
             plt.title(titles[i])
-        plt.legend(loc=loc, bbox_to_anchor=bbox_coordinates)
+        plt.legend(loc=loc, bbox_to_anchor=bbox_coordinates, ncol = legend_cols)
         gs.tight_layout(fig)
         if save_to:
             plt.savefig(fname=save_to, transparent=True, dpi=300)
@@ -1971,6 +1949,7 @@ class mxif_labeler(tissue_labeler):
             df = pd.DataFrame(counts[: self.k], columns=[i])
             df_count = pd.concat([df_count, df], axis=1)
         df_count = df_count / df_count.sum()
+        self.tissue_ID_proportion = df_count
         ax = df_count.T.plot.bar(stacked=True, cmap=color, figsize=figsize)
         ax.legend(loc="best", bbox_to_anchor=(1, 1))
         ax.set_xlabel("images")
