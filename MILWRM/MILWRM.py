@@ -225,10 +225,10 @@ def prep_data_single_sample_mxif(
     # subsample pixels to build the kmeans model
     subsampled_data = image.subsample_pixels(features, fract)
     if use_path == True:
-        new_image_path = os.path.join(path_save, "final_preprocessed_images")
+        new_image_path = os.path.join(path_save, "_final_preprocessed_images")
         if not os.path.exists(new_image_path):
             os.mkdir(new_image_path)
-        file_name = image_path.split("/")[-1] + "final_preprocessed"
+        file_name = image_path.split("/")[-1] + "_final_preprocessed"
         file_save = os.path.join(new_image_path, file_name)
         image.to_npz(file_save)
         return subsampled_data, file_save
@@ -325,9 +325,9 @@ def estimate_percentage_variance_mxif(
     # init a numpy array of image shape to store the distance from pixels to centroids
     dc = np.zeros(scaled_img_ar.shape)
     for i in range(centroids.shape[0]):
-        dc[tissue_ID == i] = (abs(scaled_img_ar[tissue_ID == i]) - abs(centroids[i])) ** 2
+        dc[tissue_ID == i] = ((scaled_img_ar[tissue_ID == i]) - (centroids[i])) ** 2
     # estimating the difference between pixels and the image mean
-    dm = (abs(scaled_img_ar) - abs(scaled_img_ar.mean(axis=0))) ** 2
+    dm = ((scaled_img_ar) - (scaled_img_ar.mean(axis=0))) ** 2
     # taking ratio of sum of differences for all points from centroids and data mean
     S_square = np.sum(dc) / np.sum(dm)
     S_square_pct = S_square * 100
@@ -436,13 +436,13 @@ def estimate_confidence_score_mxif(
     # initializing an empty numpy array to store distance to each centroid along axis = 2
     dist_ar = np.zeros((w,h,len(centroids)))
     for i,centroid in enumerate(centroids):
-        dist = (abs(img_sc) - abs(centroid))**2
+        dist = ((img_sc) - (centroid))**2
         dist_cp = np.sum(dist, axis = 2)
         dist_ar[:,:,i] = dist_ar[:,:,i] + dist_cp
     # sorting the numpy array according to distance from centroids
     new_dist_ar = np.sort(dist_ar, axis = 2)
     # estimating new confidence score
-    cID = (abs(new_dist_ar[:,:,1]) - abs(new_dist_ar[:,:,0]))/new_dist_ar[:,:,1]
+    cID = ((new_dist_ar[:,:,1]) - (new_dist_ar[:,:,0]))/new_dist_ar[:,:,1]
     cID[image.mask == 0] = np.nan
     # estimating average confidence score in that image
     mean_conf_score = {}
@@ -500,7 +500,7 @@ def estimate_mse_mxif(images, use_path, tissue_IDs, scaler, centroids, features,
         mse = {}
         for i in range(k):
             x = (
-                abs(scaled_img_ar[ar == i]) - abs(centroids[i])
+                (scaled_img_ar[ar == i]) - (centroids[i])
             ) ** 2  # estimating mse for each tissue ID for that image
             mse[i] = x.mean(axis=0)
         mse_temp[image_index] = mse
@@ -538,7 +538,7 @@ def estimate_percentage_variance_st(sub_cluster_data, adata, centroids):
     df["index"] = list(range(adata.n_obs))
     for i in ids:
         # estimating euclidean distance from the data point to closest centroid
-        diff = (abs(sub_cluster_data[df[df["tissue_ID"] == i]["index"]]) - abs(centroids[i])) ** 2
+        diff = ((sub_cluster_data[df[df["tissue_ID"] == i]["index"]]) - (centroids[i])) ** 2
         dc.append(diff)
     dc = np.row_stack(dc)
     # estimating euclidean distance from each data point to the mean of the data
@@ -575,13 +575,13 @@ def estimate_confidence_score_st(sub_cluster_data, adata, centroids):
     dist_mx = np.zeros((sub_cluster_data.shape[0], len(centroids)))
     # calculating distance to each centroid
     for i,centroid in enumerate(centroids):
-        dist_cp = (abs(sub_cluster_data) - abs(centroid))**2
+        dist_cp = ((sub_cluster_data) - (centroid))**2
         dist = np.sum(dist_cp, axis = 1)
         dist_mx[:,i] = dist_mx[:,i] + dist
     # sorting distances according to distance from centroids
     new_dist_ar = np.sort(dist_mx, axis = 1)
     # using assigned and second closest centroid to estimate confidence score
-    cID = (abs(new_dist_ar[:,1]) - abs(new_dist_ar[:,0]))/new_dist_ar[:,1]
+    cID = ((new_dist_ar[:,1]) - (new_dist_ar[:,0]))/new_dist_ar[:,1]
     adata.obs["confidence_score"] = cID
     score_df = pd.DataFrame(cID, columns = ['score'])
     score_df['tissue_ID'] = adata.obs["tissue_ID"].values
@@ -627,7 +627,7 @@ def estimate_mse_st(cluster_data, adatas, centroids, k):
                 i_slice:j_slice
             ]  # slicing cluster data for sub_cluster_data for that visium slide
             x = (
-                abs(data[df[df["tissue_ID"] == i]["index"]]) - abs(centroids[i])
+                (data[df[df["tissue_ID"] == i]["index"]]) - (centroids[i])
             ) ** 2  # difference between each data point and centroids
             if len(x) == 0:
                 diff.append(np.zeros(mse.shape))
@@ -1231,13 +1231,13 @@ class st_labeler(tissue_labeler):
             fig = plt.figure(figsize=fig_size)
             plt.bar(range(len(R_squre_for_each_st)), R_squre_for_each_st)
             plt.xlabel("slides")
-            plt.ylabel("percentage variance not explained by Kmeans")
+            plt.ylabel("percentage variance explained by Kmeans")
 
         else:
             fig = plt.figure(figsize=fig_size)
             plt.bar(range(len(S_squre_for_each_st)), S_squre_for_each_st)
             plt.xlabel("slides")
-            plt.ylabel("percentage variance explained by Kmeans")
+            plt.ylabel("percentage variance not explained by Kmeans")
 
         if save_to:
             plt.savefig(fname=save_to, transparent=True, bbox_inches="tight", dpi=300)
