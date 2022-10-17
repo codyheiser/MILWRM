@@ -632,7 +632,7 @@ def estimate_mse_st(cluster_data, adatas, centroids, k):
                 (data[df[df["tissue_ID"] == i]["index"]]) - (centroids[i])
             ) ** 2  # difference between each data point and centroids
             if len(x) == 0:
-                diff.append(np.zeros(mse.shape))
+                diff.append(np.zeros(centroids.shape[1],))
             else:
                 mse = x.mean(axis=0)  # mean of all the differences
                 # diff.append(mse.mean(axis = 0))
