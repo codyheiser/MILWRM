@@ -517,7 +517,7 @@ class img:
 
     def calculate_non_zero_mean(self):
         """
-        Calculate mean estimator for the given image array avoiding mask pixels or 
+        Calculate mean estimator for the given image array avoiding mask pixels or
         pixels with value 0
 
         Parameters
@@ -606,10 +606,10 @@ class img:
         channels : tuple of int or None, optional (default=`None`)
             List of channels by index or name to show
         RGB : bool
-            Treat 3- or 4-dimensional array as RGB image. If `False`, plot channels 
+            Treat 3- or 4-dimensional array as RGB image. If `False`, plot channels
             individually.
         cbar : bool
-            Show colorbar for scale of image intensities if plotting individual 
+            Show colorbar for scale of image intensities if plotting individual
             channels.
         mask_out : bool, optional (default=`True`)
             Mask out non-tissue pixels prior to showing
@@ -624,7 +624,7 @@ class img:
 
         Returns
         -------
-        Matplotlib object (if plotting one feature or RGB) or gridspec object (for 
+        Matplotlib object (if plotting one feature or RGB) or gridspec object (for
         multiple features). Saves plot to file if `save_to` is not `None`.
         """
         # if only one feature (2D), plot it quickly
