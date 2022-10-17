@@ -1227,7 +1227,7 @@ class st_labeler(tissue_labeler):
             R_squre_for_each_st.append(100 - S_square)
             i_slice = i_slice + adata.n_obs
 
-        if R_square == True:
+        if R_square:
             fig = plt.figure(figsize=fig_size)
             plt.bar(range(len(R_squre_for_each_st)), R_squre_for_each_st)
             plt.xlabel("slides")
@@ -1252,9 +1252,9 @@ class st_labeler(tissue_labeler):
 
         Returns
         -------
-        self.confidence_IDs and self.confidence_score_df are added containing
-        confidence score for each tissue ID assignment and mean confidence score for
-        each tissue ID within each visium slide
+        self.adatas[i].obs.confidence_IDs and self.confidence_score_df are added 
+        containing confidence score for each tissue ID assignment and mean confidence 
+        score for each tissue ID within each visium slide
         """
         i_slice = 0
         j_slice = 0
@@ -1292,6 +1292,7 @@ class st_labeler(tissue_labeler):
             Number of columns for gridspec. If `None`, uses number of tissue domains k.
         labels : list of str, optional (default=`None`)
             Labels corresponding to each MILWRM training feature. If `None`, features
+            are numbered sequentially.
         titles : list of str, optional (default=`None`)
             Titles of plots corresponding to each MILWRM domain. If `None`, titles
             will be numbers 0 through k.
@@ -1356,7 +1357,7 @@ class st_labeler(tissue_labeler):
                         -0.3, 0.3, offsets.shape[0]
                     )
                     dots.set_offsets(jittered_offsets)
-            plt.xlabel("PCs")
+            plt.xlabel("slides")
             plt.ylabel("mean square error")
             plt.title(titles[i])
         plt.legend(loc=loc, bbox_to_anchor=bbox_coordinates)
@@ -1366,7 +1367,7 @@ class st_labeler(tissue_labeler):
         return fig
 
     def plot_tissue_ID_proportions_st(
-        self, figsize=(5, 5), color="rainbow", save_to=None
+        self, figsize=(5, 5), cmap="rainbow", save_to=None
     ):
         """
         Plot proportion of each tissue ID within each slide
@@ -1375,7 +1376,8 @@ class st_labeler(tissue_labeler):
         ----------
         figsize : tuple of float, optional (default=(5,5))
             Size of matplotlib figure
-        color : str, optional (default = `rainbow`)
+        cmap : str, optional (default = `"rainbow"`)
+            Colormap from matplotlib
         save_to : str, optional (default=`None`)
             Path to image file to save plot
 
@@ -1388,7 +1390,7 @@ class st_labeler(tissue_labeler):
             df = adata.obs["tissue_ID"].value_counts(normalize=True, sort=False)
             df_count = pd.concat([df_count, df], axis=1)
         df_count = df_count.T.reset_index(drop=True)
-        ax = df_count.plot.bar(stacked=True, cmap=color, figsize=figsize)
+        ax = df_count.plot.bar(stacked=True, cmap=cmap, figsize=figsize)
         ax.legend(loc="best", bbox_to_anchor=(1, 1))
         ax.set_xlabel("slides")
         ax.set_ylabel("tissue ID proportion")
@@ -1403,7 +1405,7 @@ class st_labeler(tissue_labeler):
         pita,
         features=None,
         histo=None,
-        cmap="plasma",
+        cmap="rainbow",
         label="feature",
         ncols=4,
         save_to=None,
@@ -1424,7 +1426,7 @@ class st_labeler(tissue_labeler):
             List of features by index to show in plot. If `None`, use all features.
         histo : np.array or `None`, optional (default=`None`)
             Histology image to show along with pita in gridspec. If `None`, ignore.
-        cmap : str, optional (default="plasma")
+        cmap : str, optional (default="rainbow")
             Matplotlib colormap to use for plotting tissue IDs
         label : str
             What to title each panel of the gridspec (i.e. "PC" or "usage") or each
@@ -1959,7 +1961,7 @@ class mxif_labeler(tissue_labeler):
         else:
             return ax
 
-    def make_umap(self, frac=None, color_map="rainbow", save_to=None, alpha=0.8):
+    def make_umap(self, frac=None, cmap="rainbow", save_to=None, alpha=0.8):
         """
         plot umap for the cluster data
 
@@ -1968,7 +1970,7 @@ class mxif_labeler(tissue_labeler):
         frac : None or float
             if None entire cluster data is used for the computation of umap
             else that percentage of cluster data is used.
-        color_map : str
+        cmap : str
             str for cmap used for plotting. Default cmap is rainbow
         save_to : str or None
             Path to image file to save results. if `None`, show figure.
@@ -2001,10 +2003,10 @@ class mxif_labeler(tissue_labeler):
         # defining color_map
         # TODO : add alpha here
         disc_cmap_1 = plt.cm.get_cmap(
-            color_map, len(np.unique(np.array(umap_centroid_data.index)))
+            cmap, len(np.unique(np.array(umap_centroid_data.index)))
         )
         disc_cmap_2 = plt.cm.get_cmap(
-            color_map, len(np.unique(np.array(umap_centroid_data["Kmeans_labels"])))
+            cmap, len(np.unique(np.array(umap_centroid_data["Kmeans_labels"])))
         )
         plot_1 = ax1.scatter(
             standard_embedding_1[:, 0],
