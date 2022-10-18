@@ -17,7 +17,7 @@ Or compile from source:
 ^^^^^^^^^^^^^^^^^^^^^^^
 .. code:: bash
 
-   git clone https://github.com/codyheiser/MILWRM.git
+   git clone https://github.com/Ken-Lau-Lab/MILWRM.git
    cd MILWRM
    python setup.py install
 
@@ -25,7 +25,7 @@ See the |tutorials|_ directory for Jupyter notebooks detailing usage of `MILWRM`
 
 Full documentation is available at |codyheiser.github.io/MILWRM|_
 
-.. |milwrm_logo| image:: https://github.com/codyheiser/MILWRM/blob/main/docs/milwrm_logo.jpg
+.. |milwrm_logo| image:: https://github.com/Ken-Lau-Lab/MILWRM/blob/main/docs/milwrm_logo.jpg
 
 .. |Latest Version| image:: https://img.shields.io/pypi/v/MILWRM
    :target: https://pypi.python.org/pypi/MILWRM/

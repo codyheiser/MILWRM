@@ -33,12 +33,12 @@ def blur_features_st(adata, tmp, spatial_graph_key=None, n_rings=1):
     tmp : pd.DataFrame
         containing feature columns from adata.obs that will be blurred
     spatial_graph_key : str, optional (default=`None`)
-        Key in `adata.obsp` containing spatial graph connectivities (i.e. 
-        `"spatial_connectivities"`). If `None`, compute new spatial graph using 
+        Key in `adata.obsp` containing spatial graph connectivities (i.e.
+        `"spatial_connectivities"`). If `None`, compute new spatial graph using
         `n_rings` in `squidpy`.
     n_rings : int, optional (default=1)
-        Number of hexagonal rings around each spatial transcriptomics spot to blur 
-        features by for capturing regional information. Assumes 10X Genomics Visium 
+        Number of hexagonal rings around each spatial transcriptomics spot to blur
+        features by for capturing regional information. Assumes 10X Genomics Visium
         platform.
 
     Returns
@@ -88,7 +88,7 @@ def bin_threshold(mat, threshmin=None, threshmax=0.5):
     threshmin : float or None
         Minimum value on [0,1] to assign binary IDs from probabilities.
     thresmax : float
-        Maximum value on [0,1] to assign binary IDs from probabilities. Values higher 
+        Maximum value on [0,1] to assign binary IDs from probabilities. Values higher
         than threshmax -> 1. Values lower than thresmax -> 0.
 
     Returns
@@ -118,7 +118,7 @@ def map_pixels(adata, filter_label="in_tissue", img_key="hires", library_id=None
     adata : AnnData.anndata
         The data
     filter_label : str or None
-        adata.obs column key that contains binary labels for filtering barcodes. If 
+        adata.obs column key that contains binary labels for filtering barcodes. If
         None, do not filter.
     img_key : str
         adata.uns key containing the image to use for mapping
@@ -128,7 +128,7 @@ def map_pixels(adata, filter_label="in_tissue", img_key="hires", library_id=None
     adata : AnnData.anndata
         with the following attributes:
         adata.uns["pixel_map_df"] : pd.DataFrame
-            Long-form dataframe of Visium spot barcode IDs, pixel coordinates, and 
+            Long-form dataframe of Visium spot barcode IDs, pixel coordinates, and
             .obs metadata
         adata.uns["pixel_map"] : np.array
             Pixel space array of Visium spot barcode IDs
@@ -277,10 +277,7 @@ def map_pixels(adata, filter_label="in_tissue", img_key="hires", library_id=None
     # map barcodes to pixel coordinates
     pixel_coords = np.column_stack((grid_x.ravel(order="C"), grid_y.ravel(order="C")))
     barcode_list = griddata(
-        np.multiply(
-            a_frame.obsm["spatial"],
-            a_frame.uns["pixel_map_params"]["scalef"]
-        ),
+        np.multiply(a_frame.obsm["spatial"], a_frame.uns["pixel_map_params"]["scalef"]),
         a_frame.obs_names,
         (pixel_coords[:, 0], pixel_coords[:, 1]),
         method="nearest",
@@ -330,10 +327,10 @@ def trim_image(
     distance_trim : bool
         Manually trim pixels by distance to nearest Visium spot center
     threshold : int or None
-        Number of pixels from nearest Visium spot center to call barcode ID. Ignored 
+        Number of pixels from nearest Visium spot center to call barcode ID. Ignored
         if `distance_trim==False`.
     channels : list of str or None
-        Names of image channels in axis order. If None, channels are named "ch_0", 
+        Names of image channels in axis order. If None, channels are named "ch_0",
         "ch_1", etc.
     plot_out : bool
         Plot final trimmed image
@@ -508,8 +505,8 @@ def assemble_pita(
     adata : AnnData.anndata
         the data
     features : list of int or str
-        Names or indices of features to cast onto spot image. If `None`, cast all 
-        features. If `plot_out`, first feature in list will be plotted. If not 
+        Names or indices of features to cast onto spot image. If `None`, cast all
+        features. If `plot_out`, first feature in list will be plotted. If not
         specified and `plot_out`, first feature (index 0) will be plotted.
     use_rep : str
         Key from `adata.obsm` to use for plotting. If `None`, use `adata.X`.
@@ -518,7 +515,7 @@ def assemble_pita(
     plot_out : bool
         Show resulting image?
     histo : str or `None`, optional (default=`None`)
-        Histology image to show along with pita in gridspec (i.e. "hires", 
+        Histology image to show along with pita in gridspec (i.e. "hires",
         "hires_trim", "lowres"). If `None` or if `plot_out`==`False`, ignore.
     verbose : bool, optional (default=`True`)
         Print updates to console
@@ -708,7 +705,7 @@ def plot_single_image_discrete(
     **kwargs,
 ):
     """
-    Plot a discrete (categorical) pixel image containing integer values (i.e. MILWRM 
+    Plot a discrete (categorical) pixel image containing integer values (i.e. MILWRM
     domains)
 
     Parameters
@@ -718,10 +715,10 @@ def plot_single_image_discrete(
     ax : matplotlib.axes.Axes
         Matplotlib axes to plot `image` to
     max_val : int
-        Maximum integer value for categories (i.e. 4 for categories [0,1,2,3,4]). 
+        Maximum integer value for categories (i.e. 4 for categories [0,1,2,3,4]).
         Categories are expected to be zero-indexed integers.
     ticklabels : list of str, optional (default=`None`)
-        Ordered list of categories for labeling discrete colorbar ticks. If `None`, 
+        Ordered list of categories for labeling discrete colorbar ticks. If `None`,
         number categories 0 - `max_val`.
     label : str, optional (default="")
         What to title the image plot
@@ -842,16 +839,16 @@ def show_pita(
     features : list of int, optional (default=`None`)
         List of features by index to show in plot. If `None`, use all features.
     discrete_features : dict, optional (default=`None`)
-        Dictionary of feature indices (keys) containing discrete (categorical) values 
-        (i.e. MILWRM domain). Values are tuple of `max_value` to pass to 
-        `plot_single_image_discrete` for each discrete feature, and the ordered list 
+        Dictionary of feature indices (keys) containing discrete (categorical) values
+        (i.e. MILWRM domain). Values are tuple of `max_value` to pass to
+        `plot_single_image_discrete` for each discrete feature, and the ordered list
         of categories for legend plotting. If `None`, treat all features as continuous.
     RGB : bool, optional (default=`False`)
         Treat 3-dimensional array as RGB image
     histo : np.array or `None`, optional (default=`None`)
         Histology image to show along with pita in gridspec. If `None`, ignore.
     label : str, optional (default="feature")
-        What to title each panel of the gridspec (i.e. "PC" or "usage") or each 
+        What to title each panel of the gridspec (i.e. "PC" or "usage") or each
         channel in RGB image. Can also pass list of names e.g. ["NeuN","GFAP",
         "DAPI"] corresponding to channels.
     ncols : int, optional (default=4)
@@ -867,7 +864,7 @@ def show_pita(
 
     Returns
     -------
-    Matplotlib object (if plotting one feature or RGB) or gridspec object (for 
+    Matplotlib object (if plotting one feature or RGB) or gridspec object (for
     multiple features). Saves plot to file if `save_to` is not `None`.
     """
     assert pita.ndim > 1, "Pita does not have enough dimensions: {} given".format(

@@ -4,7 +4,6 @@ Classes for assigning tissue domain IDs to multiplex immunofluorescence (MxIF) o
 Visium spatial transcriptomic (ST) and histological imaging data
 """
 import os
-from re import sub
 from tkinter import E
 import matplotlib.gridspec as gridspec
 import matplotlib.pyplot as plt
@@ -163,11 +162,12 @@ def prep_data_single_sample_st(
         tmp[["ch_{}_mean".format(x) for x in fluor_channels]] = adata.obsm[
             "image_means"
         ][:, fluor_channels]
-    # blur the features extracted in tmp
-    tmp2 = blur_features_st(
-        adata, tmp, spatial_graph_key=spatial_graph_key, n_rings=n_rings
-    )
-    return tmp2
+    if n_rings > 0:
+        # blur the features extracted in tmp
+        tmp = blur_features_st(
+            adata, tmp, spatial_graph_key=spatial_graph_key, n_rings=n_rings
+        )
+    return tmp
 
 
 def prep_data_single_sample_mxif(
@@ -392,7 +392,7 @@ def estimate_confidence_score_mxif(
 ):
     """
     Estimate confidence score for the assigned tissue_IDs in MxIF slide by
-    taking difference between distance to the second closest centroid and the 
+    taking difference between distance to the second closest centroid and the
     assigned centroid divided by distance to the second closest centroid.
 
     Parameters
@@ -429,20 +429,20 @@ def estimate_confidence_score_mxif(
         features = [image.ch.index(x) for x in features]
     if features is None:  # if no features are given, use all of them
         features = [x for x in range(image.n_ch)]
-    w,h,d = image.img[:,:,features].shape
-    img_ar = image.img[:,:,features].reshape((w*h),d)
+    w, h, d = image.img[:, :, features].shape
+    img_ar = image.img[:, :, features].reshape((w * h), d)
     scaled_img_ar = scaler.transform(img_ar)
-    img_sc = scaled_img_ar.reshape((w,h,d))
+    img_sc = scaled_img_ar.reshape((w, h, d))
     # initializing an empty numpy array to store distance to each centroid along axis = 2
-    dist_ar = np.zeros((w,h,len(centroids)))
-    for i,centroid in enumerate(centroids):
-        dist = ((img_sc) - (centroid))**2
-        dist_cp = np.sum(dist, axis = 2)
-        dist_ar[:,:,i] = dist_ar[:,:,i] + dist_cp
+    dist_ar = np.zeros((w, h, len(centroids)))
+    for i, centroid in enumerate(centroids):
+        dist = ((img_sc) - (centroid)) ** 2
+        dist_cp = np.sum(dist, axis=2)
+        dist_ar[:, :, i] = dist_ar[:, :, i] + dist_cp
     # sorting the numpy array according to distance from centroids
-    new_dist_ar = np.sort(dist_ar, axis = 2)
+    new_dist_ar = np.sort(dist_ar, axis=2)
     # estimating new confidence score
-    cID = ((new_dist_ar[:,:,1]) - (new_dist_ar[:,:,0]))/new_dist_ar[:,:,1]
+    cID = ((new_dist_ar[:, :, 1]) - (new_dist_ar[:, :, 0])) / new_dist_ar[:, :, 1]
     cID[image.mask == 0] = np.nan
     # estimating average confidence score in that image
     mean_conf_score = {}
@@ -538,14 +538,16 @@ def estimate_percentage_variance_st(sub_cluster_data, adata, centroids):
     df["index"] = list(range(adata.n_obs))
     for i in ids:
         # estimating euclidean distance from the data point to closest centroid
-        diff = ((sub_cluster_data[df[df["tissue_ID"] == i]["index"]]) - (centroids[i])) ** 2
+        diff = (
+            (sub_cluster_data[df[df["tissue_ID"] == i]["index"]]) - (centroids[i])
+        ) ** 2
         dc.append(diff)
     dc = np.row_stack(dc)
     # estimating euclidean distance from each data point to the mean of the data
     dm = (sub_cluster_data - sub_cluster_data.mean(axis=0)) ** 2
     # getting sum across features
     # taking ratio of sum of distances for all data points from centroids and data mean
-    S = np.sum(dc)/np.sum(dm)
+    S = np.sum(dc) / np.sum(dm)
     S_square_pct = S * 100
     return S_square_pct
 
@@ -553,7 +555,7 @@ def estimate_percentage_variance_st(sub_cluster_data, adata, centroids):
 def estimate_confidence_score_st(sub_cluster_data, adata, centroids):
     """
     Estimate confidence score for the assigned tissue_IDs in a visium slide by
-    taking difference between distance to the second closest centroid and the 
+    taking difference between distance to the second closest centroid and the
     assigned centroid divided by distance to the second closest centroid.
 
     Parameters
@@ -574,21 +576,21 @@ def estimate_confidence_score_st(sub_cluster_data, adata, centroids):
     # initializing zeros array to store distances
     dist_mx = np.zeros((sub_cluster_data.shape[0], len(centroids)))
     # calculating distance to each centroid
-    for i,centroid in enumerate(centroids):
-        dist_cp = ((sub_cluster_data) - (centroid))**2
-        dist = np.sum(dist_cp, axis = 1)
-        dist_mx[:,i] = dist_mx[:,i] + dist
+    for i, centroid in enumerate(centroids):
+        dist_cp = ((sub_cluster_data) - (centroid)) ** 2
+        dist = np.sum(dist_cp, axis=1)
+        dist_mx[:, i] = dist_mx[:, i] + dist
     # sorting distances according to distance from centroids
-    new_dist_ar = np.sort(dist_mx, axis = 1)
+    new_dist_ar = np.sort(dist_mx, axis=1)
     # using assigned and second closest centroid to estimate confidence score
-    cID = ((new_dist_ar[:,1]) - (new_dist_ar[:,0]))/new_dist_ar[:,1]
+    cID = ((new_dist_ar[:, 1]) - (new_dist_ar[:, 0])) / new_dist_ar[:, 1]
     adata.obs["confidence_score"] = cID
-    score_df = pd.DataFrame(cID, columns = ['score'])
-    score_df['tissue_ID'] = adata.obs["tissue_ID"].values
+    score_df = pd.DataFrame(cID, columns=["score"])
+    score_df["tissue_ID"] = adata.obs["tissue_ID"].values
     mean_conf_score = {}
     for i in range(len(centroids)):
-        if (adata.obs["tissue_ID"]==i).any():
-            mean_conf_score[i] = score_df[score_df["tissue_ID"]==i]["score"].mean()
+        if (adata.obs["tissue_ID"] == i).any():
+            mean_conf_score[i] = score_df[score_df["tissue_ID"] == i]["score"].mean()
         else:
             mean_conf_score[i] = np.nan
     return mean_conf_score
@@ -948,11 +950,10 @@ class st_labeler(tissue_labeler):
         self,
         use_rep,
         features=None,
-        blur_pix=2,
+        n_rings=1,
         histo=False,
         fluor_channels=None,
         spatial_graph_key=None,
-        n_rings=1,
         n_jobs=-1,
     ):
         """
@@ -966,10 +967,10 @@ class st_labeler(tissue_labeler):
             List of features to use from `adata.obsm[use_rep]` (e.g. [0,1,2,3,4] to
             use first 5 principal components when `use_rep`="X_pca"). If `None`, use
             all features from `adata.obsm[use_rep]`
-        blur_pix : int, optional (default=2)
-            Radius of nearest spatial transcriptomics spots to blur features by for
-            capturing regional information. Assumes hexagonal spot grid (10X Genomics
-            Visium platform).
+        n_rings : int, optional (default=1)
+            Number of hexagonal rings around each spatial transcriptomics spot to blur
+            features by for capturing regional information. Assumes 10X Genomics Visium
+            platform.
         histo : bool, optional (default `False`)
             Use histology data from Visium anndata object (R,G,B brightfield features)
             in addition to `adata.obsm[use_rep]`? If fluorescent imaging data rather
@@ -982,17 +983,14 @@ class st_labeler(tissue_labeler):
             Key in `adata.obsp` containing spatial graph connectivities (i.e.
             `"spatial_connectivities"`). If `None`, compute new spatial graph using
             `n_rings` in `squidpy`.
-        n_rings : int, optional (default=1)
-            Number of hexagonal rings around each spatial transcriptomics spot to blur
-            features by for capturing regional information. Assumes 10X Genomics Visium
-            platform.
         n_jobs : int, optional (default=-1)
             Number of cores to parallelize over. Default all available cores.
 
         Returns
         -------
         Does not return anything. `self.adatas` are updated, adding "blur_*" features
-        to `.obs`. `self.cluster_data` becomes master `np.array` for cluster training.
+        to `.obs` if `n_rings > 0`.
+        `self.cluster_data` becomes master `np.array` for cluster training.
         Parameters are also captured as attributes for posterity.
         """
         if self.cluster_data is not None:
@@ -1006,7 +1004,7 @@ class st_labeler(tissue_labeler):
         self.rep = use_rep
         self.histo = histo
         self.fluor_channels = fluor_channels
-        self.blur_pix = blur_pix
+        self.n_rings = n_rings
         # collect clustering data from self.adatas in parallel
         print(
             "Collecting and blurring {} features from .obsm[{}]...".format(
@@ -1088,13 +1086,40 @@ class st_labeler(tissue_labeler):
             )
             start += self.adatas[i].n_obs
 
+    def confidence_score(self):
+        """
+        estimate confidence score for each visium slide
+
+        Parameters
+        ----------
+
+        Returns
+        -------
+        self.adatas[i].obs.confidence_IDs and self.confidence_score_df are added
+        containing confidence score for each tissue ID assignment and mean confidence
+        score for each tissue ID within each visium slide
+        """
+        i_slice = 0
+        j_slice = 0
+        confidence_score_df = pd.DataFrame()
+        adatas = self.adatas
+        cluster_data = self.cluster_data
+        centroids = self.kmeans.cluster_centers_
+        for i, adata in enumerate(adatas):
+            j_slice = j_slice + adata.n_obs
+            data = cluster_data[i_slice:j_slice]
+            scores_dict = estimate_confidence_score_st(data, adata, centroids)
+            df = pd.DataFrame(scores_dict.values(), columns=[i])
+            confidence_score_df = pd.concat([confidence_score_df, df], axis=1)
+            i_slice = i_slice + adata.n_obs
+        self.confidence_score_df = confidence_score_df
+
     def plot_gene_loadings(
         self,
         PC_loadings,
         n_genes=10,
         ncols=None,
         titles=None,
-        fig_size=(5, 5),
         save_to=None,
     ):
         """
@@ -1227,7 +1252,7 @@ class st_labeler(tissue_labeler):
             R_squre_for_each_st.append(100 - S_square)
             i_slice = i_slice + adata.n_obs
 
-        if R_square == True:
+        if R_square:
             fig = plt.figure(figsize=fig_size)
             plt.bar(range(len(R_squre_for_each_st)), R_squre_for_each_st)
             plt.xlabel("slides")
@@ -1242,34 +1267,6 @@ class st_labeler(tissue_labeler):
         if save_to:
             plt.savefig(fname=save_to, transparent=True, bbox_inches="tight", dpi=300)
         return fig
-
-    def confidence_score(self):
-        """
-        estimate confidence score for each visium slide
-
-        Parameters
-        ----------
-
-        Returns
-        -------
-        self.confidence_IDs and self.confidence_score_df are added containing
-        confidence score for each tissue ID assignment and mean confidence score for
-        each tissue ID within each visium slide
-        """
-        i_slice = 0
-        j_slice = 0
-        confidence_score_df = pd.DataFrame()
-        adatas = self.adatas
-        cluster_data = self.cluster_data
-        centroids = self.kmeans.cluster_centers_
-        for i, adata in enumerate(adatas):
-            j_slice = j_slice + adata.n_obs
-            data = cluster_data[i_slice:j_slice]
-            scores_dict = estimate_confidence_score_st(data, adata, centroids)
-            df = pd.DataFrame(scores_dict.values(), columns=[i])
-            confidence_score_df = pd.concat([confidence_score_df, df], axis=1)
-            i_slice = i_slice + adata.n_obs
-        self.confidence_score_df = confidence_score_df
 
     def plot_mse_st(
         self,
@@ -1292,6 +1289,7 @@ class st_labeler(tissue_labeler):
             Number of columns for gridspec. If `None`, uses number of tissue domains k.
         labels : list of str, optional (default=`None`)
             Labels corresponding to each MILWRM training feature. If `None`, features
+            are numbered sequentially.
         titles : list of str, optional (default=`None`)
             Titles of plots corresponding to each MILWRM domain. If `None`, titles
             will be numbers 0 through k.
@@ -1316,7 +1314,7 @@ class st_labeler(tissue_labeler):
         features = self.features
         centroids = self.kmeans.cluster_centers_
         mse_id = estimate_mse_st(cluster_data, adatas, centroids, k)
-        colors = cm.rainbow(np.linspace(0, 1, len(adatas)))
+        colors = plt.cm.tab20(np.linspace(0, 1, len(adatas)))
         if titles is None:
             titles = ["tissue_ID " + str(x) for x in range(self.k)]
         if labels is None:
@@ -1345,9 +1343,11 @@ class st_labeler(tissue_labeler):
             for col in df:
                 for k in range(len(df[col])):
                     dots = plt.scatter(
-                        col, df[col][k], s=k+1,
-                        color =  colors[k],
-                        label=labels[k] if col == 0 else ""
+                        col,
+                        df[col][k],
+                        s=k + 1,
+                        color=colors[k],
+                        label=labels[k] if col == 0 else "",
                     )
                     offsets = dots.get_offsets()
                     jittered_offsets = offsets
@@ -1356,7 +1356,7 @@ class st_labeler(tissue_labeler):
                         -0.3, 0.3, offsets.shape[0]
                     )
                     dots.set_offsets(jittered_offsets)
-            plt.xlabel("PCs")
+            plt.xlabel("slides")
             plt.ylabel("mean square error")
             plt.title(titles[i])
         plt.legend(loc=loc, bbox_to_anchor=bbox_coordinates)
@@ -1365,9 +1365,7 @@ class st_labeler(tissue_labeler):
             plt.savefig(fname=save_to, transparent=True, dpi=300)
         return fig
 
-    def plot_tissue_ID_proportions_st(
-        self, figsize=(5, 5), color="rainbow", save_to=None
-    ):
+    def plot_tissue_ID_proportions_st(self, figsize=(5, 5), cmap="tab20", save_to=None):
         """
         Plot proportion of each tissue ID within each slide
 
@@ -1375,7 +1373,8 @@ class st_labeler(tissue_labeler):
         ----------
         figsize : tuple of float, optional (default=(5,5))
             Size of matplotlib figure
-        color : str, optional (default = `rainbow`)
+        cmap : str, optional (default = `"tab20"`)
+            Colormap from matplotlib
         save_to : str, optional (default=`None`)
             Path to image file to save plot
 
@@ -1388,7 +1387,7 @@ class st_labeler(tissue_labeler):
             df = adata.obs["tissue_ID"].value_counts(normalize=True, sort=False)
             df_count = pd.concat([df_count, df], axis=1)
         df_count = df_count.T.reset_index(drop=True)
-        ax = df_count.plot.bar(stacked=True, cmap=color, figsize=figsize)
+        ax = df_count.plot.bar(stacked=True, cmap=cmap, figsize=figsize)
         ax.legend(loc="best", bbox_to_anchor=(1, 1))
         ax.set_xlabel("slides")
         ax.set_ylabel("tissue ID proportion")
@@ -1403,7 +1402,7 @@ class st_labeler(tissue_labeler):
         pita,
         features=None,
         histo=None,
-        cmap="plasma",
+        cmap="tab20",
         label="feature",
         ncols=4,
         save_to=None,
@@ -1424,7 +1423,7 @@ class st_labeler(tissue_labeler):
             List of features by index to show in plot. If `None`, use all features.
         histo : np.array or `None`, optional (default=`None`)
             Histology image to show along with pita in gridspec. If `None`, ignore.
-        cmap : str, optional (default="plasma")
+        cmap : str, optional (default="tab20")
             Matplotlib colormap to use for plotting tissue IDs
         label : str
             What to title each panel of the gridspec (i.e. "PC" or "usage") or each
@@ -1826,7 +1825,7 @@ class mxif_labeler(tissue_labeler):
         figsize=(5, 5),
         ncols=None,
         labels=None,
-        legend_cols = 2,
+        legend_cols=2,
         titles=None,
         loc="lower right",
         bbox_coordinates=(0, 0, 1.5, 1.5),
@@ -1885,7 +1884,7 @@ class mxif_labeler(tissue_labeler):
             n_rows, n_cols = 1, n_panels
         else:
             n_rows, n_cols = ceil(n_panels / ncols), ncols
-        colors = plt.cm.tab20(np.linspace(0,1,len(images)))
+        colors = plt.cm.tab20(np.linspace(0, 1, len(images)))
         fig = plt.figure(figsize=(n_cols * figsize[0], n_rows * figsize[1]))
         left, bottom = 0.1 / n_cols, 0.1 / n_rows
         gs = gridspec.GridSpec(
@@ -1900,14 +1899,20 @@ class mxif_labeler(tissue_labeler):
             plt.subplot(gs[i])
             df = pd.DataFrame.from_dict(mse_id[i])
             plt.boxplot(df, positions=range(len(features)), showfliers=False)
-            plt.xticks(ticks = range(len(features)), 
-            labels =  self.model_features, rotation = 60, fontsize = 8)
+            plt.xticks(
+                ticks=range(len(features)),
+                labels=self.model_features,
+                rotation=60,
+                fontsize=8,
+            )
             for col in df:
                 for k in range(len(images)):
                     dots = plt.scatter(
-                        col, df[col][k], s=k+1,
-                        color = colors[k],
-                        label=labels[k] if col == 0 else ""
+                        col,
+                        df[col][k],
+                        s=k + 1,
+                        color=colors[k],
+                        label=labels[k] if col == 0 else "",
                     )
                     offsets = dots.get_offsets()
                     jittered_offsets = offsets
@@ -1919,14 +1924,14 @@ class mxif_labeler(tissue_labeler):
             plt.xlabel("marker")
             plt.ylabel("mean square error")
             plt.title(titles[i])
-        plt.legend(loc=loc, bbox_to_anchor=bbox_coordinates, ncol = legend_cols)
+        plt.legend(loc=loc, bbox_to_anchor=bbox_coordinates, ncol=legend_cols)
         gs.tight_layout(fig)
         if save_to:
             plt.savefig(fname=save_to, transparent=True, dpi=300)
         return fig
 
     def plot_tissue_ID_proportions_mxif(
-        self, figsize=(5, 5), color="rainbow", save_to=None
+        self, figsize=(5, 5), cmap="tab20", save_to=None
     ):
         """
         Plot proportion of each tissue ID within each slide
@@ -1935,7 +1940,7 @@ class mxif_labeler(tissue_labeler):
         ----------
         figsize : tuple of float, optional (default=(5,5))
             Size of matplotlib figure
-        color : str, optional (default = `rainbow`)
+        cmap : str, optional (default = `"tab20"`)
         save_to : str, optional (default=`None`)
             Path to image file to save plot
 
@@ -1957,7 +1962,7 @@ class mxif_labeler(tissue_labeler):
             df_count = pd.concat([df_count, df], axis=1)
         df_count = df_count / df_count.sum()
         self.tissue_ID_proportion = df_count
-        ax = df_count.T.plot.bar(stacked=True, cmap=color, figsize=figsize)
+        ax = df_count.T.plot.bar(stacked=True, cmap=cmap, figsize=figsize)
         ax.legend(loc="best", bbox_to_anchor=(1, 1))
         ax.set_xlabel("images")
         ax.set_ylabel("tissue ID proportion")
@@ -1966,7 +1971,7 @@ class mxif_labeler(tissue_labeler):
         else:
             return ax
 
-    def make_umap(self, frac=None, color_map="hsv", save_to=None, alpha=0.8):
+    def make_umap(self, frac=None, cmap="tab20", save_to=None, alpha=0.8):
         """
         plot umap for the cluster data
 
@@ -1975,8 +1980,8 @@ class mxif_labeler(tissue_labeler):
         frac : None or float
             if None entire cluster data is used for the computation of umap
             else that percentage of cluster data is used.
-        color_map : str
-            str for cmap used for plotting. Default cmap is rainbow
+        cmap : str
+            str for cmap used for plotting. Default `"tab20"`.
         save_to : str or None
             Path to image file to save results. if `None`, show figure.
 
@@ -2008,10 +2013,10 @@ class mxif_labeler(tissue_labeler):
         # defining color_map
         # TODO : add alpha here
         disc_cmap_1 = plt.cm.get_cmap(
-            color_map, len(np.unique(np.array(umap_centroid_data.index)))
+            cmap, len(np.unique(np.array(umap_centroid_data.index)))
         )
         disc_cmap_2 = plt.cm.get_cmap(
-            color_map, len(np.unique(np.array(umap_centroid_data["Kmeans_labels"])))
+            cmap, len(np.unique(np.array(umap_centroid_data["Kmeans_labels"])))
         )
         plot_1 = ax1.scatter(
             standard_embedding_1[:, 0],
