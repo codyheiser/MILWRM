@@ -215,13 +215,13 @@ def prep_data_single_sample_mxif(
     # apply the desired filter
     image.blurring(filter_name=filter_name, sigma=sigma)
     # min max scaling of each channel
-    for i in range(image.img.shape[2]):
-        img_ar = image.img[:, :, i][image.mask != 0]
-        img_ar_max = img_ar.max()
-        img_ar_min = img_ar.min()
-        # print(img_ar_max, img_ar_min)
-        image_ar_scaled = (image.img[:, :, i] - img_ar_min) / (img_ar_max - img_ar_min)
-        image.img[:, :, i] = image_ar_scaled
+    # for i in range(image.img.shape[2]):
+    #     img_ar = image.img[:, :, i][image.mask != 0]
+    #     img_ar_max = img_ar.max()
+    #     img_ar_min = img_ar.min()
+    #     # print(img_ar_max, img_ar_min)
+    #     image_ar_scaled = (image.img[:, :, i] - img_ar_min) / (img_ar_max - img_ar_min)
+    #     image.img[:, :, i] = image_ar_scaled
     # subsample pixels to build the kmeans model
     subsampled_data = image.subsample_pixels(features, fract)
     if use_path == True:
@@ -447,7 +447,7 @@ def estimate_confidence_score_mxif(
     # estimating average confidence score in that image
     mean_conf_score = {}
     for i in range(len(centroids)):
-        mean_conf_score[i] = np.mean(cID[tissue_ID == 1])
+        mean_conf_score[i] = np.mean(cID[tissue_ID == i])
     return cID, mean_conf_score
 
 
@@ -630,7 +630,7 @@ def estimate_mse_st(cluster_data, adatas, centroids, k):
                 (data[df[df["tissue_ID"] == i]["index"]]) - (centroids[i])
             ) ** 2  # difference between each data point and centroids
             if len(x) == 0:
-                diff.append(np.zeros(mse.shape))
+                diff.append(np.zeros((centroids.shape[1])))
             else:
                 mse = x.mean(axis=0)  # mean of all the differences
                 # diff.append(mse.mean(axis = 0))
@@ -1946,7 +1946,14 @@ class mxif_labeler(tissue_labeler):
         df_count = pd.DataFrame()
         for i in range(len(self.tissue_IDs)):
             unique, counts = np.unique(self.tissue_IDs[i], return_counts=True)
-            df = pd.DataFrame(counts[: self.k], columns=[i])
+            dict_ = dict(zip(unique,counts))
+            n_counts = []
+            for k in range(self.k):
+                if k not in dict_.keys():
+                    n_counts.append(0)
+                else:
+                    n_counts.append(dict_[k])
+            df = pd.DataFrame(n_counts, columns=[i])
             df_count = pd.concat([df_count, df], axis=1)
         df_count = df_count / df_count.sum()
         self.tissue_ID_proportion = df_count
@@ -1959,7 +1966,7 @@ class mxif_labeler(tissue_labeler):
         else:
             return ax
 
-    def make_umap(self, frac=None, color_map="rainbow", save_to=None, alpha=0.8):
+    def make_umap(self, frac=None, color_map="hsv", save_to=None, alpha=0.8):
         """
         plot umap for the cluster data
 

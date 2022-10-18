@@ -454,7 +454,7 @@ class img:
                     fact = self.img[:, :, i].mean()
                     self.img[:, :, i] = np.log10(self.img[:, :, i] / fact + pseudoval)
 
-    def subsample_pixels(self, features, fract=0.2):
+    def subsample_pixels(self, features, fract=0.2, random_state = 18):
         """
         Sub-samples fraction of pixels from the image randomly for each channel
 
@@ -481,6 +481,7 @@ class img:
         if features is None:  # if no features are given, use all of them
             features = [x for x in range(self.n_ch)]
         # subsample data for given image
+        np.random.seed(random_state)
         tmp = []
         for i in range(self.img.shape[2]):
             tmp.append(self.img[:, :, i][self.mask != 0])
