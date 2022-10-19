@@ -174,7 +174,7 @@ def prep_data_single_sample_mxif(
     image, use_path, mean, filter_name, sigma, features, fract, path_save
 ):
     """
-    Perform log normalization, blurring and minmax scaling on the given image data
+    Perform log normalization, and blurring on the given image data
 
     Parameters
     ----------
@@ -215,13 +215,13 @@ def prep_data_single_sample_mxif(
     # apply the desired filter
     image.blurring(filter_name=filter_name, sigma=sigma)
     # min max scaling of each channel
-    for i in range(image.img.shape[2]):
-        img_ar = image.img[:, :, i][image.mask != 0]
-        img_ar_max = img_ar.max()
-        img_ar_min = img_ar.min()
-        # print(img_ar_max, img_ar_min)
-        image_ar_scaled = (image.img[:, :, i] - img_ar_min) / (img_ar_max - img_ar_min)
-        image.img[:, :, i] = image_ar_scaled
+    # for i in range(image.img.shape[2]):
+    #     img_ar = image.img[:, :, i][image.mask != 0]
+    #     img_ar_max = img_ar.max()
+    #     img_ar_min = img_ar.min()
+    #     # print(img_ar_max, img_ar_min)
+    #     image_ar_scaled = (image.img[:, :, i] - img_ar_min) / (img_ar_max - img_ar_min)
+    #     image.img[:, :, i] = image_ar_scaled
     # subsample pixels to build the kmeans model
     subsampled_data = image.subsample_pixels(features, fract)
     if use_path == True:
@@ -1288,8 +1288,8 @@ class st_labeler(tissue_labeler):
         ncols : int, optional (default=`None`)
             Number of columns for gridspec. If `None`, uses number of tissue domains k.
         labels : list of str, optional (default=`None`)
-            Labels corresponding to each MILWRM training feature. If `None`, features
-            are numbered sequentially.
+            Labels corresponding to each image in legend. If `None`, numeric index is 
+            used for each imaage
         titles : list of str, optional (default=`None`)
             Titles of plots corresponding to each MILWRM domain. If `None`, titles
             will be numbers 0 through k.
@@ -1841,7 +1841,8 @@ class mxif_labeler(tissue_labeler):
         ncols : int, optional (default=`None`)
             Number of columns for gridspec. If `None`, uses number of tissue domains k.
         labels : list of str, optional (default=`None`)
-            Labels corresponding to each MILWRM training feature. If `None`, features
+            Labels corresponding to each image in legend. If `None`, numeric index is 
+            used for each imaage
         legend_cols : int, optional (default = `2`)
             n_cols for legend
         titles : list of str, optional (default=`None`)
