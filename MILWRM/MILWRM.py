@@ -447,7 +447,7 @@ def estimate_confidence_score_mxif(
     # estimating average confidence score in that image
     mean_conf_score = {}
     for i in range(len(centroids)):
-        mean_conf_score[i] = np.mean(cID[tissue_ID == 1])
+        mean_conf_score[i] = np.mean(cID[tissue_ID == i])
     return cID, mean_conf_score
 
 
@@ -1254,15 +1254,20 @@ class st_labeler(tissue_labeler):
 
         if R_square:
             fig = plt.figure(figsize=fig_size)
-            plt.bar(range(len(R_squre_for_each_st)), R_squre_for_each_st)
-            plt.xlabel("slides")
+            plt.scatter(range(len(R_squre_for_each_st)), R_squre_for_each_st,color = 'black')
+            plt.xlabel("images")
             plt.ylabel("percentage variance explained by Kmeans")
+            plt.ylim((0,100))
+            plt.axhline(y = np.mean(R_squre_for_each_st),linestyle='dashed', linewidth = 1, color = 'black')
 
         else:
             fig = plt.figure(figsize=fig_size)
-            plt.bar(range(len(S_squre_for_each_st)), S_squre_for_each_st)
-            plt.xlabel("slides")
-            plt.ylabel("percentage variance not explained by Kmeans")
+            fig = plt.figure(figsize=(5,5))
+            plt.scatter(range(len(S_squre_for_each_st)), S_squre_for_each_st,color = 'black')
+            plt.xlabel("images")
+            plt.ylabel("percentage variance explained by Kmeans")
+            plt.ylim((0,100))
+            plt.axhline(y = np.mean(S_squre_for_each_st),linestyle='dashed', linewidth = 1, color = 'black')
 
         if save_to:
             plt.savefig(fname=save_to, transparent=True, bbox_inches="tight", dpi=300)
@@ -1772,16 +1777,20 @@ class mxif_labeler(tissue_labeler):
 
         if R_square == True:
             fig = plt.figure(figsize=fig_size)
-            plt.bar(range(len(R_squre_for_each_image)), R_squre_for_each_image)
+            fig = plt.figure(figsize=(5,5))
+            plt.scatter(range(len(R_squre_for_each_image)), R_squre_for_each_image,color = 'black')
             plt.xlabel("images")
             plt.ylabel("percentage variance explained by Kmeans")
+            plt.ylim((0,100))
+            plt.axhline(y = np.mean(R_squre_for_each_image),linestyle='dashed', linewidth = 1, color = 'black')
 
         else:
             fig = plt.figure(figsize=fig_size)
-            plt.bar(range(len(S_squre_for_each_image)), S_squre_for_each_image)
+            plt.scatter(range(len(S_squre_for_each_image)), S_squre_for_each_image,color = 'black')
             plt.xlabel("images")
-            plt.ylabel("percentage variance not explained by Kmeans")
-
+            plt.ylabel("percentage variance explained by Kmeans")
+            plt.ylim((0,100))
+            plt.axhline(y = np.mean(S_squre_for_each_image),linestyle='dashed', linewidth = 1, color = 'black')
         if save_to:
             plt.savefig(fname=save_to, transparent=True, bbox_inches="tight", dpi=300)
         return fig
