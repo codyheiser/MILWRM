@@ -632,7 +632,7 @@ def estimate_mse_st(cluster_data, adatas, centroids, k):
                 (data[df[df["tissue_ID"] == i]["index"]]) - (centroids[i])
             ) ** 2  # difference between each data point and centroids
             if len(x) == 0:
-                diff.append(np.zeros(centroids.shape[1],))
+                diff.append(np.zeros((centroids.shape[1])))
             else:
                 mse = x.mean(axis=0)  # mean of all the differences
                 # diff.append(mse.mean(axis = 0))
@@ -1961,7 +1961,14 @@ class mxif_labeler(tissue_labeler):
         df_count = pd.DataFrame()
         for i in range(len(self.tissue_IDs)):
             unique, counts = np.unique(self.tissue_IDs[i], return_counts=True)
-            df = pd.DataFrame(counts[: self.k], columns=[i])
+            dict_ = dict(zip(unique,counts))
+            n_counts = []
+            for k in range(self.k):
+                if k not in dict_.keys():
+                    n_counts.append(0)
+                else:
+                    n_counts.append(dict_[k])
+            df = pd.DataFrame(n_counts, columns=[i])
             df_count = pd.concat([df_count, df], axis=1)
         df_count = df_count / df_count.sum()
         self.tissue_ID_proportion = df_count
