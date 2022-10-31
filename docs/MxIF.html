@@ -483,7 +483,7 @@ class img:
                     fact = self.img[:, :, i].mean()
                     self.img[:, :, i] = np.log10(self.img[:, :, i] / fact + pseudoval)
 
-    def subsample_pixels(self, features, fract=0.2):
+    def subsample_pixels(self, features, fract=0.2, random_state=18):
         &#34;&#34;&#34;
         Sub-samples fraction of pixels from the image randomly for each channel
 
@@ -510,6 +510,7 @@ class img:
         if features is None:  # if no features are given, use all of them
             features = [x for x in range(self.n_ch)]
         # subsample data for given image
+        np.random.seed(random_state)
         tmp = []
         for i in range(self.img.shape[2]):
             tmp.append(self.img[:, :, i][self.mask != 0])
@@ -1342,7 +1343,7 @@ class img:
                     fact = self.img[:, :, i].mean()
                     self.img[:, :, i] = np.log10(self.img[:, :, i] / fact + pseudoval)
 
-    def subsample_pixels(self, features, fract=0.2):
+    def subsample_pixels(self, features, fract=0.2, random_state=18):
         &#34;&#34;&#34;
         Sub-samples fraction of pixels from the image randomly for each channel
 
@@ -1369,6 +1370,7 @@ class img:
         if features is None:  # if no features are given, use all of them
             features = [x for x in range(self.n_ch)]
         # subsample data for given image
+        np.random.seed(random_state)
         tmp = []
         for i in range(self.img.shape[2]):
             tmp.append(self.img[:, :, i][self.mask != 0])
@@ -2457,7 +2459,7 @@ channels.</dd>
 </details>
 </dd>
 <dt id="MILWRM.MxIF.img.subsample_pixels"><code class="name flex">
-<span>def <span class="ident">subsample_pixels</span></span>(<span>self, features, fract=0.2)</span>
+<span>def <span class="ident">subsample_pixels</span></span>(<span>self, features, fract=0.2, random_state=18)</span>
 </code></dt>
 <dd>
 <div class="desc"><p>Sub-samples fraction of pixels from the image randomly for each channel</p>
@@ -2478,7 +2480,7 @@ for model building</dd>
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">def subsample_pixels(self, features, fract=0.2):
+<pre><code class="python">def subsample_pixels(self, features, fract=0.2, random_state=18):
     &#34;&#34;&#34;
     Sub-samples fraction of pixels from the image randomly for each channel
 
@@ -2505,6 +2507,7 @@ for model building</dd>
     if features is None:  # if no features are given, use all of them
         features = [x for x in range(self.n_ch)]
     # subsample data for given image
+    np.random.seed(random_state)
     tmp = []
     for i in range(self.img.shape[2]):
         tmp.append(self.img[:, :, i][self.mask != 0])

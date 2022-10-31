@@ -205,7 +205,7 @@ def prep_data_single_sample_mxif(
     image, use_path, mean, filter_name, sigma, features, fract, path_save
 ):
     &#34;&#34;&#34;
-    Perform log normalization, blurring and minmax scaling on the given image data
+    Perform log normalization, and blurring on the given image data
 
     Parameters
     ----------
@@ -246,13 +246,13 @@ def prep_data_single_sample_mxif(
     # apply the desired filter
     image.blurring(filter_name=filter_name, sigma=sigma)
     # min max scaling of each channel
-    for i in range(image.img.shape[2]):
-        img_ar = image.img[:, :, i][image.mask != 0]
-        img_ar_max = img_ar.max()
-        img_ar_min = img_ar.min()
-        # print(img_ar_max, img_ar_min)
-        image_ar_scaled = (image.img[:, :, i] - img_ar_min) / (img_ar_max - img_ar_min)
-        image.img[:, :, i] = image_ar_scaled
+    # for i in range(image.img.shape[2]):
+    #     img_ar = image.img[:, :, i][image.mask != 0]
+    #     img_ar_max = img_ar.max()
+    #     img_ar_min = img_ar.min()
+    #     # print(img_ar_max, img_ar_min)
+    #     image_ar_scaled = (image.img[:, :, i] - img_ar_min) / (img_ar_max - img_ar_min)
+    #     image.img[:, :, i] = image_ar_scaled
     # subsample pixels to build the kmeans model
     subsampled_data = image.subsample_pixels(features, fract)
     if use_path == True:
@@ -478,7 +478,7 @@ def estimate_confidence_score_mxif(
     # estimating average confidence score in that image
     mean_conf_score = {}
     for i in range(len(centroids)):
-        mean_conf_score[i] = np.mean(cID[tissue_ID == 1])
+        mean_conf_score[i] = np.mean(cID[tissue_ID == i])
     return cID, mean_conf_score
 
 
@@ -663,7 +663,7 @@ def estimate_mse_st(cluster_data, adatas, centroids, k):
                 (data[df[df[&#34;tissue_ID&#34;] == i][&#34;index&#34;]]) - (centroids[i])
             ) ** 2  # difference between each data point and centroids
             if len(x) == 0:
-                diff.append(np.zeros(mse.shape))
+                diff.append(np.zeros((centroids.shape[1])))
             else:
                 mse = x.mean(axis=0)  # mean of all the differences
                 # diff.append(mse.mean(axis = 0))
@@ -1130,6 +1130,10 @@ class st_labeler(tissue_labeler):
         containing confidence score for each tissue ID assignment and mean confidence
         score for each tissue ID within each visium slide
         &#34;&#34;&#34;
+        assert (
+            self.kmeans is not None
+        ), &#34;No cluster results found. Run \
+        label_tissue_regions() first.&#34;
         i_slice = 0
         j_slice = 0
         confidence_score_df = pd.DataFrame()
@@ -1176,6 +1180,10 @@ class st_labeler(tissue_labeler):
         -------
         Matplotlib object and PC loadings in gene space set as self.gene_loadings_df
         &#34;&#34;&#34;
+        assert (
+            self.kmeans is not None
+        ), &#34;No cluster results found. Run \
+        label_tissue_regions() first.&#34;
         assert (
             PC_loadings.shape[0] == self.adatas[0].n_vars
         ), f&#34;loadings matrix does not, \
@@ -1266,6 +1274,10 @@ class st_labeler(tissue_labeler):
         -------
         Matplotlib object
         &#34;&#34;&#34;
+        assert (
+            self.kmeans is not None
+        ), &#34;No cluster results found. Run \
+        label_tissue_regions() first.&#34;
         centroids = self.kmeans.cluster_centers_
         adatas = self.adatas
         cluster_data = self.cluster_data
@@ -1285,15 +1297,34 @@ class st_labeler(tissue_labeler):
 
         if R_square:
             fig = plt.figure(figsize=fig_size)
-            plt.bar(range(len(R_squre_for_each_st)), R_squre_for_each_st)
-            plt.xlabel(&#34;slides&#34;)
+            plt.scatter(
+                range(len(R_squre_for_each_st)), R_squre_for_each_st, color=&#34;black&#34;
+            )
+            plt.xlabel(&#34;images&#34;)
             plt.ylabel(&#34;percentage variance explained by Kmeans&#34;)
+            plt.ylim((0, 100))
+            plt.axhline(
+                y=np.mean(R_squre_for_each_st),
+                linestyle=&#34;dashed&#34;,
+                linewidth=1,
+                color=&#34;black&#34;,
+            )
 
         else:
             fig = plt.figure(figsize=fig_size)
-            plt.bar(range(len(S_squre_for_each_st)), S_squre_for_each_st)
-            plt.xlabel(&#34;slides&#34;)
-            plt.ylabel(&#34;percentage variance not explained by Kmeans&#34;)
+            fig = plt.figure(figsize=(5, 5))
+            plt.scatter(
+                range(len(S_squre_for_each_st)), S_squre_for_each_st, color=&#34;black&#34;
+            )
+            plt.xlabel(&#34;images&#34;)
+            plt.ylabel(&#34;percentage variance explained by Kmeans&#34;)
+            plt.ylim((0, 100))
+            plt.axhline(
+                y=np.mean(S_squre_for_each_st),
+                linestyle=&#34;dashed&#34;,
+                linewidth=1,
+                color=&#34;black&#34;,
+            )
 
         if save_to:
             plt.savefig(fname=save_to, transparent=True, bbox_inches=&#34;tight&#34;, dpi=300)
@@ -1319,8 +1350,8 @@ class st_labeler(tissue_labeler):
         ncols : int, optional (default=`None`)
             Number of columns for gridspec. If `None`, uses number of tissue domains k.
         labels : list of str, optional (default=`None`)
-            Labels corresponding to each MILWRM training feature. If `None`, features
-            are numbered sequentially.
+            Labels corresponding to each image in legend. If `None`, numeric index is
+            used for each imaage
         titles : list of str, optional (default=`None`)
             Titles of plots corresponding to each MILWRM domain. If `None`, titles
             will be numbers 0 through k.
@@ -1803,16 +1834,38 @@ class mxif_labeler(tissue_labeler):
 
         if R_square == True:
             fig = plt.figure(figsize=fig_size)
-            plt.bar(range(len(R_squre_for_each_image)), R_squre_for_each_image)
+            fig = plt.figure(figsize=(5, 5))
+            plt.scatter(
+                range(len(R_squre_for_each_image)),
+                R_squre_for_each_image,
+                color=&#34;black&#34;,
+            )
             plt.xlabel(&#34;images&#34;)
             plt.ylabel(&#34;percentage variance explained by Kmeans&#34;)
+            plt.ylim((0, 100))
+            plt.axhline(
+                y=np.mean(R_squre_for_each_image),
+                linestyle=&#34;dashed&#34;,
+                linewidth=1,
+                color=&#34;black&#34;,
+            )
 
         else:
             fig = plt.figure(figsize=fig_size)
-            plt.bar(range(len(S_squre_for_each_image)), S_squre_for_each_image)
+            plt.scatter(
+                range(len(S_squre_for_each_image)),
+                S_squre_for_each_image,
+                color=&#34;black&#34;,
+            )
             plt.xlabel(&#34;images&#34;)
-            plt.ylabel(&#34;percentage variance not explained by Kmeans&#34;)
-
+            plt.ylabel(&#34;percentage variance explained by Kmeans&#34;)
+            plt.ylim((0, 100))
+            plt.axhline(
+                y=np.mean(S_squre_for_each_image),
+                linestyle=&#34;dashed&#34;,
+                linewidth=1,
+                color=&#34;black&#34;,
+            )
         if save_to:
             plt.savefig(fname=save_to, transparent=True, bbox_inches=&#34;tight&#34;, dpi=300)
         return fig
@@ -1872,7 +1925,8 @@ class mxif_labeler(tissue_labeler):
         ncols : int, optional (default=`None`)
             Number of columns for gridspec. If `None`, uses number of tissue domains k.
         labels : list of str, optional (default=`None`)
-            Labels corresponding to each MILWRM training feature. If `None`, features
+            Labels corresponding to each image in legend. If `None`, numeric index is
+            used for each imaage
         legend_cols : int, optional (default = `2`)
             n_cols for legend
         titles : list of str, optional (default=`None`)
@@ -1982,7 +2036,14 @@ class mxif_labeler(tissue_labeler):
         df_count = pd.DataFrame()
         for i in range(len(self.tissue_IDs)):
             unique, counts = np.unique(self.tissue_IDs[i], return_counts=True)
-            df = pd.DataFrame(counts[: self.k], columns=[i])
+            dict_ = dict(zip(unique, counts))
+            n_counts = []
+            for k in range(self.k):
+                if k not in dict_.keys():
+                    n_counts.append(0)
+                else:
+                    n_counts.append(dict_[k])
+            df = pd.DataFrame(n_counts, columns=[i])
             df_count = pd.concat([df_count, df], axis=1)
         df_count = df_count / df_count.sum()
         self.tissue_ID_proportion = df_count
@@ -2411,7 +2472,7 @@ given as MILWRM.MxIF.img object</dd>
     # estimating average confidence score in that image
     mean_conf_score = {}
     for i in range(len(centroids)):
-        mean_conf_score[i] = np.mean(cID[tissue_ID == 1])
+        mean_conf_score[i] = np.mean(cID[tissue_ID == i])
     return cID, mean_conf_score</code></pre>
 </details>
 </dd>
@@ -2641,7 +2702,7 @@ given as MILWRM.MxIF.img object</dd>
                 (data[df[df[&#34;tissue_ID&#34;] == i][&#34;index&#34;]]) - (centroids[i])
             ) ** 2  # difference between each data point and centroids
             if len(x) == 0:
-                diff.append(np.zeros(mse.shape))
+                diff.append(np.zeros((centroids.shape[1])))
             else:
                 mse = x.mean(axis=0)  # mean of all the differences
                 # diff.append(mse.mean(axis = 0))
@@ -2940,7 +3001,7 @@ of Umap, centroids, batch_labels and kmeans_labels</dd>
 <span>def <span class="ident">prep_data_single_sample_mxif</span></span>(<span>image, use_path, mean, filter_name, sigma, features, fract, path_save)</span>
 </code></dt>
 <dd>
-<div class="desc"><p>Perform log normalization, blurring and minmax scaling on the given image data</p>
+<div class="desc"><p>Perform log normalization, and blurring on the given image data</p>
 <h2 id="parameters">Parameters</h2>
 <dl>
 <dt><strong><code>image</code></strong> :&ensp;<code><a title="MILWRM.MxIF.img" href="MxIF.html#MILWRM.MxIF.img">img</a></code> or <code>str</code></dt>
@@ -2977,7 +3038,7 @@ building</dd>
     image, use_path, mean, filter_name, sigma, features, fract, path_save
 ):
     &#34;&#34;&#34;
-    Perform log normalization, blurring and minmax scaling on the given image data
+    Perform log normalization, and blurring on the given image data
 
     Parameters
     ----------
@@ -3018,13 +3079,13 @@ building</dd>
     # apply the desired filter
     image.blurring(filter_name=filter_name, sigma=sigma)
     # min max scaling of each channel
-    for i in range(image.img.shape[2]):
-        img_ar = image.img[:, :, i][image.mask != 0]
-        img_ar_max = img_ar.max()
-        img_ar_min = img_ar.min()
-        # print(img_ar_max, img_ar_min)
-        image_ar_scaled = (image.img[:, :, i] - img_ar_min) / (img_ar_max - img_ar_min)
-        image.img[:, :, i] = image_ar_scaled
+    # for i in range(image.img.shape[2]):
+    #     img_ar = image.img[:, :, i][image.mask != 0]
+    #     img_ar_max = img_ar.max()
+    #     img_ar_min = img_ar.min()
+    #     # print(img_ar_max, img_ar_min)
+    #     image_ar_scaled = (image.img[:, :, i] - img_ar_min) / (img_ar_max - img_ar_min)
+    #     image.img[:, :, i] = image_ar_scaled
     # subsample pixels to build the kmeans model
     subsampled_data = image.subsample_pixels(features, fract)
     if use_path == True:
@@ -3384,16 +3445,38 @@ following column order ['Img', 'batch_names', 'mean estimators', 'pixels']</dd>
 
         if R_square == True:
             fig = plt.figure(figsize=fig_size)
-            plt.bar(range(len(R_squre_for_each_image)), R_squre_for_each_image)
+            fig = plt.figure(figsize=(5, 5))
+            plt.scatter(
+                range(len(R_squre_for_each_image)),
+                R_squre_for_each_image,
+                color=&#34;black&#34;,
+            )
             plt.xlabel(&#34;images&#34;)
             plt.ylabel(&#34;percentage variance explained by Kmeans&#34;)
+            plt.ylim((0, 100))
+            plt.axhline(
+                y=np.mean(R_squre_for_each_image),
+                linestyle=&#34;dashed&#34;,
+                linewidth=1,
+                color=&#34;black&#34;,
+            )
 
         else:
             fig = plt.figure(figsize=fig_size)
-            plt.bar(range(len(S_squre_for_each_image)), S_squre_for_each_image)
+            plt.scatter(
+                range(len(S_squre_for_each_image)),
+                S_squre_for_each_image,
+                color=&#34;black&#34;,
+            )
             plt.xlabel(&#34;images&#34;)
-            plt.ylabel(&#34;percentage variance not explained by Kmeans&#34;)
-
+            plt.ylabel(&#34;percentage variance explained by Kmeans&#34;)
+            plt.ylim((0, 100))
+            plt.axhline(
+                y=np.mean(S_squre_for_each_image),
+                linestyle=&#34;dashed&#34;,
+                linewidth=1,
+                color=&#34;black&#34;,
+            )
         if save_to:
             plt.savefig(fname=save_to, transparent=True, bbox_inches=&#34;tight&#34;, dpi=300)
         return fig
@@ -3453,7 +3536,8 @@ following column order ['Img', 'batch_names', 'mean estimators', 'pixels']</dd>
         ncols : int, optional (default=`None`)
             Number of columns for gridspec. If `None`, uses number of tissue domains k.
         labels : list of str, optional (default=`None`)
-            Labels corresponding to each MILWRM training feature. If `None`, features
+            Labels corresponding to each image in legend. If `None`, numeric index is
+            used for each imaage
         legend_cols : int, optional (default = `2`)
             n_cols for legend
         titles : list of str, optional (default=`None`)
@@ -3563,7 +3647,14 @@ following column order ['Img', 'batch_names', 'mean estimators', 'pixels']</dd>
         df_count = pd.DataFrame()
         for i in range(len(self.tissue_IDs)):
             unique, counts = np.unique(self.tissue_IDs[i], return_counts=True)
-            df = pd.DataFrame(counts[: self.k], columns=[i])
+            dict_ = dict(zip(unique, counts))
+            n_counts = []
+            for k in range(self.k):
+                if k not in dict_.keys():
+                    n_counts.append(0)
+                else:
+                    n_counts.append(dict_[k])
+            df = pd.DataFrame(n_counts, columns=[i])
             df_count = pd.concat([df_count, df], axis=1)
         df_count = df_count / df_count.sum()
         self.tissue_ID_proportion = df_count
@@ -4001,7 +4092,8 @@ else that percentage of cluster data is used.</dd>
 <dt><strong><code>ncols</code></strong> :&ensp;<code>int</code>, optional <code>(default=</code>None<code>)</code></dt>
 <dd>Number of columns for gridspec. If <code>None</code>, uses number of tissue domains k.</dd>
 <dt><strong><code>labels</code></strong> :&ensp;<code>list</code> of <code>str</code>, optional <code>(default=</code>None<code>)</code></dt>
-<dd>Labels corresponding to each MILWRM training feature. If <code>None</code>, features</dd>
+<dd>Labels corresponding to each image in legend. If <code>None</code>, numeric index is
+used for each imaage</dd>
 <dt><strong><code>legend_cols</code></strong> :&ensp;<code>int</code>, optional <code>(default =</code>2<code>)</code></dt>
 <dd>n_cols for legend</dd>
 <dt><strong><code>titles</code></strong> :&ensp;<code>list</code> of <code>str</code>, optional <code>(default=</code>None<code>)</code></dt>
@@ -4044,7 +4136,8 @@ will be numbers 0 through k.</dd>
     ncols : int, optional (default=`None`)
         Number of columns for gridspec. If `None`, uses number of tissue domains k.
     labels : list of str, optional (default=`None`)
-        Labels corresponding to each MILWRM training feature. If `None`, features
+        Labels corresponding to each image in legend. If `None`, numeric index is
+        used for each imaage
     legend_cols : int, optional (default = `2`)
         n_cols for legend
     titles : list of str, optional (default=`None`)
@@ -4191,16 +4284,38 @@ will be numbers 0 through k.</dd>
 
     if R_square == True:
         fig = plt.figure(figsize=fig_size)
-        plt.bar(range(len(R_squre_for_each_image)), R_squre_for_each_image)
+        fig = plt.figure(figsize=(5, 5))
+        plt.scatter(
+            range(len(R_squre_for_each_image)),
+            R_squre_for_each_image,
+            color=&#34;black&#34;,
+        )
         plt.xlabel(&#34;images&#34;)
         plt.ylabel(&#34;percentage variance explained by Kmeans&#34;)
+        plt.ylim((0, 100))
+        plt.axhline(
+            y=np.mean(R_squre_for_each_image),
+            linestyle=&#34;dashed&#34;,
+            linewidth=1,
+            color=&#34;black&#34;,
+        )
 
     else:
         fig = plt.figure(figsize=fig_size)
-        plt.bar(range(len(S_squre_for_each_image)), S_squre_for_each_image)
+        plt.scatter(
+            range(len(S_squre_for_each_image)),
+            S_squre_for_each_image,
+            color=&#34;black&#34;,
+        )
         plt.xlabel(&#34;images&#34;)
-        plt.ylabel(&#34;percentage variance not explained by Kmeans&#34;)
-
+        plt.ylabel(&#34;percentage variance explained by Kmeans&#34;)
+        plt.ylim((0, 100))
+        plt.axhline(
+            y=np.mean(S_squre_for_each_image),
+            linestyle=&#34;dashed&#34;,
+            linewidth=1,
+            color=&#34;black&#34;,
+        )
     if save_to:
         plt.savefig(fname=save_to, transparent=True, bbox_inches=&#34;tight&#34;, dpi=300)
     return fig</code></pre>
@@ -4247,7 +4362,14 @@ will be numbers 0 through k.</dd>
     df_count = pd.DataFrame()
     for i in range(len(self.tissue_IDs)):
         unique, counts = np.unique(self.tissue_IDs[i], return_counts=True)
-        df = pd.DataFrame(counts[: self.k], columns=[i])
+        dict_ = dict(zip(unique, counts))
+        n_counts = []
+        for k in range(self.k):
+            if k not in dict_.keys():
+                n_counts.append(0)
+            else:
+                n_counts.append(dict_[k])
+        df = pd.DataFrame(n_counts, columns=[i])
         df_count = pd.concat([df_count, df], axis=1)
     df_count = df_count / df_count.sum()
     self.tissue_ID_proportion = df_count
@@ -4717,6 +4839,10 @@ image)</dd>
         containing confidence score for each tissue ID assignment and mean confidence
         score for each tissue ID within each visium slide
         &#34;&#34;&#34;
+        assert (
+            self.kmeans is not None
+        ), &#34;No cluster results found. Run \
+        label_tissue_regions() first.&#34;
         i_slice = 0
         j_slice = 0
         confidence_score_df = pd.DataFrame()
@@ -4763,6 +4889,10 @@ image)</dd>
         -------
         Matplotlib object and PC loadings in gene space set as self.gene_loadings_df
         &#34;&#34;&#34;
+        assert (
+            self.kmeans is not None
+        ), &#34;No cluster results found. Run \
+        label_tissue_regions() first.&#34;
         assert (
             PC_loadings.shape[0] == self.adatas[0].n_vars
         ), f&#34;loadings matrix does not, \
@@ -4853,6 +4983,10 @@ image)</dd>
         -------
         Matplotlib object
         &#34;&#34;&#34;
+        assert (
+            self.kmeans is not None
+        ), &#34;No cluster results found. Run \
+        label_tissue_regions() first.&#34;
         centroids = self.kmeans.cluster_centers_
         adatas = self.adatas
         cluster_data = self.cluster_data
@@ -4872,15 +5006,34 @@ image)</dd>
 
         if R_square:
             fig = plt.figure(figsize=fig_size)
-            plt.bar(range(len(R_squre_for_each_st)), R_squre_for_each_st)
-            plt.xlabel(&#34;slides&#34;)
+            plt.scatter(
+                range(len(R_squre_for_each_st)), R_squre_for_each_st, color=&#34;black&#34;
+            )
+            plt.xlabel(&#34;images&#34;)
             plt.ylabel(&#34;percentage variance explained by Kmeans&#34;)
+            plt.ylim((0, 100))
+            plt.axhline(
+                y=np.mean(R_squre_for_each_st),
+                linestyle=&#34;dashed&#34;,
+                linewidth=1,
+                color=&#34;black&#34;,
+            )
 
         else:
             fig = plt.figure(figsize=fig_size)
-            plt.bar(range(len(S_squre_for_each_st)), S_squre_for_each_st)
-            plt.xlabel(&#34;slides&#34;)
-            plt.ylabel(&#34;percentage variance not explained by Kmeans&#34;)
+            fig = plt.figure(figsize=(5, 5))
+            plt.scatter(
+                range(len(S_squre_for_each_st)), S_squre_for_each_st, color=&#34;black&#34;
+            )
+            plt.xlabel(&#34;images&#34;)
+            plt.ylabel(&#34;percentage variance explained by Kmeans&#34;)
+            plt.ylim((0, 100))
+            plt.axhline(
+                y=np.mean(S_squre_for_each_st),
+                linestyle=&#34;dashed&#34;,
+                linewidth=1,
+                color=&#34;black&#34;,
+            )
 
         if save_to:
             plt.savefig(fname=save_to, transparent=True, bbox_inches=&#34;tight&#34;, dpi=300)
@@ -4906,8 +5059,8 @@ image)</dd>
         ncols : int, optional (default=`None`)
             Number of columns for gridspec. If `None`, uses number of tissue domains k.
         labels : list of str, optional (default=`None`)
-            Labels corresponding to each MILWRM training feature. If `None`, features
-            are numbered sequentially.
+            Labels corresponding to each image in legend. If `None`, numeric index is
+            used for each imaage
         titles : list of str, optional (default=`None`)
             Titles of plots corresponding to each MILWRM domain. If `None`, titles
             will be numbers 0 through k.
@@ -5229,6 +5382,10 @@ image)</dd>
     containing confidence score for each tissue ID assignment and mean confidence
     score for each tissue ID within each visium slide
     &#34;&#34;&#34;
+    assert (
+        self.kmeans is not None
+    ), &#34;No cluster results found. Run \
+    label_tissue_regions() first.&#34;
     i_slice = 0
     j_slice = 0
     confidence_score_df = pd.DataFrame()
@@ -5383,6 +5540,10 @@ will be numbers 0 through k.</dd>
     Matplotlib object and PC loadings in gene space set as self.gene_loadings_df
     &#34;&#34;&#34;
     assert (
+        self.kmeans is not None
+    ), &#34;No cluster results found. Run \
+    label_tissue_regions() first.&#34;
+    assert (
         PC_loadings.shape[0] == self.adatas[0].n_vars
     ), f&#34;loadings matrix does not, \
     contain enough genes, there should be {self.adatas[0].n_vars} genes&#34;
@@ -5466,8 +5627,8 @@ will be numbers 0 through k.</dd>
 <dt><strong><code>ncols</code></strong> :&ensp;<code>int</code>, optional <code>(default=</code>None<code>)</code></dt>
 <dd>Number of columns for gridspec. If <code>None</code>, uses number of tissue domains k.</dd>
 <dt><strong><code>labels</code></strong> :&ensp;<code>list</code> of <code>str</code>, optional <code>(default=</code>None<code>)</code></dt>
-<dd>Labels corresponding to each MILWRM training feature. If <code>None</code>, features
-are numbered sequentially.</dd>
+<dd>Labels corresponding to each image in legend. If <code>None</code>, numeric index is
+used for each imaage</dd>
 <dt><strong><code>titles</code></strong> :&ensp;<code>list</code> of <code>str</code>, optional <code>(default=</code>None<code>)</code></dt>
 <dd>Titles of plots corresponding to each MILWRM domain. If <code>None</code>, titles
 will be numbers 0 through k.</dd>
@@ -5507,8 +5668,8 @@ will be numbers 0 through k.</dd>
     ncols : int, optional (default=`None`)
         Number of columns for gridspec. If `None`, uses number of tissue domains k.
     labels : list of str, optional (default=`None`)
-        Labels corresponding to each MILWRM training feature. If `None`, features
-        are numbered sequentially.
+        Labels corresponding to each image in legend. If `None`, numeric index is
+        used for each imaage
     titles : list of str, optional (default=`None`)
         Titles of plots corresponding to each MILWRM domain. If `None`, titles
         will be numbers 0 through k.
@@ -5627,6 +5788,10 @@ will be numbers 0 through k.</dd>
     -------
     Matplotlib object
     &#34;&#34;&#34;
+    assert (
+        self.kmeans is not None
+    ), &#34;No cluster results found. Run \
+    label_tissue_regions() first.&#34;
     centroids = self.kmeans.cluster_centers_
     adatas = self.adatas
     cluster_data = self.cluster_data
@@ -5646,15 +5811,34 @@ will be numbers 0 through k.</dd>
 
     if R_square:
         fig = plt.figure(figsize=fig_size)
-        plt.bar(range(len(R_squre_for_each_st)), R_squre_for_each_st)
-        plt.xlabel(&#34;slides&#34;)
+        plt.scatter(
+            range(len(R_squre_for_each_st)), R_squre_for_each_st, color=&#34;black&#34;
+        )
+        plt.xlabel(&#34;images&#34;)
         plt.ylabel(&#34;percentage variance explained by Kmeans&#34;)
+        plt.ylim((0, 100))
+        plt.axhline(
+            y=np.mean(R_squre_for_each_st),
+            linestyle=&#34;dashed&#34;,
+            linewidth=1,
+            color=&#34;black&#34;,
+        )
 
     else:
         fig = plt.figure(figsize=fig_size)
-        plt.bar(range(len(S_squre_for_each_st)), S_squre_for_each_st)
-        plt.xlabel(&#34;slides&#34;)
-        plt.ylabel(&#34;percentage variance not explained by Kmeans&#34;)
+        fig = plt.figure(figsize=(5, 5))
+        plt.scatter(
+            range(len(S_squre_for_each_st)), S_squre_for_each_st, color=&#34;black&#34;
+        )
+        plt.xlabel(&#34;images&#34;)
+        plt.ylabel(&#34;percentage variance explained by Kmeans&#34;)
+        plt.ylim((0, 100))
+        plt.axhline(
+            y=np.mean(S_squre_for_each_st),
+            linestyle=&#34;dashed&#34;,
+            linewidth=1,
+            color=&#34;black&#34;,
+        )
 
     if save_to:
         plt.savefig(fname=save_to, transparent=True, bbox_inches=&#34;tight&#34;, dpi=300)
