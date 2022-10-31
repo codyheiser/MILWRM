@@ -11,7 +11,7 @@ from sklearn.utils import shuffle
 from sklearn.cluster import KMeans
 
 sns.set_style("white")
-plt.rcParams["font.family"] = "monospace"
+plt.rcParams["font.family"] = "sans.serif"
 
 from math import ceil
 from skimage import exposure
@@ -454,7 +454,7 @@ class img:
                     fact = self.img[:, :, i].mean()
                     self.img[:, :, i] = np.log10(self.img[:, :, i] / fact + pseudoval)
 
-    def subsample_pixels(self, features, fract=0.2, random_state = 18):
+    def subsample_pixels(self, features, fract=0.2, random_state=18):
         """
         Sub-samples fraction of pixels from the image randomly for each channel
 

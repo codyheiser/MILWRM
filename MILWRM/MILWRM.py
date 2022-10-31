@@ -11,7 +11,6 @@ import numpy as np
 import pandas as pd
 import itertools
 import seaborn as sns
-import matplotlib.cm as cm
 import umap
 
 sns.set_style("white")
@@ -1099,6 +1098,10 @@ class st_labeler(tissue_labeler):
         containing confidence score for each tissue ID assignment and mean confidence
         score for each tissue ID within each visium slide
         """
+        assert (
+            self.kmeans is not None
+        ), "No cluster results found. Run \
+        label_tissue_regions() first."
         i_slice = 0
         j_slice = 0
         confidence_score_df = pd.DataFrame()
@@ -1145,6 +1148,10 @@ class st_labeler(tissue_labeler):
         -------
         Matplotlib object and PC loadings in gene space set as self.gene_loadings_df
         """
+        assert (
+            self.kmeans is not None
+        ), "No cluster results found. Run \
+        label_tissue_regions() first."
         assert (
             PC_loadings.shape[0] == self.adatas[0].n_vars
         ), f"loadings matrix does not, \
@@ -1235,6 +1242,10 @@ class st_labeler(tissue_labeler):
         -------
         Matplotlib object
         """
+        assert (
+            self.kmeans is not None
+        ), "No cluster results found. Run \
+        label_tissue_regions() first."
         centroids = self.kmeans.cluster_centers_
         adatas = self.adatas
         cluster_data = self.cluster_data
@@ -1254,21 +1265,36 @@ class st_labeler(tissue_labeler):
 
         if R_square:
             fig = plt.figure(figsize=fig_size)
-            plt.scatter(range(len(R_squre_for_each_st)), R_squre_for_each_st,color = 'black')
+            plt.scatter(
+                range(len(R_squre_for_each_st)), R_squre_for_each_st, color="black"
+            )
             plt.xlabel("images")
             plt.ylabel("percentage variance explained by Kmeans")
-            plt.ylim((0,100))
-            plt.axhline(y = np.mean(R_squre_for_each_st),linestyle='dashed', linewidth = 1, color = 'black')
+            plt.ylim((0, 100))
+            plt.axhline(
+                y=np.mean(R_squre_for_each_st),
+                linestyle="dashed",
+                linewidth=1,
+                color="black",
+            )
 
         else:
             fig = plt.figure(figsize=fig_size)
-            fig = plt.figure(figsize=(5,5))
-            plt.scatter(range(len(S_squre_for_each_st)), S_squre_for_each_st,color = 'black')
+            fig = plt.figure(figsize=(5, 5))
+            plt.scatter(
+                range(len(S_squre_for_each_st)), S_squre_for_each_st, color="black"
+            )
             plt.xlabel("images")
             plt.ylabel("percentage variance explained by Kmeans")
-            plt.ylim((0,100))
-            plt.axhline(y = np.mean(S_squre_for_each_st),linestyle='dashed', linewidth = 1, color = 'black')
+            plt.ylim((0, 100))
+            plt.axhline(
+                y=np.mean(S_squre_for_each_st),
+                linestyle="dashed",
+                linewidth=1,
+                color="black",
+            )
 
+        fig.tight_layout()
         if save_to:
             plt.savefig(fname=save_to, transparent=True, bbox_inches="tight", dpi=300)
         return fig
@@ -1293,7 +1319,7 @@ class st_labeler(tissue_labeler):
         ncols : int, optional (default=`None`)
             Number of columns for gridspec. If `None`, uses number of tissue domains k.
         labels : list of str, optional (default=`None`)
-            Labels corresponding to each image in legend. If `None`, numeric index is 
+            Labels corresponding to each image in legend. If `None`, numeric index is
             used for each imaage
         titles : list of str, optional (default=`None`)
             Titles of plots corresponding to each MILWRM domain. If `None`, titles
@@ -1370,12 +1396,23 @@ class st_labeler(tissue_labeler):
             plt.savefig(fname=save_to, transparent=True, dpi=300)
         return fig
 
-    def plot_tissue_ID_proportions_st(self, figsize=(5, 5), cmap="tab20", save_to=None):
+    def plot_tissue_ID_proportions_st(
+        self,
+        tID_labels=None,
+        slide_labels=None,
+        figsize=(5, 5),
+        cmap="tab20",
+        save_to=None,
+    ):
         """
         Plot proportion of each tissue ID within each slide
 
         Parameters
         ----------
+        tID_labels : list of str, optional (default=`None`)
+            List of labels corresponding to MILWRM tissue IDs for plotting legend
+        slide_labels : list of str, optional (default=`None`)
+            List of labels for each slide batch for labeling x-axis
         figsize : tuple of float, optional (default=(5,5))
             Size of matplotlib figure
         cmap : str, optional (default = `"tab20"`)
@@ -1388,14 +1425,26 @@ class st_labeler(tissue_labeler):
         `gridspec.GridSpec` if `save_to` is `None`, else saves plot to file
         """
         df_count = pd.DataFrame()
-        for i, adata in enumerate(self.adatas):
+        for adata in self.adatas:
             df = adata.obs["tissue_ID"].value_counts(normalize=True, sort=False)
             df_count = pd.concat([df_count, df], axis=1)
         df_count = df_count.T.reset_index(drop=True)
+        if tID_labels:
+            assert (
+                len(tID_labels) == df_count.shape[1]
+            ), "Length of given tissue ID labels does not match number of tissue IDs!"
+            df_count.columns = tID_labels
+        if slide_labels:
+            assert (
+                len(slide_labels) == df_count.shape[0]
+            ), "Length of given slide labels does not match number of slides!"
+            df_count.index = slide_labels
         ax = df_count.plot.bar(stacked=True, cmap=cmap, figsize=figsize)
         ax.legend(loc="best", bbox_to_anchor=(1, 1))
         ax.set_xlabel("slides")
         ax.set_ylabel("tissue ID proportion")
+        ax.set_ylim((0, 1))
+        plt.tight_layout()
         if save_to is not None:
             ax.figure.savefig(save_to)
         else:
@@ -1777,20 +1826,40 @@ class mxif_labeler(tissue_labeler):
 
         if R_square == True:
             fig = plt.figure(figsize=fig_size)
-            fig = plt.figure(figsize=(5,5))
-            plt.scatter(range(len(R_squre_for_each_image)), R_squre_for_each_image,color = 'black')
+            fig = plt.figure(figsize=(5, 5))
+            plt.scatter(
+                range(len(R_squre_for_each_image)),
+                R_squre_for_each_image,
+                color="black",
+            )
             plt.xlabel("images")
             plt.ylabel("percentage variance explained by Kmeans")
-            plt.ylim((0,100))
-            plt.axhline(y = np.mean(R_squre_for_each_image),linestyle='dashed', linewidth = 1, color = 'black')
+            plt.ylim((0, 100))
+            plt.axhline(
+                y=np.mean(R_squre_for_each_image),
+                linestyle="dashed",
+                linewidth=1,
+                color="black",
+            )
 
         else:
             fig = plt.figure(figsize=fig_size)
-            plt.scatter(range(len(S_squre_for_each_image)), S_squre_for_each_image,color = 'black')
+            plt.scatter(
+                range(len(S_squre_for_each_image)),
+                S_squre_for_each_image,
+                color="black",
+            )
             plt.xlabel("images")
             plt.ylabel("percentage variance explained by Kmeans")
-            plt.ylim((0,100))
-            plt.axhline(y = np.mean(S_squre_for_each_image),linestyle='dashed', linewidth = 1, color = 'black')
+            plt.ylim((0, 100))
+            plt.axhline(
+                y=np.mean(S_squre_for_each_image),
+                linestyle="dashed",
+                linewidth=1,
+                color="black",
+            )
+
+        fig.tight_layout()
         if save_to:
             plt.savefig(fname=save_to, transparent=True, bbox_inches="tight", dpi=300)
         return fig
@@ -1850,7 +1919,7 @@ class mxif_labeler(tissue_labeler):
         ncols : int, optional (default=`None`)
             Number of columns for gridspec. If `None`, uses number of tissue domains k.
         labels : list of str, optional (default=`None`)
-            Labels corresponding to each image in legend. If `None`, numeric index is 
+            Labels corresponding to each image in legend. If `None`, numeric index is
             used for each imaage
         legend_cols : int, optional (default = `2`)
             n_cols for legend
@@ -1941,13 +2010,22 @@ class mxif_labeler(tissue_labeler):
         return fig
 
     def plot_tissue_ID_proportions_mxif(
-        self, figsize=(5, 5), cmap="tab20", save_to=None
+        self,
+        tID_labels=None,
+        slide_labels=None,
+        figsize=(5, 5),
+        cmap="tab20",
+        save_to=None,
     ):
         """
         Plot proportion of each tissue ID within each slide
 
         Parameters
         ----------
+        tID_labels : list of str, optional (default=`None`)
+            List of labels corresponding to MILWRM tissue IDs for plotting legend
+        slide_labels : list of str, optional (default=`None`)
+            List of labels for each slide batch for labeling x-axis
         figsize : tuple of float, optional (default=(5,5))
             Size of matplotlib figure
         cmap : str, optional (default = `"tab20"`)
@@ -1961,7 +2039,7 @@ class mxif_labeler(tissue_labeler):
         df_count = pd.DataFrame()
         for i in range(len(self.tissue_IDs)):
             unique, counts = np.unique(self.tissue_IDs[i], return_counts=True)
-            dict_ = dict(zip(unique,counts))
+            dict_ = dict(zip(unique, counts))
             n_counts = []
             for k in range(self.k):
                 if k not in dict_.keys():
@@ -1971,11 +2049,23 @@ class mxif_labeler(tissue_labeler):
             df = pd.DataFrame(n_counts, columns=[i])
             df_count = pd.concat([df_count, df], axis=1)
         df_count = df_count / df_count.sum()
+        if tID_labels:
+            assert (
+                len(tID_labels) == df_count.shape[1]
+            ), "Length of given tissue ID labels does not match number of tissue IDs!"
+            df_count.columns = tID_labels
+        if slide_labels:
+            assert (
+                len(slide_labels) == df_count.shape[0]
+            ), "Length of given slide labels does not match number of slides!"
+            df_count.index = slide_labels
         self.tissue_ID_proportion = df_count
         ax = df_count.T.plot.bar(stacked=True, cmap=cmap, figsize=figsize)
         ax.legend(loc="best", bbox_to_anchor=(1, 1))
         ax.set_xlabel("images")
         ax.set_ylabel("tissue ID proportion")
+        ax.set_ylim((0, 1))
+        plt.tight_layout()
         if save_to is not None:
             ax.figure.savefig(save_to)
         else:
@@ -2049,6 +2139,7 @@ class mxif_labeler(tissue_labeler):
         ax2.set_title("Umap with tissue IDs")
         cbar_2 = plt.colorbar(plot_2, ax=ax2, ticks=ticks)
         cbar_2.ax.set_yticklabels(tick_label)
+        fig.tight_layout()
         if save_to:
             plt.savefig(fname=save_to, transparent=True, bbox_inches="tight", dpi=300)
         return fig
