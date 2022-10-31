@@ -174,7 +174,7 @@ def prep_data_single_sample_mxif(
     image, use_path, mean, filter_name, sigma, features, fract, path_save
 ):
     """
-    Perform log normalization, blurring and minmax scaling on the given image data
+    Perform log normalization, and blurring on the given image data
 
     Parameters
     ----------
@@ -215,13 +215,13 @@ def prep_data_single_sample_mxif(
     # apply the desired filter
     image.blurring(filter_name=filter_name, sigma=sigma)
     # min max scaling of each channel
-    for i in range(image.img.shape[2]):
-        img_ar = image.img[:, :, i][image.mask != 0]
-        img_ar_max = img_ar.max()
-        img_ar_min = img_ar.min()
-        # print(img_ar_max, img_ar_min)
-        image_ar_scaled = (image.img[:, :, i] - img_ar_min) / (img_ar_max - img_ar_min)
-        image.img[:, :, i] = image_ar_scaled
+    # for i in range(image.img.shape[2]):
+    #     img_ar = image.img[:, :, i][image.mask != 0]
+    #     img_ar_max = img_ar.max()
+    #     img_ar_min = img_ar.min()
+    #     # print(img_ar_max, img_ar_min)
+    #     image_ar_scaled = (image.img[:, :, i] - img_ar_min) / (img_ar_max - img_ar_min)
+    #     image.img[:, :, i] = image_ar_scaled
     # subsample pixels to build the kmeans model
     subsampled_data = image.subsample_pixels(features, fract)
     if use_path == True:
@@ -447,7 +447,7 @@ def estimate_confidence_score_mxif(
     # estimating average confidence score in that image
     mean_conf_score = {}
     for i in range(len(centroids)):
-        mean_conf_score[i] = np.mean(cID[tissue_ID == 1])
+        mean_conf_score[i] = np.mean(cID[tissue_ID == i])
     return cID, mean_conf_score
 
 
@@ -632,7 +632,7 @@ def estimate_mse_st(cluster_data, adatas, centroids, k):
                 (data[df[df["tissue_ID"] == i]["index"]]) - (centroids[i])
             ) ** 2  # difference between each data point and centroids
             if len(x) == 0:
-                diff.append(np.zeros(mse.shape))
+                diff.append(np.zeros((centroids.shape[1])))
             else:
                 mse = x.mean(axis=0)  # mean of all the differences
                 # diff.append(mse.mean(axis = 0))
@@ -1254,15 +1254,20 @@ class st_labeler(tissue_labeler):
 
         if R_square:
             fig = plt.figure(figsize=fig_size)
-            plt.bar(range(len(R_squre_for_each_st)), R_squre_for_each_st)
-            plt.xlabel("slides")
+            plt.scatter(range(len(R_squre_for_each_st)), R_squre_for_each_st,color = 'black')
+            plt.xlabel("images")
             plt.ylabel("percentage variance explained by Kmeans")
+            plt.ylim((0,100))
+            plt.axhline(y = np.mean(R_squre_for_each_st),linestyle='dashed', linewidth = 1, color = 'black')
 
         else:
             fig = plt.figure(figsize=fig_size)
-            plt.bar(range(len(S_squre_for_each_st)), S_squre_for_each_st)
-            plt.xlabel("slides")
-            plt.ylabel("percentage variance not explained by Kmeans")
+            fig = plt.figure(figsize=(5,5))
+            plt.scatter(range(len(S_squre_for_each_st)), S_squre_for_each_st,color = 'black')
+            plt.xlabel("images")
+            plt.ylabel("percentage variance explained by Kmeans")
+            plt.ylim((0,100))
+            plt.axhline(y = np.mean(S_squre_for_each_st),linestyle='dashed', linewidth = 1, color = 'black')
 
         if save_to:
             plt.savefig(fname=save_to, transparent=True, bbox_inches="tight", dpi=300)
@@ -1288,8 +1293,8 @@ class st_labeler(tissue_labeler):
         ncols : int, optional (default=`None`)
             Number of columns for gridspec. If `None`, uses number of tissue domains k.
         labels : list of str, optional (default=`None`)
-            Labels corresponding to each MILWRM training feature. If `None`, features
-            are numbered sequentially.
+            Labels corresponding to each image in legend. If `None`, numeric index is 
+            used for each imaage
         titles : list of str, optional (default=`None`)
             Titles of plots corresponding to each MILWRM domain. If `None`, titles
             will be numbers 0 through k.
@@ -1772,16 +1777,20 @@ class mxif_labeler(tissue_labeler):
 
         if R_square == True:
             fig = plt.figure(figsize=fig_size)
-            plt.bar(range(len(R_squre_for_each_image)), R_squre_for_each_image)
+            fig = plt.figure(figsize=(5,5))
+            plt.scatter(range(len(R_squre_for_each_image)), R_squre_for_each_image,color = 'black')
             plt.xlabel("images")
             plt.ylabel("percentage variance explained by Kmeans")
+            plt.ylim((0,100))
+            plt.axhline(y = np.mean(R_squre_for_each_image),linestyle='dashed', linewidth = 1, color = 'black')
 
         else:
             fig = plt.figure(figsize=fig_size)
-            plt.bar(range(len(S_squre_for_each_image)), S_squre_for_each_image)
+            plt.scatter(range(len(S_squre_for_each_image)), S_squre_for_each_image,color = 'black')
             plt.xlabel("images")
-            plt.ylabel("percentage variance not explained by Kmeans")
-
+            plt.ylabel("percentage variance explained by Kmeans")
+            plt.ylim((0,100))
+            plt.axhline(y = np.mean(S_squre_for_each_image),linestyle='dashed', linewidth = 1, color = 'black')
         if save_to:
             plt.savefig(fname=save_to, transparent=True, bbox_inches="tight", dpi=300)
         return fig
@@ -1841,7 +1850,8 @@ class mxif_labeler(tissue_labeler):
         ncols : int, optional (default=`None`)
             Number of columns for gridspec. If `None`, uses number of tissue domains k.
         labels : list of str, optional (default=`None`)
-            Labels corresponding to each MILWRM training feature. If `None`, features
+            Labels corresponding to each image in legend. If `None`, numeric index is 
+            used for each imaage
         legend_cols : int, optional (default = `2`)
             n_cols for legend
         titles : list of str, optional (default=`None`)
@@ -1951,7 +1961,14 @@ class mxif_labeler(tissue_labeler):
         df_count = pd.DataFrame()
         for i in range(len(self.tissue_IDs)):
             unique, counts = np.unique(self.tissue_IDs[i], return_counts=True)
-            df = pd.DataFrame(counts[: self.k], columns=[i])
+            dict_ = dict(zip(unique,counts))
+            n_counts = []
+            for k in range(self.k):
+                if k not in dict_.keys():
+                    n_counts.append(0)
+                else:
+                    n_counts.append(dict_[k])
+            df = pd.DataFrame(n_counts, columns=[i])
             df_count = pd.concat([df_count, df], axis=1)
         df_count = df_count / df_count.sum()
         self.tissue_ID_proportion = df_count
