@@ -11,7 +11,7 @@ from sklearn.utils import shuffle
 from sklearn.cluster import KMeans
 
 sns.set_style("white")
-plt.rcParams["font.family"] = "monospace"
+plt.rcParams["font.family"] = "sans.serif"
 
 from math import ceil
 from skimage import exposure

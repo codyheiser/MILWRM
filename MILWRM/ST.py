@@ -13,7 +13,7 @@ import squidpy as sq
 
 sc.set_figure_params(dpi=100, dpi_save=400)
 sns.set_style("white")
-plt.rcParams["font.family"] = "monospace"
+plt.rcParams["font.family"] = "sans.serif"
 
 from math import ceil
 from matplotlib.lines import Line2D

@@ -11,7 +11,6 @@ import numpy as np
 import pandas as pd
 import itertools
 import seaborn as sns
-import matplotlib.cm as cm
 import umap
 
 sns.set_style("white")
@@ -1295,6 +1294,7 @@ class st_labeler(tissue_labeler):
                 color="black",
             )
 
+        fig.tight_layout()
         if save_to:
             plt.savefig(fname=save_to, transparent=True, bbox_inches="tight", dpi=300)
         return fig
@@ -1396,12 +1396,23 @@ class st_labeler(tissue_labeler):
             plt.savefig(fname=save_to, transparent=True, dpi=300)
         return fig
 
-    def plot_tissue_ID_proportions_st(self, figsize=(5, 5), cmap="tab20", save_to=None):
+    def plot_tissue_ID_proportions_st(
+        self,
+        tID_labels=None,
+        slide_labels=None,
+        figsize=(5, 5),
+        cmap="tab20",
+        save_to=None,
+    ):
         """
         Plot proportion of each tissue ID within each slide
 
         Parameters
         ----------
+        tID_labels : list of str, optional (default=`None`)
+            List of labels corresponding to MILWRM tissue IDs for plotting legend
+        slide_labels : list of str, optional (default=`None`)
+            List of labels for each slide batch for labeling x-axis
         figsize : tuple of float, optional (default=(5,5))
             Size of matplotlib figure
         cmap : str, optional (default = `"tab20"`)
@@ -1414,14 +1425,26 @@ class st_labeler(tissue_labeler):
         `gridspec.GridSpec` if `save_to` is `None`, else saves plot to file
         """
         df_count = pd.DataFrame()
-        for i, adata in enumerate(self.adatas):
+        for adata in self.adatas:
             df = adata.obs["tissue_ID"].value_counts(normalize=True, sort=False)
             df_count = pd.concat([df_count, df], axis=1)
         df_count = df_count.T.reset_index(drop=True)
+        if tID_labels:
+            assert (
+                len(tID_labels) == df_count.shape[1]
+            ), "Length of given tissue ID labels does not match number of tissue IDs!"
+            df_count.columns = tID_labels
+        if slide_labels:
+            assert (
+                len(slide_labels) == df_count.shape[0]
+            ), "Length of given slide labels does not match number of slides!"
+            df_count.index = slide_labels
         ax = df_count.plot.bar(stacked=True, cmap=cmap, figsize=figsize)
         ax.legend(loc="best", bbox_to_anchor=(1, 1))
         ax.set_xlabel("slides")
         ax.set_ylabel("tissue ID proportion")
+        ax.set_ylim((0, 1))
+        plt.tight_layout()
         if save_to is not None:
             ax.figure.savefig(save_to)
         else:
@@ -1835,6 +1858,8 @@ class mxif_labeler(tissue_labeler):
                 linewidth=1,
                 color="black",
             )
+
+        fig.tight_layout()
         if save_to:
             plt.savefig(fname=save_to, transparent=True, bbox_inches="tight", dpi=300)
         return fig
@@ -1985,13 +2010,22 @@ class mxif_labeler(tissue_labeler):
         return fig
 
     def plot_tissue_ID_proportions_mxif(
-        self, figsize=(5, 5), cmap="tab20", save_to=None
+        self,
+        tID_labels=None,
+        slide_labels=None,
+        figsize=(5, 5),
+        cmap="tab20",
+        save_to=None,
     ):
         """
         Plot proportion of each tissue ID within each slide
 
         Parameters
         ----------
+        tID_labels : list of str, optional (default=`None`)
+            List of labels corresponding to MILWRM tissue IDs for plotting legend
+        slide_labels : list of str, optional (default=`None`)
+            List of labels for each slide batch for labeling x-axis
         figsize : tuple of float, optional (default=(5,5))
             Size of matplotlib figure
         cmap : str, optional (default = `"tab20"`)
@@ -2015,11 +2049,23 @@ class mxif_labeler(tissue_labeler):
             df = pd.DataFrame(n_counts, columns=[i])
             df_count = pd.concat([df_count, df], axis=1)
         df_count = df_count / df_count.sum()
+        if tID_labels:
+            assert (
+                len(tID_labels) == df_count.shape[1]
+            ), "Length of given tissue ID labels does not match number of tissue IDs!"
+            df_count.columns = tID_labels
+        if slide_labels:
+            assert (
+                len(slide_labels) == df_count.shape[0]
+            ), "Length of given slide labels does not match number of slides!"
+            df_count.index = slide_labels
         self.tissue_ID_proportion = df_count
         ax = df_count.T.plot.bar(stacked=True, cmap=cmap, figsize=figsize)
         ax.legend(loc="best", bbox_to_anchor=(1, 1))
         ax.set_xlabel("images")
         ax.set_ylabel("tissue ID proportion")
+        ax.set_ylim((0, 1))
+        plt.tight_layout()
         if save_to is not None:
             ax.figure.savefig(save_to)
         else:
@@ -2093,6 +2139,7 @@ class mxif_labeler(tissue_labeler):
         ax2.set_title("Umap with tissue IDs")
         cbar_2 = plt.colorbar(plot_2, ax=ax2, ticks=ticks)
         cbar_2.ax.set_yticklabels(tick_label)
+        fig.tight_layout()
         if save_to:
             plt.savefig(fname=save_to, transparent=True, bbox_inches="tight", dpi=300)
         return fig
