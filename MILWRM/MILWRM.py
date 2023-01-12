@@ -503,7 +503,7 @@ def estimate_mse_mxif(images, use_path, tissue_IDs, scaler, centroids, features,
             ) ** 2  # estimating mse for each tissue domain for that image
             mse[i] = x.mean(axis=0)
         mse_temp[image_index] = mse
-    mse_id = {}  # reorganizing within a new dictionary with keys as tissue IDs
+    mse_id = {}  # reorganizing within a new dictionary with keys as tissue domains
     for i in range(k):
         mse_l = []
         for image_index, image in enumerate(images):
@@ -1308,7 +1308,7 @@ class st_labeler(tissue_labeler):
         save_to=None,
     ):
         """
-        estimate mean square error within each tissue ID
+        estimate mean square error within each tissue domain
 
         Parameters
         ----------
@@ -1385,7 +1385,7 @@ class st_labeler(tissue_labeler):
                         -0.3, 0.3, offsets.shape[0]
                     )
                     dots.set_offsets(jittered_offsets)
-            plt.xlabel("slides")
+            plt.xlabel("tissue domains")
             plt.ylabel("mean square error")
             plt.title(titles[i])
         plt.legend(loc=loc, bbox_to_anchor=bbox_coordinates)
@@ -1408,7 +1408,7 @@ class st_labeler(tissue_labeler):
         Parameters
         ----------
         tID_labels : list of str, optional (default=`None`)
-            List of labels corresponding to MILWRM tissue IDs for plotting legend
+            List of labels corresponding to MILWRM tissue domains for plotting legend
         slide_labels : list of str, optional (default=`None`)
             List of labels for each slide batch for labeling x-axis
         figsize : tuple of float, optional (default=(5,5))
@@ -1430,7 +1430,7 @@ class st_labeler(tissue_labeler):
         if tID_labels:
             assert (
                 len(tID_labels) == df_count.shape[1]
-            ), "Length of given tissue domain labels does not match number of tissue IDs!"
+            ), "Length of given tissue domain labels does not match number of tissue domains!"
             df_count.columns = tID_labels
         if slide_labels:
             assert (
@@ -1476,7 +1476,7 @@ class st_labeler(tissue_labeler):
         histo : np.array or `None`, optional (default=`None`)
             Histology image to show along with pita in gridspec. If `None`, ignore.
         cmap : str, optional (default="tab20")
-            Matplotlib colormap to use for plotting tissue IDs
+            Matplotlib colormap to use for plotting tissue domains
         label : str
             What to title each panel of the gridspec (i.e. "PC" or "usage") or each
             channel in RGB image. Can also pass list of names e.g. ["NeuN","GFAP",
@@ -1908,7 +1908,7 @@ class mxif_labeler(tissue_labeler):
         save_to=None,
     ):
         """
-        estimate mean square error within each tissue ID
+        estimate mean square error within each tissue domain
 
         Parameters
         ----------
@@ -2021,7 +2021,7 @@ class mxif_labeler(tissue_labeler):
         Parameters
         ----------
         tID_labels : list of str, optional (default=`None`)
-            List of labels corresponding to MILWRM tissue IDs for plotting legend
+            List of labels corresponding to MILWRM tissue domains for plotting legend
         slide_labels : list of str, optional (default=`None`)
             List of labels for each slide batch for labeling x-axis
         figsize : tuple of float, optional (default=(5,5))
@@ -2050,7 +2050,7 @@ class mxif_labeler(tissue_labeler):
         if tID_labels:
             assert (
                 len(tID_labels) == df_count.shape[1]
-            ), "Length of given tissue domain labels does not match number of tissue IDs!"
+            ), "Length of given tissue domain labels does not match number of tissue domains!"
             df_count.columns = tID_labels
         if slide_labels:
             assert (
@@ -2142,7 +2142,7 @@ class mxif_labeler(tissue_labeler):
             cmap=disc_cmap_2,
             alpha=alpha,
         )
-        ax2.set_title("UMAP with tissue IDs", fontsize = 24)
+        ax2.set_title("UMAP with tissue domains", fontsize = 24)
         ax2.set_xticks([])
         ax2.set_yticks([])
         ax2.set_xlabel("UMAP 2")
@@ -2176,7 +2176,7 @@ class mxif_labeler(tissue_labeler):
         channels : tuple of int or None, optional (default=`None`)
             List of channels by index or name to show
         cmap : str, optional (default="plasma")
-            Matplotlib colormap to use for plotting tissue IDs
+            Matplotlib colormap to use for plotting tissue domains
         mask_out : bool, optional (default=`True`)
             Mask out non-tissue pixels prior to showing
         ncols : int
