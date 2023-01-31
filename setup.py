@@ -34,7 +34,7 @@ if __name__ == "__main__":
         author_email="cody.n.heiser@vanderbilt.edu",
         url="https://github.com/codyheiser/MILWRM",
         install_requires=read("requirements.txt").splitlines(),
-        packages=setuptools.find_packages(),
+        packages=setuptools.find_packages(exclude=["tutorials"]),
         classifiers=[
             "Programming Language :: Python :: 3",
             "Operating System :: OS Independent",

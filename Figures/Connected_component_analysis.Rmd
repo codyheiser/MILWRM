@@ -1,0 +1,137 @@
+---
+title: "MILWRM_Final_figures"
+author: "Harsimran Kaur"
+date: '2023-01-13'
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(geepack)
+library(NMF)
+```
+
+```{r}
+library(emmeans)
+sr = read.csv('tumor_connected_components_final.csv') # reading the dataframe
+# changing it to wide format
+cellCounts = reshape(sr, direction='wide', v.names=names(sr)[c(5:9)],drop='tissue_ID', timevar='tissue_ID_labels', idvar=c('batch', 'Image', 'region'))
+cellCounts =na.omit(cellCounts)
+tissue_IDs = unique(sr[c('tissue_ID_labels')])
+```
+
+```{r}
+outvars = grep('Pixel.size.of.tissue.region', names(cellCounts), value=TRUE)
+cellCounts$Total = rowSums(cellCounts[,outvars])
+cellCounts[, sapply(cellCounts, is.character)] = as.data.frame(lapply(cellCounts[,sapply(cellCounts, is.character)], factor))
+geeMods = as.list(rep(NA, length(outvars)))
+names(geeMods) = outvars
+
+for(var in outvars){
+  cellCounts$prop = cellCounts[,var]/cellCounts$Total
+  cellCounts$batch = factor(cellCounts$batch)
+  geeMods[[var]] = geeglm(prop ~ broad_tumor_type, id=batch, data=cellCounts, family=binomial, weights=Total, corstr='exchangeable')
+}
+
+geeMods[['Total']] = geeglm(Total ~ broad_tumor_type, id=batch, data=cellCounts, family=gaussian, weights=Total, corstr='exchangeable')
+
+intercept_prop_table = do.call(rbind,lapply(geeMods, function(x){intercepts = RESI::resi_pe(x)$coefficients; out = intercepts[1,]; names(out)=colnames(intercepts); out})) # --> delete this 
+```
+
+```{r}
+broad_tumor_type_SSL_table = do.call(rbind,lapply(geeMods, function(x){intercepts = RESI::resi_pe(x)$coefficients; out = intercepts[2,]; names(out)=colnames(intercepts); out}))
+broad_tumor_type_SSL_table$p.fdr = p.adjust(broad_tumor_type_SSL_table[,4], method = 'fdr')
+
+pmat = do.call(rbind, lapply(geeMods, function(x){aov = anova(x); out=aov[,3]; names(out)=rownames(aov); out}))
+adj.pmat = apply(pmat, 2, p.adjust, method='fdr')
+thrPmat = -log10(pmat)
+# thrPmat[pmat>0.05] = 0.99
+# thrPmat = thrPmat[do.call(order, as.data.frame(thrPmat)),]
+hmInds = aheatmap(thrPmat, Colv=NA, scale='none', breaks=seq(-log10(0.05), max(thrPmat), length.out=101), cexCol = 1)
+```
+
+```{r}
+knitr::kable(broad_tumor_type_SSL_table)
+```
+
+```{r}
+varOrders = rownames(pmat)[ hmInds$rowInd]
+
+results=list()
+thr = 0.05
+cn = 'broad_tumor_type'
+  #par(mfrow=c(2,3), mgp=c(1.6,0.8,0), lwd=1.5, lend=2, mar=c(3,3,1.8,0), bty='l', oma=c(0,0,3,0))
+  for(var in varOrders){
+    if(pmat[var,cn]<thr){
+      varnames = unlist(strsplit(cn, split=':'))
+      CIs = summary(emmeans(geeMods[[var]], varnames, type='response' ))
+      if(var != 'Total'){
+        cellCounts$temp = cellCounts[,var]/cellCounts$Total
+      } else {
+        cellCounts$temp = cellCounts$Total
+      }
+      # assumes factors
+        xticks = as.numeric(cellCounts[,varnames])
+        xtics = sort(unique(xticks))
+        plot(jitter(xticks, factor = .1), cellCounts$temp, xlab='Tumor type', ylab='Proportion', xaxt='n', xlim=range(xticks)+c(-.5, .5), bty='l', main=gsub('Pixel.size.of.tissue.region.', '', var), col='gray')
+        axis(1, unique(xtics), labels=levels(CIs[,varnames]))
+        points(xtics, CIs$prob, cex=1.5, pch=19)
+        segments(x0=xtics, x1=xtics, y0=CIs$asymp.LCL, y1=CIs$asymp.UCL, lwd=2)
+    }
+}
+```
+
+```{r}
+#par(mfrow=c(1,1), mgp=c(1.6,0.8,0), lwd=1.5, lend=2, mar=c(8,3,1.8,4), bty='l', oma=c(0,0,3,0))
+
+outvars = grep('max.pixels.in.cc', names(cellCounts), value=TRUE)
+geeMods = as.list(rep(NA, length(outvars)))
+names(geeMods) = outvars
+for(var in outvars){
+  x = cellCounts[,var]
+  cellCounts$prop = log10(cellCounts[,var])
+  cellCounts$log10_Total = log10(cellCounts$Total)
+  geeMods[[var]] = geeglm(prop ~ log10_Total + broad_tumor_type, id=cellCounts$batch, data=cellCounts, family= gaussian(), weights=cellCounts$Total, corstr='exchangeable')
+  if(var == "max.pixels.in.cc.Differentiated"){
+     geeMods[[var]] = geeglm(prop ~ log10_Total + broad_tumor_type, id=cellCounts$batch, data=cellCounts, family= gaussian(), weights=cellCounts$Total, corstr='independence', control=geese.control(maxit=1000, trace=TRUE)) #start=fixef(lmerMod),
+  }
+}
+```
+```{r}
+pmat = do.call(rbind, lapply(geeMods, function(x){aov = anova(x); out=aov[,3]; names(out)=rownames(aov); out}))
+
+```
+
+```{r}
+intercept_cc_table = do.call(rbind,lapply(geeMods, function(x){intercepts = RESI::resi_pe(x)$coefficients; out = intercepts[1,]; names(out)=colnames(intercepts); out}))
+broad_tumor_type_SSL_cc_table = do.call(rbind,lapply(geeMods, function(x){intercepts = RESI::resi_pe(x)$coefficients; out = intercepts['broad_tumor_typeSSL',]; names(out)=colnames(intercepts); out}))
+# compute adjusted p-values
+broad_tumor_type_SSL_cc_table$p.fdr = p.adjust(broad_tumor_type_SSL_cc_table[,4], method = 'fdr')
+
+knitr::kable(broad_tumor_type_SSL_cc_table)
+```
+
+```{r}
+results=list()
+# p-value threshold for "significance"
+thr = 0.05
+for(var in rownames(broad_tumor_type_SSL_cc_table)){
+      #cat('\n###', var, '\n')
+  #par(mfrow=c(2,3), mgp=c(1.6,0.8,0), lwd=1.5, lend=2, mar=c(3,3,1.8,0), bty='l', oma=c(0,0,3,0))
+    if(broad_tumor_type_SSL_cc_table[var,4]<thr){
+      CIs = summary(emmeans(geeMods[[var]], 'broad_tumor_type', type='response' ))
+      cellCounts$temp = log10(cellCounts[,var])
+      # assumes factors
+        xticks = as.numeric(cellCounts[,'broad_tumor_type'])
+        xtics = sort(unique(xticks))
+        plot(jitter(xticks, factor = .1), cellCounts$temp, xlab='Tumor type', ylab='log10(Max CC size)', xaxt='n', xlim=range(xticks)+c(-.5, .5), bty='l', main=gsub('max.pixels.in.cc.', '', var), col='gray')
+        axis(1, unique(xtics), labels=levels(CIs[,'broad_tumor_type']))
+        points(xtics, CIs$emmean, cex=1.5, pch=19)
+        segments(x0=xtics, x1=xtics, y0=CIs$asymp.LCL, y1=CIs$asymp.UCL, lwd=2)
+    }
+  #cat('\n\n')
+  }
+```

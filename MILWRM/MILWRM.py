@@ -346,7 +346,7 @@ def perform_umap(cluster_data, centroids, batch_labels, kmeans_labels, frac):
     batch_labels : list
         list containing batch label for each datapoint
     kmeans_label : list
-        list containing tissue ID labels for each datapoint
+        list containing tissue domain labels for each datapoint
     frac : None or float
         if None entire cluster_data is used to compute umap if float
         that fraction of data is used to compute the umap
@@ -415,7 +415,7 @@ def estimate_confidence_score_mxif(
     Conf_ID : np.ndarray
         overall confidence score for each pixel's cluster assignment
     mean_conf_score : dict
-        mean confidence score for each tissue ID (keys for the dictionary)
+        mean confidence score for each tissue domain (keys for the dictionary)
     """
     if use_path == True:
         image_path = image + ".npz"
@@ -452,7 +452,7 @@ def estimate_confidence_score_mxif(
 
 def estimate_mse_mxif(images, use_path, tissue_IDs, scaler, centroids, features, k):
     """
-    Estimate mean square error for each tissue ID for each MxIF images
+    Estimate mean square error for each tissue domain for each MxIF images
 
     Parameters
     ----------
@@ -500,10 +500,13 @@ def estimate_mse_mxif(images, use_path, tissue_IDs, scaler, centroids, features,
         for i in range(k):
             x = (
                 (scaled_img_ar[ar == i]) - (centroids[i])
-            ) ** 2  # estimating mse for each tissue ID for that image
-            mse[i] = x.mean(axis=0)
+            ) ** 2  # estimating mse for each tissue domain for that image
+            if len(x) == 0:
+                mse[i] = np.zeros((centroids.shape[1]))
+            else:
+                mse[i] = x.mean(axis=0)
         mse_temp[image_index] = mse
-    mse_id = {}  # reorganizing within a new dictionary with keys as tissue IDs
+    mse_id = {}  # reorganizing within a new dictionary with keys as tissue domains
     for i in range(k):
         mse_l = []
         for image_index, image in enumerate(images):
@@ -570,7 +573,7 @@ def estimate_confidence_score_st(sub_cluster_data, adata, centroids):
     -------
     Confidence_score added to adata.obs
     mean_conf_score : dict
-        mean confidence score for each tissue ID (keys for the dictionary)
+        mean confidence score for each tissue domain (keys for the dictionary)
     """
     # initializing zeros array to store distances
     dist_mx = np.zeros((sub_cluster_data.shape[0], len(centroids)))
@@ -597,7 +600,7 @@ def estimate_confidence_score_st(sub_cluster_data, adata, centroids):
 
 def estimate_mse_st(cluster_data, adatas, centroids, k):
     """
-    Estimate mean square error for each tissue ID for each visium slide
+    Estimate mean square error for each tissue domain for each visium slide
 
     Parameters
     ----------
@@ -1095,8 +1098,8 @@ class st_labeler(tissue_labeler):
         Returns
         -------
         self.adatas[i].obs.confidence_IDs and self.confidence_score_df are added
-        containing confidence score for each tissue ID assignment and mean confidence
-        score for each tissue ID within each visium slide
+        containing confidence score for each tissue domain assignment and mean confidence
+        score for each tissue domain within each visium slide
         """
         assert (
             self.kmeans is not None
@@ -1139,8 +1142,6 @@ class st_labeler(tissue_labeler):
         titles : list of str, optional (default=`None`)
             Titles of plots corresponding to each MILWRM domain. If `None`, titles
             will be numbers 0 through k.
-        figsize : tuple of float, optional (default=(5,5))
-            Size of matplotlib figure
         save_to : str, optional (default=`None`)
             Path to image file to save plot
 
@@ -1310,7 +1311,7 @@ class st_labeler(tissue_labeler):
         save_to=None,
     ):
         """
-        estimate mean square error within each tissue ID
+        estimate mean square error within each tissue domain
 
         Parameters
         ----------
@@ -1347,7 +1348,7 @@ class st_labeler(tissue_labeler):
         mse_id = estimate_mse_st(cluster_data, adatas, centroids, k)
         colors = plt.cm.tab20(np.linspace(0, 1, len(adatas)))
         if titles is None:
-            titles = ["tissue_ID " + str(x) for x in range(self.k)]
+            titles = ["tissue_domain " + str(x) for x in range(self.k)]
         if labels is None:
             labels = range(len(adatas))
         n_panels = len(mse_id.keys())
@@ -1387,7 +1388,7 @@ class st_labeler(tissue_labeler):
                         -0.3, 0.3, offsets.shape[0]
                     )
                     dots.set_offsets(jittered_offsets)
-            plt.xlabel("slides")
+            plt.xlabel("PCs")
             plt.ylabel("mean square error")
             plt.title(titles[i])
         plt.legend(loc=loc, bbox_to_anchor=bbox_coordinates)
@@ -1405,12 +1406,12 @@ class st_labeler(tissue_labeler):
         save_to=None,
     ):
         """
-        Plot proportion of each tissue ID within each slide
+        Plot proportion of each tissue domain within each slide
 
         Parameters
         ----------
         tID_labels : list of str, optional (default=`None`)
-            List of labels corresponding to MILWRM tissue IDs for plotting legend
+            List of labels corresponding to MILWRM tissue domains for plotting legend
         slide_labels : list of str, optional (default=`None`)
             List of labels for each slide batch for labeling x-axis
         figsize : tuple of float, optional (default=(5,5))
@@ -1432,7 +1433,7 @@ class st_labeler(tissue_labeler):
         if tID_labels:
             assert (
                 len(tID_labels) == df_count.shape[1]
-            ), "Length of given tissue ID labels does not match number of tissue IDs!"
+            ), "Length of given tissue domain labels does not match number of tissue domains!"
             df_count.columns = tID_labels
         if slide_labels:
             assert (
@@ -1442,7 +1443,7 @@ class st_labeler(tissue_labeler):
         ax = df_count.plot.bar(stacked=True, cmap=cmap, figsize=figsize)
         ax.legend(loc="best", bbox_to_anchor=(1, 1))
         ax.set_xlabel("slides")
-        ax.set_ylabel("tissue ID proportion")
+        ax.set_ylabel("tissue domain proportion")
         ax.set_ylim((0, 1))
         plt.tight_layout()
         if save_to is not None:
@@ -1478,7 +1479,7 @@ class st_labeler(tissue_labeler):
         histo : np.array or `None`, optional (default=`None`)
             Histology image to show along with pita in gridspec. If `None`, ignore.
         cmap : str, optional (default="tab20")
-            Matplotlib colormap to use for plotting tissue IDs
+            Matplotlib colormap to use for plotting tissue domains
         label : str
             What to title each panel of the gridspec (i.e. "PC" or "usage") or each
             channel in RGB image. Can also pass list of names e.g. ["NeuN","GFAP",
@@ -1761,7 +1762,7 @@ class mxif_labeler(tissue_labeler):
         random_state : int, optional (default=18)
             Seed for k-means clustering model
         n_jobs : int
-            Number of cores to parallelize k-choosing and tissue ID assignment across.
+            Number of cores to parallelize k-choosing and tissue domain assignment across.
             Default all available cores.
 
         Returns
@@ -1874,8 +1875,8 @@ class mxif_labeler(tissue_labeler):
         Returns
         -------
         self.confidence_IDs and self.confidence_score_df is added containing
-        confidence score for each tissue ID assignment and mean confidence score for
-        each tissue ID within each image
+        confidence score for each tissue domain assignment and mean confidence score for
+        each tissue domain within each image
         """
         scaler = self.scaler
         centroids = self.kmeans.cluster_centers_
@@ -1910,7 +1911,7 @@ class mxif_labeler(tissue_labeler):
         save_to=None,
     ):
         """
-        estimate mean square error within each tissue ID
+        estimate mean square error within each tissue domain
 
         Parameters
         ----------
@@ -2018,12 +2019,12 @@ class mxif_labeler(tissue_labeler):
         save_to=None,
     ):
         """
-        Plot proportion of each tissue ID within each slide
+        Plot proportion of each tissue domain within each slide
 
         Parameters
         ----------
         tID_labels : list of str, optional (default=`None`)
-            List of labels corresponding to MILWRM tissue IDs for plotting legend
+            List of labels corresponding to MILWRM tissue domains for plotting legend
         slide_labels : list of str, optional (default=`None`)
             List of labels for each slide batch for labeling x-axis
         figsize : tuple of float, optional (default=(5,5))
@@ -2052,7 +2053,7 @@ class mxif_labeler(tissue_labeler):
         if tID_labels:
             assert (
                 len(tID_labels) == df_count.shape[1]
-            ), "Length of given tissue ID labels does not match number of tissue IDs!"
+            ), "Length of given tissue domain labels does not match number of tissue domains!"
             df_count.columns = tID_labels
         if slide_labels:
             assert (
@@ -2063,7 +2064,7 @@ class mxif_labeler(tissue_labeler):
         ax = df_count.T.plot.bar(stacked=True, cmap=cmap, figsize=figsize)
         ax.legend(loc="best", bbox_to_anchor=(1, 1))
         ax.set_xlabel("images")
-        ax.set_ylabel("tissue ID proportion")
+        ax.set_ylabel("tissue domain proportion")
         ax.set_ylim((0, 1))
         plt.tight_layout()
         if save_to is not None:
@@ -2071,7 +2072,7 @@ class mxif_labeler(tissue_labeler):
         else:
             return ax
 
-    def make_umap(self, frac=None, cmap="tab20", save_to=None, alpha=0.8):
+    def make_umap(self, frac=None, cmap="tab20", save_to=None, alpha=0.8, dot_size_batch = 0.1):
         """
         plot umap for the cluster data
 
@@ -2084,6 +2085,10 @@ class mxif_labeler(tissue_labeler):
             str for cmap used for plotting. Default `"tab20"`.
         save_to : str or None
             Path to image file to save results. if `None`, show figure.
+        alpha : float
+            opaqueness of umap scatter plot (default=`0.8`)
+        dot_size_batch = float
+            scatter plot dot size (default=`0.1`)
 
         Returns
         -------
@@ -2111,7 +2116,6 @@ class mxif_labeler(tissue_labeler):
         # plotting a fig with two subplots
         fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(20, 10))
         # defining color_map
-        # TODO : add alpha here
         disc_cmap_1 = plt.cm.get_cmap(
             cmap, len(np.unique(np.array(umap_centroid_data.index)))
         )
@@ -2121,13 +2125,18 @@ class mxif_labeler(tissue_labeler):
         plot_1 = ax1.scatter(
             standard_embedding_1[:, 0],
             standard_embedding_1[:, 1],
-            s=0.01,
+            s=dot_size_batch,
             c=umap_centroid_data.index,
             cmap=disc_cmap_1,
             alpha=alpha,
         )
-        ax1.set_title("Umap with batch labels")
+        ax1.set_title("UMAP with batch labels", fontsize = 24)
+        ax1.set_xlabel("UMAP 2")
+        ax1.set_ylabel("UMAP 1")
+        ax1.set_xticks([])
+        ax1.set_yticks([])
         cbar_1 = plt.colorbar(plot_1, ax=ax1)
+
         plot_2 = ax2.scatter(
             standard_embedding_1[:, 0],
             standard_embedding_1[:, 1],
@@ -2136,7 +2145,11 @@ class mxif_labeler(tissue_labeler):
             cmap=disc_cmap_2,
             alpha=alpha,
         )
-        ax2.set_title("Umap with tissue IDs")
+        ax2.set_title("UMAP with tissue domains", fontsize = 24)
+        ax2.set_xticks([])
+        ax2.set_yticks([])
+        ax2.set_xlabel("UMAP 2")
+        ax2.set_ylabel("UMAP 1")
         cbar_2 = plt.colorbar(plot_2, ax=ax2, ticks=ticks)
         cbar_2.ax.set_yticklabels(tick_label)
         fig.tight_layout()
@@ -2166,7 +2179,7 @@ class mxif_labeler(tissue_labeler):
         channels : tuple of int or None, optional (default=`None`)
             List of channels by index or name to show
         cmap : str, optional (default="plasma")
-            Matplotlib colormap to use for plotting tissue IDs
+            Matplotlib colormap to use for plotting tissue domains
         mask_out : bool, optional (default=`True`)
             Mask out non-tissue pixels prior to showing
         ncols : int
