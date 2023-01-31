@@ -501,7 +501,10 @@ def estimate_mse_mxif(images, use_path, tissue_IDs, scaler, centroids, features,
             x = (
                 (scaled_img_ar[ar == i]) - (centroids[i])
             ) ** 2  # estimating mse for each tissue domain for that image
-            mse[i] = x.mean(axis=0)
+            if len(x) == 0:
+                mse[i] = np.zeros((centroids.shape[1]))
+            else:
+                mse[i] = x.mean(axis=0)
         mse_temp[image_index] = mse
     mse_id = {}  # reorganizing within a new dictionary with keys as tissue domains
     for i in range(k):
