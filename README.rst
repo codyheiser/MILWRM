@@ -23,7 +23,7 @@ Or compile from source:
 
 See the |tutorials|_ directory for Jupyter notebooks detailing usage of `MILWRM`
 
-Full documentation is available at |codyheiser.github.io/MILWRM|_
+Full documentation is available at |ken-lau-lab.github.io/MILWRM|_
 
 .. |milwrm_logo| image:: https://github.com/Ken-Lau-Lab/MILWRM/blob/main/docs/milwrm_logo.jpg
 
