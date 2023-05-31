@@ -292,8 +292,8 @@ def map_pixels(
             - a_frame.uns["pixel_map_params"]["xmin_px"]
         ), "Given map_size isn't large enough."
         grid_y, grid_x = np.mgrid[
-            map_size[1],
-            map_size[0],
+            0 : map_size[1],
+            0 : map_size[0],
         ]
 
     else:
