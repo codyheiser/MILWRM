@@ -295,6 +295,11 @@ def map_pixels(
             0 : map_size[0],
             0 : map_size[1],
         ]
+        # set min and max pixels to map_size
+        a_frame.uns["pixel_map_params"]["ymin_px"] = 0
+        a_frame.uns["pixel_map_params"]["ymax_px"] = map_size[0]
+        a_frame.uns["pixel_map_params"]["xmin_px"] = 0
+        a_frame.uns["pixel_map_params"]["xmax_px"] = map_size[1]
 
     else:
         # determine size from a.obsm["spatial"]
